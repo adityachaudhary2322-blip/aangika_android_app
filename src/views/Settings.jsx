@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, KeyRound, ShieldAlert, Check } from 'lucide-react';
 import { getKeys, setKey } from '../services/translator.js';
+import { getTurnCredentials, setTurnCredentials } from '../services/iceConfig.js';
 import {
   VISION_ENGINES, GRAMMAR_ENGINES, VISION_AANGIKA, VISION_SIGNBRIDGE,
   GRAMMAR_QWEN_OFFLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS,
@@ -15,10 +16,18 @@ export default function Settings({
   const [gemini, setGemini] = useState(initial.gemini);
   const [sarvam, setSarvam] = useState(initial.sarvam);
   const [saved, setSaved] = useState(false);
+  const initialTurn = getTurnCredentials();
+  const [turnUser, setTurnUser] = useState(
+    initialTurn.source === 'custom' ? initialTurn.username : ''
+  );
+  const [turnKey, setTurnKey] = useState(
+    initialTurn.source === 'custom' ? initialTurn.credential : ''
+  );
 
   const save = () => {
     setKey('gemini', gemini);
     setKey('sarvam', sarvam);
+    setTurnCredentials(turnUser, turnKey);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -105,6 +114,34 @@ export default function Settings({
         >
           {saved ? 'Saved' : 'Save keys'}
         </button>
+
+        <label className="mt-3 block text-xs text-ink-dim">
+          TURN username <span className="opacity-60">(video calling)</span>
+        </label>
+        <input
+          value={turnUser}
+          onChange={(e) => setTurnUser(e.target.value)}
+          placeholder="Leave blank for the shared open relay"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          className="mt-1 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+        />
+
+        <label className="mt-3 block text-xs text-ink-dim">TURN credential</label>
+        <input
+          type="password"
+          value={turnKey}
+          onChange={(e) => setTurnKey(e.target.value)}
+          placeholder="Metered API key"
+          className="mt-1 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+        />
+        <p className="mt-1.5 text-[10px] leading-relaxed text-ink-dim">
+          Without valid TURN credentials the relay silently fails to allocate
+          and calls between two mobile-data connections will not connect. The
+          shared open-relay defaults are rate-limited; the call lobby has a test
+          button that reports whether a relay candidate was actually obtained.
+        </p>
 
         <p className="mt-3 flex gap-2 text-[11px] leading-relaxed text-amber">
           <ShieldAlert size={26} className="shrink-0" />
