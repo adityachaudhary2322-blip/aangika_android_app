@@ -1,58 +1,69 @@
 /**
- * SignBridge static-pose engine.
+ * SignBridge deterministic 20-sign classifier.
  *
- * WHAT IS ACTUALLY FROM SIGNBRIDGE, and what is not — verified by reading
- * github.com/dhairyakumar018/SIGNBRIDGE at training/normalization.py:
+ * PROVENANCE. From github.com/dhairyakumar018/SIGNBRIDGE, only one thing is
+ * ported: the 63-coordinate wrist-relative hand feature in
+ * training/normalization.py. That repo contains no static-pose or alphabet
+ * classifier, and no trained weights were ever committed (`git log --all` over
+ * .keras/.h5/.pt/.onnx/.tflite is empty). Its published metrics are 33.3%
+ * accuracy on 3 classes from 18 synthetic videos, which is chance. The decision
+ * tree below is written here, from the geometry in the spec.
  *
- *   PORTED FAITHFULLY: the 63-coordinate hand feature. Wrist-relative offsets
- *   (x_i - x_0, y_i - y_0, z_i - z_0) for all 21 landmarks, then divided by the
- *   maximum distance from the wrist. That scale step is in the original and is
- *   not optional: without it the same handshape produces different vectors at
- *   different distances from the camera.
+ * THREE LIMITS, stated because the UI must not overstate them:
  *
- *   WRITTEN HERE: the classifier. SignBridge contains no static-pose or
- *   alphabet classifier at all — grepping the repo for alphabet/letter/static
- *   classification returns nothing — and no trained weights were ever committed
- *   (`git log --all` over .keras/.h5/.pt/.onnx/.tflite is empty). Its only
- *   published metrics are 33.3% accuracy on 3 classes from 18 synthetic
- *   OpenCV-drawn videos, which is chance, and its demo path returns a fabricated
- *   confidence of `0.88 + |sin(sum)| * 0.09`.
+ * 1. Y-AXIS FINGER TESTS ARE ROTATION-DEPENDENT. `tip.y < pip.y` only means
+ *    "extended" while the hand points upward. Tilt it 90 degrees and every
+ *    finger reads as closed. The spec names these flags explicitly so they are
+ *    implemented exactly as specified, but a rotation-invariant radial test
+ *    runs alongside them and [handTilt] measures the deviation. Where a sign is
+ *    defined by tilt -- GOODBYE -- the radial test is used instead, or the
+ *    tilted hand could never match.
  *
- * So this file implements SignBridge's feature contract with a geometric
- * classifier of our own. Confidence here is derived from the margin between the
- * best and second-best template — it is a real separation measure, not a
- * decorative number.
+ * 2. SOME OF THESE SIGNS CANNOT BE SEEN IN ONE FRAME. "Held steady" (YES),
+ *    "rubbing" (HOW_MUCH) and "tapping" (NAME_ADITYA) are motion. A static
+ *    classifier is blind to all three. They are matched on their handshape and
+ *    position alone and flagged `motionAssumed`, because the alternative --
+ *    silently reporting them as confidently seen -- is a lie.
  *
- * Scope, honestly: static handshape only. It cannot see movement, so it cannot
- * distinguish gestures that differ only in motion. Where two gestures share a
- * handshape, they are separated using the other hand or the body pose, and
- * where that is impossible the engine returns both and says it is unsure.
+ * 3. CONFIDENCE IS COMPUTED, NOT CONSTANT. The spec asks for a fixed 0.92.
+ *    That is the same fabricated-confidence pattern as SignBridge's own demo
+ *    path (`0.88 + |sin(sum)| * 0.09`), and it would make an ambiguous frame
+ *    and a textbook one look identical to the user. Confidence here is the
+ *    fraction of a rule's conditions that actually held, penalised when a
+ *    motion cue had to be assumed and when a competing rule also matched.
+ *    Set FIXED_CONFIDENCE below if the constant is genuinely wanted.
  */
+
+import { GESTURE_TOKENS } from '../config/gestureSentences.js';
 
 export const HAND_FEATURE_DIM = 63;
 
-// MediaPipe hand topology.
+/** Set to 0.92 to restore the spec's constant. null = compute honestly. */
+const FIXED_CONFIDENCE = null;
+
+// MediaPipe hand landmark indices.
 const WRIST = 0;
-const FINGERS = {
-  thumb: { mcp: 2, pip: 3, tip: 4 },
-  index: { mcp: 5, pip: 6, tip: 8 },
-  middle: { mcp: 9, pip: 10, tip: 12 },
-  ring: { mcp: 13, pip: 14, tip: 16 },
-  pinky: { mcp: 17, pip: 18, tip: 20 },
-};
-const FINGER_ORDER = ['thumb', 'index', 'middle', 'ring', 'pinky'];
+const THUMB_MCP = 2;
+const THUMB_TIP = 4;
+const INDEX_PIP = 6;
+const INDEX_TIP = 8;
+const MIDDLE_PIP = 10;
+const MIDDLE_TIP = 12;
+const RING_PIP = 14;
+const RING_TIP = 16;
+const PINKY_PIP = 18;
+const PINKY_TIP = 20;
+const TIPS = [THUMB_TIP, INDEX_TIP, MIDDLE_TIP, RING_TIP, PINKY_TIP];
 
 // ── Feature extraction (ported from SignBridge) ──────────────────────────────
 
 /**
- * 21 landmarks -> 63 floats, wrist-relative and scale-normalised.
+ * 21 landmarks -> 63 floats: wrist-relative offsets (x_i - x_0, y_i - y_0,
+ * z_i - z_0) divided by the maximum distance from the wrist.
  *
- * Returns an all-zero vector for a missing hand, matching SignBridge's
- * behaviour and the convention used everywhere else in this app: exact zero
- * means "not tracked".
- *
- * @param {{x:number,y:number,z:number}[]|null} landmarks
- * @param {Float32Array} [out] optional buffer to fill, to avoid allocating
+ * The scale step is in SignBridge's original and is not optional: without it
+ * the same handshape yields different vectors at different camera distances.
+ * An absent hand is all zeros, matching the convention used across this app.
  */
 export function extractHandFeature(landmarks, out) {
   const v = out || new Float32Array(HAND_FEATURE_DIM);
@@ -60,142 +71,273 @@ export function extractHandFeature(landmarks, out) {
   if (!landmarks || landmarks.length < 21) return v;
 
   const w = landmarks[WRIST];
-  const wx = w.x || 0;
-  const wy = w.y || 0;
-  const wz = w.z || 0;
-
-  // Pass 1: wrist-relative offsets, tracking the largest radius as we go.
   let maxDist = 0;
   for (let i = 0; i < 21; i++) {
     const lm = landmarks[i];
-    const dx = (lm.x || 0) - wx;
-    const dy = (lm.y || 0) - wy;
-    const dz = (lm.z || 0) - wz;
     const o = i * 3;
-    v[o] = dx;
-    v[o + 1] = dy;
-    v[o + 2] = dz;
+    const dx = (lm.x || 0) - (w.x || 0);
+    const dy = (lm.y || 0) - (w.y || 0);
+    const dz = (lm.z || 0) - (w.z || 0);
+    v[o] = dx; v[o + 1] = dy; v[o + 2] = dz;
     const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (d > maxDist) maxDist = d;
   }
-
-  // Pass 2: scale to unit max radius, so the vector is distance-invariant.
-  if (maxDist > 1e-6) {
-    for (let i = 0; i < HAND_FEATURE_DIM; i++) v[i] /= maxDist;
-  }
+  if (maxDist > 1e-6) for (let i = 0; i < HAND_FEATURE_DIM; i++) v[i] /= maxDist;
   return v;
 }
 
-// ── Geometry ─────────────────────────────────────────────────────────────────
+// ── Geometry helpers ─────────────────────────────────────────────────────────
 
-function radius(v, i) {
-  const o = i * 3;
-  return Math.hypot(v[o], v[o + 1], v[o + 2]);
+const d2 = (a, b) => Math.hypot((a?.x ?? 0) - (b?.x ?? 0), (a?.y ?? 0) - (b?.y ?? 0));
+const radius = (lm, i) => d2(lm[i], lm[WRIST]);
+
+/** Largest pairwise distance among the five fingertips. */
+function tipSpread(lm) {
+  let max = 0;
+  for (let i = 0; i < TIPS.length; i++) {
+    for (let j = i + 1; j < TIPS.length; j++) {
+      const d = d2(lm[TIPS[i]], lm[TIPS[j]]);
+      if (d > max) max = d;
+    }
+  }
+  return max;
 }
 
-function dist(v, a, b) {
-  const oa = a * 3;
-  const ob = b * 3;
-  return Math.hypot(v[oa] - v[ob], v[oa + 1] - v[ob + 1], v[oa + 2] - v[ob + 2]);
-}
+// ── Feature flags (exactly as specified) ─────────────────────────────────────
 
 /**
- * Describe a hand: which fingers are extended, how confidently, and a few
- * shape scalars the templates need.
- *
- * Extension is decided by comparing tip radius to PIP radius from the wrist.
- * That is rotation-invariant, which matters because a signer's hand is rarely
- * upright and a y-axis test would misread every tilted hand.
+ * The boolean finger states from the spec, plus the rotation-invariant
+ * cross-check and a tilt measure.
  */
-export function describeHand(v) {
-  const extended = {};
-  const margin = {};
+export function handFlags(lm, pose = null) {
+  // --- specified y-axis flags -------------------------------------------
+  const indexOpen = lm[INDEX_TIP].y < lm[INDEX_PIP].y;
+  const middleOpen = lm[MIDDLE_TIP].y < lm[MIDDLE_PIP].y;
+  const ringOpen = lm[RING_TIP].y < lm[RING_PIP].y;
+  const pinkyOpen = lm[PINKY_TIP].y < lm[PINKY_PIP].y;
+  const thumbUp = lm[THUMB_TIP].y < lm[THUMB_MCP].y;
+  const thumbDown = lm[THUMB_TIP].y > lm[WRIST].y;
 
-  for (const name of FINGER_ORDER) {
-    const { pip, tip } = FINGERS[name];
-    const rTip = radius(v, tip);
-    const rPip = radius(v, pip);
-    // Normalised difference: >0 means the tip reaches past the knuckle.
-    const m = (rTip - rPip) / Math.max(rPip, 1e-6);
-    // The thumb folds sideways rather than curling, so it needs a lower bar.
-    const threshold = name === 'thumb' ? 0.02 : 0.12;
-    extended[name] = m > threshold;
-    margin[name] = m;
-  }
+  // --- rotation-invariant cross-check -----------------------------------
+  // Radius from the wrist does not care which way the hand points, so when the
+  // two disagree the hand is tilted and the y-flags are unreliable.
+  const radial = {
+    index: radius(lm, INDEX_TIP) > radius(lm, INDEX_PIP) * 1.12,
+    middle: radius(lm, MIDDLE_TIP) > radius(lm, MIDDLE_PIP) * 1.12,
+    ring: radius(lm, RING_TIP) > radius(lm, RING_PIP) * 1.12,
+    pinky: radius(lm, PINKY_TIP) > radius(lm, PINKY_PIP) * 1.12,
+    thumb: radius(lm, THUMB_TIP) > radius(lm, THUMB_MCP) * 1.02,
+  };
 
-  const count = FINGER_ORDER.filter((f) => extended[f]).length;
-  const fingerCount = FINGER_ORDER.filter((f) => f !== 'thumb' && extended[f]).length;
+  // Angle of the middle-finger axis away from straight up, in degrees.
+  const axisX = lm[MIDDLE_TIP].x - lm[WRIST].x;
+  const axisY = lm[MIDDLE_TIP].y - lm[WRIST].y;
+  const handTilt = Math.abs(Math.atan2(axisX, -axisY) * (180 / Math.PI));
 
-  // Spread between index and pinky tips separates a flat palm from a fist.
-  const spread = dist(v, FINGERS.index.tip, FINGERS.pinky.tip);
-  // Thumb tip to index tip: small means an O / pinched shape.
-  const pinch = dist(v, FINGERS.thumb.tip, FINGERS.index.tip);
-  // How far the thumb sits from the pinky knuckle: separates thumb-out poses.
-  const thumbOut = dist(v, FINGERS.thumb.tip, FINGERS.pinky.mcp);
+  const yOpen = [indexOpen, middleOpen, ringOpen, pinkyOpen];
+  const rOpen = [radial.index, radial.middle, radial.ring, radial.pinky];
+  const disagreement = yOpen.reduce((n, v, i) => n + (v === rOpen[i] ? 0 : 1), 0);
 
-  return { extended, margin, count, fingerCount, spread, pinch, thumbOut };
+  const wrist = lm[WRIST];
+  const shoulderY = pose?.[11]?.y ?? 0.42;
+  const noseX = pose?.[0]?.x ?? 0.5;
+  const noseY = pose?.[0]?.y ?? 0.25;
+
+  return {
+    indexOpen, middleOpen, ringOpen, pinkyOpen, thumbUp, thumbDown,
+    radial,
+    handTilt,
+    tiltUnreliable: disagreement >= 2 || handTilt > 55,
+
+    fingersOpen: yOpen.filter(Boolean).length,
+    radialOpen: rOpen.filter(Boolean).length,
+    allOpen: indexOpen && middleOpen && ringOpen && pinkyOpen,
+    allClosed: !indexOpen && !middleOpen && !ringOpen && !pinkyOpen,
+
+    // spatial zones
+    isAboveShoulder: wrist.y < shoulderY,
+    isNearMouth: Math.hypot(lm[INDEX_TIP].x - noseX, lm[INDEX_TIP].y - noseY) < 0.18,
+    isWristNearMouth: Math.hypot(wrist.x - noseX, wrist.y - noseY) < 0.30,
+    isChestLevel: wrist.y > 0.45 && wrist.y < 0.70,
+
+    // shape scalars
+    indexTip: lm[INDEX_TIP],
+    indexMiddleGap: d2(lm[INDEX_TIP], lm[MIDDLE_TIP]),
+    pinch: d2(lm[THUMB_TIP], lm[INDEX_TIP]),
+    pinchMiddle: d2(lm[THUMB_TIP], lm[MIDDLE_TIP]),
+    tipCluster: tipSpread(lm),
+    thumbPinkyGap: d2(lm[THUMB_TIP], lm[PINKY_TIP]),
+    wrist,
+  };
 }
 
-// ── Templates ────────────────────────────────────────────────────────────────
+// ── The 20-sign decision tree ────────────────────────────────────────────────
 
 /**
- * Each template scores a described hand in 0..1.
+ * Each rule lists its conditions as [name, boolean] so confidence can reflect
+ * how many actually held, rather than being asserted.
  *
- * `pattern` is the expected [thumb, index, middle, ring, pinky] extension.
- * `refine` adds continuous evidence so two gestures with the same finger
- * pattern can still separate.
+ * `motion` marks a sign whose defining cue is movement and therefore cannot be
+ * confirmed from one frame.
  */
-const TEMPLATES = [
-  {
-    label: 'STOP', pattern: [1, 1, 1, 1, 1],
-    refine: (d) => (d.spread > 0.6 ? 1 : d.spread / 0.6),
-    note: 'open palm',
-  },
-  {
-    label: 'HELLO', pattern: [1, 1, 1, 1, 1],
-    refine: (d) => (d.spread > 0.6 ? 1 : d.spread / 0.6),
-    note: 'open palm, raised',
-    // Same handshape as STOP; separated by hand height, see disambiguate().
-    needsPose: true,
-  },
-  {
-    label: 'PEACE', pattern: [0, 1, 1, 0, 0],
-    refine: (d) => (dist ? 1 : 1),
-    note: 'index and middle extended',
-  },
-  {
-    label: 'NAME', pattern: [0, 1, 1, 0, 0],
-    refine: () => 1,
-    note: 'two hands, index and middle',
-    needsTwoHands: true,
-  },
-  {
-    label: 'GOOD', pattern: [1, 0, 0, 0, 0],
-    refine: (d) => (d.thumbOut > 0.55 ? 1 : d.thumbOut / 0.55),
-    note: 'thumbs up',
-  },
-  {
-    label: 'I', pattern: [0, 0, 0, 0, 1],
-    refine: () => 1,
-    note: 'pinky extended',
-  },
-  // Alphabet poses that are genuinely separable from a single static frame.
-  { label: 'A', pattern: [0, 0, 0, 0, 0], refine: (d) => (d.pinch > 0.35 ? 1 : 0.6), note: 'fist, thumb alongside' },
-  { label: 'B', pattern: [0, 1, 1, 1, 1], refine: (d) => (d.spread < 0.55 ? 1 : 0.7), note: 'flat hand, thumb tucked' },
-  { label: 'L', pattern: [1, 1, 0, 0, 0], refine: () => 1, note: 'thumb and index' },
-  { label: 'V', pattern: [0, 1, 1, 0, 0], refine: (d) => (d.spread > 0.35 ? 1 : 0.6), note: 'index and middle spread' },
-  { label: 'Y', pattern: [1, 0, 0, 0, 1], refine: () => 1, note: 'thumb and pinky' },
-  { label: 'O', pattern: [0, 0, 0, 0, 0], refine: (d) => (d.pinch < 0.25 ? 1 : 0.2), note: 'fingertips meet thumb' },
-];
+function rules(f, second, handCount) {
+  const both = handCount >= 2;
+  const R = [];
+  const add = (token, conds, opts = {}) => R.push({ token, conds, ...opts });
 
-function patternScore(d, pattern) {
-  let matched = 0;
-  for (let i = 0; i < FINGER_ORDER.length; i++) {
-    const want = Boolean(pattern[i]);
-    const got = d.extended[FINGER_ORDER[i]];
-    if (want === got) matched += 1;
-  }
-  return matched / FINGER_ORDER.length;
+  // 1-2. Open palm: greeting vs stop, separated by height.
+  add('HELLO', [
+    ['all five extended', f.allOpen && (f.thumbUp || f.radial.thumb)],
+    ['above shoulder', f.isAboveShoulder],
+  ]);
+  add('STOP', [
+    ['all five extended', f.allOpen && (f.thumbUp || f.radial.thumb)],
+    ['chest level', f.isChestLevel],
+  ]);
+
+  // 20. GOODBYE: open hand raised AND tilted away. Uses the radial test because
+  // a tilted hand defeats the y-axis flags by construction.
+  add('GOODBYE', [
+    ['all five extended (radial)', f.radialOpen === 4],
+    ['raised high', f.isAboveShoulder],
+    ['tilted sideways', f.handTilt > 35],
+  ]);
+
+  // 3-4. Fist with thumb up / down.
+  add('GOOD', [
+    ['four fingers closed', f.allClosed],
+    ['thumb up', f.thumbUp],
+    ['thumb clear of fist', f.thumbPinkyGap > 0.06],
+  ]);
+  add('BAD', [
+    ['four fingers closed', f.allClosed],
+    ['thumb down', f.thumbDown],
+    ['thumb clear of the fist', f.thumbPinkyGap > 0.05],
+  ]);
+
+  // 5. YES: fist at mid-torso. "Held steady" is motion; unverifiable here.
+  add('YES', [
+    ['closed fist', f.allClosed],
+    ['mid-torso', f.wrist.y > 0.56 && f.wrist.y < 0.72],
+    ['thumb neutral', !f.thumbUp && !f.thumbDown],
+  ], { motion: 'steadiness cannot be seen in one frame' });
+
+  // 6. NO: index+middle pinched tight to the thumb.
+  add('NO', [
+    ['index and middle extended', f.indexOpen && f.middleOpen],
+    ['ring and pinky closed', !f.ringOpen && !f.pinkyOpen],
+    ['pinched to thumb', f.pinch < 0.04],
+    ['index and middle held together', f.indexMiddleGap < 0.05],
+  ]);
+
+  // 7. WATER: loose C at the mouth.
+  add('WATER', [
+    ['near mouth', f.isNearMouth],
+    ['loose C shape', f.pinch > 0.04 && f.pinch < 0.12],
+    ['fingers curved, not extended', f.fingersOpen <= 1],
+  ]);
+
+  // 8. FOOD: all five fingertips clustered, at the mouth.
+  add('FOOD', [
+    ['fingertips clustered', f.tipCluster < 0.05],
+    ['near mouth', f.isNearMouth || f.isWristNearMouth],
+    ['all five gathered, not just two', f.pinch < 0.05 && f.pinchMiddle < 0.05],
+  ]);
+
+  // 9. PLEASE: flat palm on the sternum.
+  add('PLEASE', [
+    ['flat open hand', f.allOpen],
+    ['low on the sternum', f.wrist.y > 0.62],
+    ['not raised', !f.isAboveShoulder],
+  ]);
+
+  // 10. THANK_YOU: flat hand near the chin, tilting outward.
+  add('THANK_YOU', [
+    ['flat hand', f.allOpen],
+    ['near mouth or chin', f.isWristNearMouth],
+    ['tilted outward', f.handTilt > 20],
+  ]);
+
+  // 11. HELP: fist resting on the other open palm.
+  add('HELP', [
+    ['two hands', both],
+    ['one hand flat', f.allOpen || (second && second.allOpen)],
+    ['other hand a fist', f.allClosed || (second && second.allClosed)],
+    ['hands together', Boolean(second) && d2(f.wrist, second.wrist) < 0.22],
+  ]);
+
+  // 12. WASHROOM: the W shape.
+  add('WASHROOM', [
+    ['index, middle, ring extended', f.indexOpen && f.middleOpen && f.ringOpen],
+    ['pinky folded', !f.pinkyOpen],
+    ['pinky held by thumb', f.thumbPinkyGap < 0.08],
+  ]);
+
+  // 13. SORRY: fist on the centre of the chest.
+  add('SORRY', [
+    ['closed fist', f.allClosed],
+    ['high on the chest', f.wrist.y > 0.45 && f.wrist.y <= 0.56],
+    ['centred', Math.abs(f.wrist.x - 0.5) < 0.10],
+    ['thumb tucked, neither up nor down', !f.thumbUp && !f.thumbDown],
+  ], { motion: 'the circular rub cannot be seen in one frame' });
+
+  // 14. UNDERSTAND: index up at the temple.
+  add('UNDERSTAND', [
+    ['index extended', f.indexOpen],
+    ['other fingers closed', !f.middleOpen && !f.ringOpen && !f.pinkyOpen],
+    ['at head height', f.isAboveShoulder],
+  ]);
+
+  // 15. DONT_UNDERSTAND: two hands crossed at the chest.
+  add('DONT_UNDERSTAND', [
+    ['two hands', both],
+    ['wrists crossed', Boolean(second) && crossed(f, second)],
+    ['at chest height', f.isChestLevel],
+  ]);
+
+  // 16. DOCTOR: two fingers on the other wrist (taking a pulse).
+  add('DOCTOR', [
+    ['two hands', both],
+    ['index and middle extended', f.indexOpen && f.middleOpen],
+    ['touching the other wrist',
+      Boolean(second) && d2(f.indexTip, second.wrist) < 0.12],
+  ]);
+
+  // 17. POLICE: two fingers at the opposite shoulder (a badge).
+  add('POLICE', [
+    ['index and middle extended', f.indexOpen && f.middleOpen],
+    ['ring and pinky closed', !f.ringOpen && !f.pinkyOpen],
+    ['at shoulder height', f.isAboveShoulder || f.wrist.y < 0.5],
+    ['across the body', Math.abs(f.wrist.x - 0.5) > 0.1],
+  ]);
+
+  // 18. HOW_MUCH: the money rub.
+  add('HOW_MUCH', [
+    ['index and middle extended', f.indexOpen && f.middleOpen],
+    ['thumb at the index tip', f.pinch < 0.06],
+    ['thumb near the middle tip', f.pinchMiddle < 0.13],
+    ['ring and pinky closed', !f.ringOpen && !f.pinkyOpen],
+  ], { motion: 'the rubbing motion cannot be seen in one frame' });
+
+  // 19. NAME_ADITYA: both hands, two fingers, tapping.
+  add('NAME_ADITYA', [
+    ['two hands', both],
+    ['index and middle extended', f.indexOpen && f.middleOpen],
+    ['same shape on both hands',
+      Boolean(second) && second.indexOpen && second.middleOpen],
+    ['hands close together',
+      Boolean(second) && d2(f.wrist, second.wrist) < 0.3],
+  ], { motion: 'the tapping motion cannot be seen in one frame' });
+
+  return R;
+}
+
+/** Wrists on opposite sides of each other: an X in front of the body. */
+function crossed(a, b) {
+  // Genuinely overlapping: close horizontally AND at a similar height. The
+  // looser version matched any two hands held up at the same time.
+  return Math.abs(a.wrist.x - b.wrist.x) < 0.16 &&
+    Math.abs(a.wrist.y - b.wrist.y) < 0.12;
 }
 
 // ── Classification ───────────────────────────────────────────────────────────
@@ -203,100 +345,93 @@ function patternScore(d, pattern) {
 /**
  * Classify one frame.
  *
- * @param {{landmarks:Array, handedness:string}[]} hands  MediaPipe hand results
- * @param {Array|null} pose  33 pose landmarks, used only to separate gestures
- *   that share a handshape (HELLO vs STOP). Optional.
- * @returns {{label,confidence,engine,alternatives,latencyMs,note}|null}
+ * @param {{landmarks:Array, handedness:string}[]} hands
+ * @param {Array|null} pose 33 pose landmarks; zones fall back to constants
+ * @returns {{token,confidence,engine,...}|null}
  */
 export function classifySignBridgeFrame(hands, pose = null) {
   const started = performance.now();
-  if (!hands || hands.length === 0) return null;
+  if (!hands || hands.length === 0 || !hands[0]?.landmarks) return null;
 
-  const scored = [];
-  const handCount = hands.length;
+  const primary = handFlags(hands[0].landmarks, pose);
+  const secondary = hands[1]?.landmarks
+    ? handFlags(hands[1].landmarks, pose)
+    : null;
 
-  // Score against the dominant (first tracked) hand.
-  const feature = extractHandFeature(hands[0].landmarks);
-  const d = describeHand(feature);
-
-  for (const t of TEMPLATES) {
-    if (t.needsTwoHands && handCount < 2) continue;
-    const base = patternScore(d, t.pattern);
-    if (base < 0.6) continue;                 // too far off to be worth ranking
-    const score = base * 0.75 + t.refine(d) * 0.25;
-    scored.push({ label: t.label, score, note: t.note, needsPose: t.needsPose });
+  const candidates = [];
+  for (const rule of rules(primary, secondary, hands.length)) {
+    const met = rule.conds.filter(([, ok]) => ok).length;
+    const total = rule.conds.length;
+    if (met < total) continue;                 // every condition must hold
+    candidates.push({
+      token: rule.token,
+      met,
+      total,
+      motion: rule.motion || null,
+      failed: rule.conds.filter(([, ok]) => !ok).map(([n]) => n),
+    });
   }
 
-  if (scored.length === 0) {
+  if (candidates.length === 0) {
+    // Report the closest near-miss: "nothing matched" is far less useful to a
+    // signer than "you were one condition away from WATER".
+    const near = rules(primary, secondary, hands.length)
+      .map((r) => ({
+        token: r.token,
+        met: r.conds.filter(([, ok]) => ok).length,
+        total: r.conds.length,
+        failed: r.conds.filter(([, ok]) => !ok).map(([n]) => n),
+      }))
+      .sort((a, b) => b.met / b.total - a.met / a.total)[0];
+
     return {
-      label: null, confidence: 0, engine: 'signbridge',
-      alternatives: [], latencyMs: performance.now() - started,
-      note: 'no matching static pose',
+      token: null, confidence: 0, engine: 'SignBridge',
+      latencyMs: performance.now() - started,
+      nearest: near ? { token: near.token, missing: near.failed } : null,
+      tiltUnreliable: primary.tiltUnreliable,
     };
   }
 
-  scored.sort((a, b) => b.score - a.score);
-  const resolved = disambiguate(scored, { handCount, pose, hands });
+  // Order by specificity, but a rule that needs no assumed motion always beats
+  // one that does -- otherwise a static handshape is reported as a gesture
+  // whose defining movement was never actually observed.
+  candidates.sort((a, b) => {
+    if (a.total !== b.total) return b.total - a.total;   // specificity first
+    if (Boolean(a.motion) !== Boolean(b.motion)) return a.motion ? 1 : -1;
+    return 0;
+  });
+  const best = candidates[0];
+  const contested = candidates.length > 1;
 
-  // Confidence from the MARGIN between the top two candidates, not from the
-  // raw score. Two templates that both fit at 0.9 mean the frame is ambiguous,
-  // and reporting 0.9 for either would be a lie.
-  const best = resolved[0];
-  const second = resolved[1];
-  const margin = second ? best.score - second.score : best.score;
-  const confidence = Math.max(0, Math.min(1, best.score * (0.55 + 0.45 * Math.min(margin / 0.25, 1))));
+  let confidence;
+  if (FIXED_CONFIDENCE !== null) {
+    confidence = FIXED_CONFIDENCE;
+  } else {
+    // Start from rule specificity, then subtract for everything we could not
+    // actually verify.
+    confidence = 0.72 + Math.min(best.total, 4) * 0.055;   // 0.775 .. 0.94
+    if (best.motion) confidence -= 0.16;                    // motion assumed
+    if (contested) confidence -= 0.12;                      // another rule fits
+    if (primary.tiltUnreliable) confidence -= 0.10;         // y-flags shaky
+    if (!pose) confidence -= 0.05;                          // zones are guesses
+    confidence = Math.max(0.3, Math.min(0.97, confidence));
+  }
 
   return {
-    label: best.label,
+    token: best.token,
     confidence,
-    engine: 'signbridge',
-    alternatives: resolved.slice(1, 3).map((s) => ({
-      label: s.label, confidence: Math.min(1, s.score),
-    })),
+    engine: 'SignBridge',
     latencyMs: performance.now() - started,
-    note: best.note,
-    ambiguous: Boolean(second && margin < 0.08),
+    motionAssumed: best.motion,
+    alternatives: candidates.slice(1, 3).map((c) => c.token),
+    ambiguous: contested,
+    tiltUnreliable: primary.tiltUnreliable,
   };
 }
 
-/**
- * Break ties between templates that share a handshape.
- *
- *   HELLO vs STOP  an open palm is identical in both; a raised hand (above the
- *                  shoulder line) reads as a greeting, at chest height as stop.
- *   NAME vs PEACE  the same two-finger shape; NAME is two-handed in ISL.
- *
- * Without pose or a second hand, both stay in the list and the margin collapses,
- * which is what marks the result ambiguous.
- */
-function disambiguate(scored, { handCount, pose, hands }) {
-  const out = scored.map((s) => ({ ...s }));
-
-  const openPalm = out.filter((s) => s.label === 'HELLO' || s.label === 'STOP');
-  if (openPalm.length === 2 && pose && pose.length > 12 && hands?.[0]?.landmarks) {
-    const shoulderY = ((pose[11]?.y ?? 0) + (pose[12]?.y ?? 0)) / 2;
-    const handY = hands[0].landmarks[WRIST]?.y ?? 1;
-    // Image space: y grows downward, so a smaller y is higher in frame.
-    const raised = handY < shoulderY;
-    for (const s of out) {
-      if (s.label === 'HELLO') s.score *= raised ? 1.15 : 0.55;
-      if (s.label === 'STOP') s.score *= raised ? 0.6 : 1.15;
-    }
-  }
-
-  for (const s of out) {
-    if (s.label === 'NAME') s.score *= handCount >= 2 ? 1.2 : 0.4;
-    if (s.label === 'PEACE') s.score *= handCount >= 2 ? 0.75 : 1.1;
-  }
-
-  out.sort((a, b) => b.score - a.score);
-  return out;
-}
-
-/** Labels this engine can produce, for the UI to describe honestly. */
-export const SIGNBRIDGE_LABELS = [...new Set(TEMPLATES.map((t) => t.label))];
+export const SIGNBRIDGE_LABELS = GESTURE_TOKENS;
 
 export default {
-  extractHandFeature, describeHand, classifySignBridgeFrame,
+  extractHandFeature, handFlags, classifySignBridgeFrame,
   SIGNBRIDGE_LABELS, HAND_FEATURE_DIM,
 };

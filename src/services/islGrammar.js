@@ -28,6 +28,7 @@
 
 import { ISL_FEW_SHOT } from './qwenRules.js';
 import { KNOWN_NAMES, buildIntroduction } from '../config/greetings.js';
+import { sentenceFor } from '../config/gestureSentences.js';
 
 // ── Lexicon ──────────────────────────────────────────────────────────────────
 
@@ -270,6 +271,26 @@ export function expand(tags, languageCode = 'en-IN') {
   const tokens = (tags || []).map(norm).filter(Boolean);
   if (tokens.length === 0) return { english: '', rule: 'empty', translated: '' };
 
+  // -1. A single SignBridge gesture token.
+  //
+  // Checked before everything else because these carry a whole utterance on
+  // their own -- WATER at the mouth means "I need water", not the bare noun --
+  // and because they are the only path that produces a non-English sentence
+  // offline. Falling through to the SOV rules would emit "I water." instead.
+  if (tags && tags.length === 1) {
+    // Look up the RAW tag: norm() strips underscores, which would turn
+    // HOW_MUCH into HOWMUCH and miss the table entirely.
+    const key = String(tags[0] || '').trim().toUpperCase().replace(/[^A-Z_]/g, '');
+    const english = sentenceFor(key, 'en-IN');
+    if (english) {
+      return {
+        english,
+        translated: sentenceFor(key, languageCode) || '',
+        rule: 'gesture-sentence',
+      };
+    }
+  }
+
   // 0. Greetings and self-introduction.
   //
   // This is the one family of phrases the offline engine can render in a
@@ -381,6 +402,7 @@ export function expand(tags, languageCode = 'en-IN') {
         c.subject.subject, be, not ? 'not' : '',
         nounPhrase(c.nouns[0]), timePhrase,
       ]),
+      translated: '',
       rule: 'copula',
     };
   }

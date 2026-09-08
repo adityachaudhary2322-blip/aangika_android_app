@@ -1,186 +1,226 @@
 /**
- * SignBridge engine test: feature contract, classification, latency.
+ * SignBridge 20-sign classifier test.
  *
  *     node scripts/test-signbridge.mjs
  *
- * Hands are synthesised geometrically rather than captured, so this checks the
- * classifier's logic, not its real-world accuracy. Nothing here says how it
- * behaves on an actual signer -- that needs a camera and a person.
+ * Hands are synthesised geometrically. This verifies the decision tree's logic
+ * and the feature contract -- NOT real-world accuracy, which needs a camera and
+ * a signer. Nothing here says how it behaves on actual hands.
  */
 
 import {
-  extractHandFeature, describeHand, classifySignBridgeFrame, HAND_FEATURE_DIM,
+  extractHandFeature, classifySignBridgeFrame, HAND_FEATURE_DIM,
 } from '../src/services/signbridgeEngine.js';
+import { GESTURE_TOKENS, sentenceFor } from '../src/config/gestureSentences.js';
+import { LANGUAGES } from '../src/config/languages.js';
+
+// ── Synthetic hand builder ──────────────────────────────────────────────────
 
 /**
- * Build a 21-landmark hand.
- * @param {object} ext which fingers are extended
- * @param {object} opts scale/origin, to prove distance-invariance
+ * @param ext   which fingers are extended
+ * @param opts  ox/oy place the wrist in the frame; tilt rotates the hand;
+ *              curlTip pulls fingertips toward the palm (cluster shapes)
  */
-function makeHand(ext = {}, { scale = 1, ox = 0.5, oy = 0.5, spread = 1 } = {}) {
-  const P = (x, y, z = 0) => ({ x: ox + x * scale, y: oy + y * scale, z: z * scale });
-  const lm = new Array(21);
-  lm[0] = P(0, 0);                                   // wrist
+function hand(ext = {}, opts = {}) {
+  const {
+    ox = 0.5, oy = 0.55, scale = 1, tilt = 0, spread = 1,
+    thumbAcross = false, thumbDownward = false, cluster = 0,
+    thumbToTips = false,
+  } = opts;
 
-  // Joint radius from the wrist is what the classifier measures, so the
-  // generator has to get that right: an EXTENDED finger grows monotonically
-  // outward, a CURLED one peaks at the PIP knuckle and folds back inside it.
+  const rad = (tilt * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const P = (x, y) => ({
+    x: ox + (x * cos - y * sin) * scale,
+    y: oy + (x * sin + y * cos) * scale,
+    z: 0,
+  });
+
+  const lm = new Array(21);
+  lm[0] = P(0, 0);
+
   const chains = [
-    { name: 'thumb',  idx: [1, 2, 3, 4],     dx: -0.09, dy: -0.05 },
-    { name: 'index',  idx: [5, 6, 7, 8],     dx: -0.04 * spread, dy: -0.10 },
-    { name: 'middle', idx: [9, 10, 11, 12],  dx: 0.00, dy: -0.11 },
-    { name: 'ring',   idx: [13, 14, 15, 16], dx: 0.04, dy: -0.10 },
-    { name: 'pinky',  idx: [17, 18, 19, 20], dx: 0.08 * spread, dy: -0.09 },
+    { name: 'thumb', idx: [1, 2, 3, 4], dx: -0.085, dy: -0.045 },
+    { name: 'index', idx: [5, 6, 7, 8], dx: -0.035 * spread, dy: -0.10 },
+    { name: 'middle', idx: [9, 10, 11, 12], dx: 0.0, dy: -0.11 },
+    { name: 'ring', idx: [13, 14, 15, 16], dx: 0.035, dy: -0.10 },
+    { name: 'pinky', idx: [17, 18, 19, 20], dx: 0.07 * spread, dy: -0.088 },
   ];
 
-  // [MCP, PIP, DIP, TIP] multipliers along the finger axis.
   const EXTENDED = [1.0, 1.8, 2.5, 3.1];
-  const CURLED   = [1.0, 1.45, 1.05, 0.62];   // peaks at PIP, tip tucked in
+  const CURLED = [1.0, 1.45, 1.05, 0.62];
 
   for (const c of chains) {
-    const mult = ext[c.name] ? EXTENDED : CURLED;
+    let mult = ext[c.name] ? EXTENDED : CURLED;
+    let dx = c.dx;
+    let dy = c.dy;
+
+    if (c.name === 'thumb') {
+      if (thumbDownward) { dy = 0.05; mult = [1.0, 1.6, 2.2, 2.7]; }
+      else if (thumbToTips) {
+        // Thumb reaches up to meet extended index/middle tips (a real pinch).
+        // The old `cluster` option collapsed whole fingers, which made a pinch
+        // read as a fist and sent NO / HOW_MUCH to the YES rule.
+        // Track the index tip wherever `spread` put it, instead of assuming
+        // spread === 1. A fixed offset left the thumb short of a wide hand.
+        dx = -0.0353 * spread; dy = -0.101; mult = [0.6, 1.4, 2.2, 3.07];
+      } else if (thumbAcross) { dx = 0.02; dy = -0.02; mult = [1.0, 1.6, 1.4, 1.1]; }
+    }
     for (let j = 0; j < 4; j++) {
-      lm[c.idx[j]] = P(c.dx * mult[j], c.dy * mult[j]);
+      let m = mult[j];
+      // `cluster` pulls the extended tips back together (FOOD / pinches).
+      if (cluster > 0 && j === 3) m *= 1 - cluster;
+      const px = dx * m * (cluster > 0 && j === 3 ? 0.15 : 1);
+      lm[c.idx[j]] = P(px, dy * m);
     }
   }
   return lm;
 }
 
 const ALL = { thumb: 1, index: 1, middle: 1, ring: 1, pinky: 1 };
+const H = (lm, handedness = 'Right') => ({ landmarks: lm, handedness });
+
+/** Pose with shoulders at y and nose at (0.5, 0.25). */
+function pose(shoulderY = 0.42) {
+  const p = new Array(33).fill(null).map(() => ({ x: 0.5, y: 0.9 }));
+  p[0] = { x: 0.5, y: 0.25 };
+  p[11] = { x: 0.38, y: shoulderY };
+  p[12] = { x: 0.62, y: shoulderY };
+  return p;
+}
+const POSE = pose();
+
+// ── Cases: one per sign ─────────────────────────────────────────────────────
+
 const CASES = [
-  ['STOP / open palm', makeHand(ALL), null, ['STOP', 'HELLO']],
-  ['PEACE', makeHand({ index: 1, middle: 1 }, { spread: 1.6 }), null, ['PEACE', 'V']],
-  ['GOOD / thumbs up', makeHand({ thumb: 1 }), null, ['GOOD']],
-  ['I / pinky', makeHand({ pinky: 1 }), null, ['I']],
-  ['L', makeHand({ thumb: 1, index: 1 }), null, ['L']],
-  ['Y', makeHand({ thumb: 1, pinky: 1 }), null, ['Y']],
-  ['B / flat hand', makeHand({ index: 1, middle: 1, ring: 1, pinky: 1 }, { spread: 0.4 }), null, ['B']],
-  ['A / fist', makeHand({}), null, ['A', 'O']],
+  ['HELLO', [H(hand(ALL, { oy: 0.30 }))], POSE],
+  ['STOP', [H(hand(ALL, { oy: 0.55 }))], POSE],
+  ['GOOD', [H(hand({ thumb: 1 }, { oy: 0.55 }))], POSE],
+  ['BAD', [H(hand({}, { oy: 0.55, thumbDownward: true }))], POSE],
+  ['YES', [H(hand({}, { oy: 0.63, thumbAcross: true }))], POSE],
+  ['NO', [H(hand({ index: 1, middle: 1 }, { oy: 0.55, spread: 0.25, thumbToTips: true }))], POSE],
+  ['WATER', [H(hand({}, { ox: 0.5, oy: 0.34 }))], POSE],
+  ['FOOD', [H(hand(ALL, { ox: 0.5, oy: 0.40, cluster: 0.985 }))], POSE],
+  ['PLEASE', [H(hand(ALL, { oy: 0.68 }))], POSE],
+  ['THANK_YOU', [H(hand(ALL, { ox: 0.5, oy: 0.45, tilt: 30 }))], POSE],
+  ['HELP', [H(hand(ALL, { ox: 0.45, oy: 0.55 })), H(hand({}, { ox: 0.55, oy: 0.5 }), 'Left')], POSE],
+  ['WASHROOM', [H(hand({ index: 1, middle: 1, ring: 1 }, { oy: 0.55, thumbAcross: true }))], POSE],
+  ['SORRY', [H(hand({}, { ox: 0.5, oy: 0.52, thumbAcross: true }))], POSE],
+  ['UNDERSTAND', [H(hand({ index: 1 }, { ox: 0.42, oy: 0.30 }))], POSE],
+  ['DONT_UNDERSTAND', [H(hand({ index: 1 }, { ox: 0.47, oy: 0.55 })), H(hand({ index: 1 }, { ox: 0.53, oy: 0.55 }), 'Left')], POSE],
+  ['DOCTOR', [H(hand({ index: 1, middle: 1 }, { ox: 0.5, oy: 0.55 })), H(hand({}, { ox: 0.39, oy: 0.25 }), 'Left')], POSE],
+  ['POLICE', [H(hand({ index: 1, middle: 1 }, { ox: 0.68, oy: 0.38 }))], POSE],
+  ['HOW_MUCH', [H(hand({ index: 1, middle: 1 }, { oy: 0.60, spread: 1.1, thumbToTips: true }))], POSE],
+  ['NAME_ADITYA', [H(hand({ index: 1, middle: 1 }, { ox: 0.44, oy: 0.5 })), H(hand({ index: 1, middle: 1 }, { ox: 0.56, oy: 0.5 }), 'Left')], POSE],
+  ['GOODBYE', [H(hand(ALL, { oy: 0.28, tilt: 45 }))], POSE],
 ];
 
 let pass = 0;
 let fail = 0;
+const check = (ok, label, detail) => {
+  ok ? pass++ : fail++;
+  console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${label}${detail ? '  ' + detail : ''}`);
+};
 
-console.log('='.repeat(72));
-console.log('  SignBridge static engine');
-console.log('='.repeat(72));
+console.log('='.repeat(74));
+console.log('  SignBridge 20-sign deterministic classifier');
+console.log('='.repeat(74));
 
 // ── 1. Feature contract ─────────────────────────────────────────────────────
-console.log('\n1. 63-coordinate feature (ported from SignBridge)\n' + '-'.repeat(72));
+console.log('\n1. 63-coordinate feature (ported from SignBridge)\n' + '-'.repeat(74));
 {
-  const hand = makeHand(ALL);
-  const f = extractHandFeature(hand);
-  const check = (ok, label, detail) => {
-    ok ? pass++ : fail++;
-    console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${label}${detail ? '  ' + detail : ''}`);
-  };
-
-  check(f.length === HAND_FEATURE_DIM, 'length is 63', `got ${f.length}`);
-  check(f[0] === 0 && f[1] === 0 && f[2] === 0,
-    'wrist maps to the origin', '(x0-x0, y0-y0, z0-z0)');
-
-  let maxR = 0;
-  for (let i = 0; i < 21; i++) {
-    maxR = Math.max(maxR, Math.hypot(f[i * 3], f[i * 3 + 1], f[i * 3 + 2]));
-  }
-  check(Math.abs(maxR - 1) < 1e-5, 'scaled to unit max radius', `max=${maxR.toFixed(6)}`);
-
-  // Distance invariance: the same pose twice as large and moved must produce
-  // the same vector. This is what the scale step buys.
-  const near = extractHandFeature(makeHand(ALL, { scale: 1 }));
-  const far = extractHandFeature(makeHand(ALL, { scale: 2.5, ox: 0.2, oy: 0.8 }));
+  const f = extractHandFeature(hand(ALL));
+  check(f.length === HAND_FEATURE_DIM, 'length is 63');
+  check(f[0] === 0 && f[1] === 0 && f[2] === 0, 'wrist at the origin');
+  const near = extractHandFeature(hand(ALL, { scale: 1 }));
+  const far = extractHandFeature(hand(ALL, { scale: 2.5, ox: 0.2, oy: 0.8 }));
   let worst = 0;
   for (let i = 0; i < HAND_FEATURE_DIM; i++) worst = Math.max(worst, Math.abs(near[i] - far[i]));
-  check(worst < 1e-5, 'scale and position invariant', `max deviation ${worst.toExponential(1)}`);
-
-  const empty = extractHandFeature(null);
-  check(empty.every((x) => x === 0), 'missing hand is exactly zero');
+  check(worst < 1e-5, 'scale and position invariant', `max dev ${worst.toExponential(1)}`);
+  check(extractHandFeature(null).every((x) => x === 0), 'missing hand is exactly zero');
 }
 
-// ── 2. Classification ───────────────────────────────────────────────────────
-console.log('\n2. Static classification\n' + '-'.repeat(72));
-for (const [label, hand, pose, accept] of CASES) {
-  const r = classifySignBridgeFrame([{ landmarks: hand, handedness: 'Right' }], pose);
-  const got = r?.label;
-  const ok = accept.includes(got);
+// ── 2. All 20 signs ─────────────────────────────────────────────────────────
+console.log('\n2. Decision tree — all 20 signs\n' + '-'.repeat(74));
+const detected = new Set();
+for (const [expected, hands, p] of CASES) {
+  const r = classifySignBridgeFrame(hands, p);
+  const ok = r?.token === expected;
+  if (ok) detected.add(expected);
   ok ? pass++ : fail++;
-  console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${label.padEnd(22)} -> ${String(got).padEnd(7)} ` +
-    `${((r?.confidence ?? 0) * 100).toFixed(0)}%${r?.ambiguous ? ' (ambiguous)' : ''}`);
-  if (!ok) console.log(`         accepted: ${accept.join(' / ')}`);
-  if (r?.alternatives?.length) {
-    console.log(`         also: ${r.alternatives.map((a) => a.label).join(', ')}`);
+  const conf = r?.token ? `${(r.confidence * 100).toFixed(0)}%` : '--';
+  const marks = [
+    r?.motionAssumed ? 'motion-assumed' : null,
+    r?.ambiguous ? `also:${r.alternatives.join('/')}` : null,
+    r?.tiltUnreliable ? 'tilt' : null,
+  ].filter(Boolean).join(' ');
+  console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${expected.padEnd(16)} -> ${String(r?.token).padEnd(16)} ${conf.padStart(4)}  ${marks}`);
+  if (!ok && r?.nearest) {
+    console.log(`         nearest ${r.nearest.token}, missing: ${r.nearest.missing.join(', ')}`);
   }
 }
 
-// ── 3. HELLO vs STOP via pose ───────────────────────────────────────────────
-console.log('\n3. HELLO vs STOP -- identical handshape, separated by pose\n' + '-'.repeat(72));
+// ── 3. Sentence coverage ────────────────────────────────────────────────────
+console.log('\n3. Sentence templates — 20 tokens x 11 languages\n' + '-'.repeat(74));
 {
-  const palm = makeHand(ALL);
-  // pose[11]/[12] are the shoulders. y grows downward in image space.
-  const shoulders = (y) => { const p = new Array(33).fill({ x: 0.5, y: 0.9 }); p[11] = { x: 0.4, y }; p[12] = { x: 0.6, y }; return p; };
-
-  const raised = classifySignBridgeFrame(
-    [{ landmarks: makeHand(ALL, { oy: 0.15 }), handedness: 'Right' }], shoulders(0.5));
-  const chest = classifySignBridgeFrame(
-    [{ landmarks: makeHand(ALL, { oy: 0.7 }), handedness: 'Right' }], shoulders(0.5));
-
-  const a = raised?.label === 'HELLO';
-  const b = chest?.label === 'STOP';
-  a ? pass++ : fail++;
-  b ? pass++ : fail++;
-  console.log(`  [${a ? 'PASS' : 'FAIL'}] hand above shoulders -> ${raised?.label} (${(raised.confidence * 100).toFixed(0)}%)`);
-  console.log(`  [${b ? 'PASS' : 'FAIL'}] hand at chest        -> ${chest?.label} (${(chest.confidence * 100).toFixed(0)}%)`);
-
-  const noPose = classifySignBridgeFrame([{ landmarks: palm, handedness: 'Right' }], null);
-  console.log(`  no pose available    -> ${noPose.label}` +
-    `${noPose.ambiguous ? ' + flagged ambiguous (correct: cannot be resolved)' : ''}`);
+  let missing = 0;
+  for (const token of GESTURE_TOKENS) {
+    for (const l of LANGUAGES) {
+      if (!sentenceFor(token, l.code)) {
+        missing++;
+        console.log(`    MISSING ${token} / ${l.code}`);
+      }
+    }
+  }
+  check(GESTURE_TOKENS.length === 20, 'exactly 20 tokens', `got ${GESTURE_TOKENS.length}`);
+  check(missing === 0, `all ${20 * LANGUAGES.length} token/language pairs present`,
+    missing ? `${missing} missing` : '');
+  console.log(`    e.g. WATER  en: ${sentenceFor('WATER', 'en-IN')}`);
+  console.log(`         WATER  hi: ${sentenceFor('WATER', 'hi-IN')}`);
+  console.log(`         WATER  ta: ${sentenceFor('WATER', 'ta-IN')}`);
 }
 
-// ── 4. NAME vs PEACE via hand count ─────────────────────────────────────────
-console.log('\n4. NAME vs PEACE -- separated by hand count\n' + '-'.repeat(72));
+// ── 4. Honesty checks ───────────────────────────────────────────────────────
+console.log('\n4. Honesty of the reported confidence\n' + '-'.repeat(74));
 {
-  const two = makeHand({ index: 1, middle: 1 });
-  const one = classifySignBridgeFrame([{ landmarks: two, handedness: 'Right' }], null);
-  const both = classifySignBridgeFrame([
-    { landmarks: two, handedness: 'Right' },
-    { landmarks: two, handedness: 'Left' },
-  ], null);
-  const a = one?.label !== 'NAME';
-  const b = both?.label === 'NAME';
-  a ? pass++ : fail++;
-  b ? pass++ : fail++;
-  console.log(`  [${a ? 'PASS' : 'FAIL'}] one hand  -> ${one?.label}`);
-  console.log(`  [${b ? 'PASS' : 'FAIL'}] two hands -> ${both?.label}`);
+  const yes = classifySignBridgeFrame([H(hand({}, { oy: 0.63, thumbAcross: true }))], POSE);
+  check(Boolean(yes?.motionAssumed), 'YES is flagged motion-assumed',
+    yes?.motionAssumed || '');
+
+  const withPose = classifySignBridgeFrame([H(hand(ALL, { oy: 0.30 }))], POSE);
+  const without = classifySignBridgeFrame([H(hand(ALL, { oy: 0.30 }))], null);
+  check(without.confidence < withPose.confidence,
+    'confidence drops without pose',
+    `${(withPose.confidence * 100).toFixed(0)}% -> ${(without.confidence * 100).toFixed(0)}%`);
+
+  const confs = CASES.map(([, h, p]) => classifySignBridgeFrame(h, p))
+    .filter((r) => r?.token).map((r) => r.confidence);
+  const unique = new Set(confs.map((c) => c.toFixed(3)));
+  check(unique.size > 1, 'confidence varies by evidence, not a constant',
+    `${unique.size} distinct values across ${confs.length} matches`);
 }
 
 // ── 5. Latency ──────────────────────────────────────────────────────────────
-console.log('\n5. Latency budget (spec: under 2 ms per frame)\n' + '-'.repeat(72));
+console.log('\n5. Latency (spec: under 2 ms per frame)\n' + '-'.repeat(74));
 {
-  const hand = [{ landmarks: makeHand(ALL), handedness: 'Right' }];
-  const pose = new Array(33).fill({ x: 0.5, y: 0.5 });
-  for (let i = 0; i < 2000; i++) classifySignBridgeFrame(hand, pose);  // warm up
-
+  const hands = [H(hand(ALL, { oy: 0.3 }))];
+  for (let i = 0; i < 3000; i++) classifySignBridgeFrame(hands, POSE);
   const N = 20000;
-  const samples = new Float64Array(N);
+  const s = new Float64Array(N);
   for (let i = 0; i < N; i++) {
     const t0 = performance.now();
-    classifySignBridgeFrame(hand, pose);
-    samples[i] = performance.now() - t0;
+    classifySignBridgeFrame(hands, POSE);
+    s[i] = performance.now() - t0;
   }
-  samples.sort();
-  const mean = samples.reduce((a, b) => a + b, 0) / N;
-  const p50 = samples[Math.floor(N * 0.5)];
-  const p99 = samples[Math.floor(N * 0.99)];
-  const max = samples[N - 1];
-
-  console.log(`  mean ${mean.toFixed(4)} ms · p50 ${p50.toFixed(4)} ms · ` +
-    `p99 ${p99.toFixed(4)} ms · max ${max.toFixed(4)} ms  (n=${N})`);
-  const ok = p99 < 2;
-  ok ? pass++ : fail++;
-  console.log(`  [${ok ? 'PASS' : 'FAIL'}] p99 under 2 ms`);
+  s.sort();
+  const mean = s.reduce((a, b) => a + b, 0) / N;
+  console.log(`  mean ${mean.toFixed(4)} ms · p50 ${s[N >> 1].toFixed(4)} ms · ` +
+    `p99 ${s[Math.floor(N * 0.99)].toFixed(4)} ms  (n=${N})`);
+  check(s[Math.floor(N * 0.99)] < 2, 'p99 under 2 ms');
 }
 
-console.log('\n' + '='.repeat(72));
-console.log(`  ${pass} passed, ${fail} failed`);
-console.log('='.repeat(72));
+console.log('\n' + '='.repeat(74));
+console.log(`  ${pass} passed, ${fail} failed · ${detected.size}/20 signs classified`);
+console.log('='.repeat(74));
 process.exit(fail ? 1 : 0);
