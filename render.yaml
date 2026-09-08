@@ -1,0 +1,46 @@
+# Render blueprint - static site.
+#
+# The app is a single-page app: all navigation is React state, so there is only
+# ever one real document. Without the rewrite below, a refresh on any path other
+# than "/" asks Render for a file that does not exist and returns 404.
+services:
+  - type: web
+    name: isl-connect
+    runtime: static
+    plan: free
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: false
+
+    routes:
+      # SPA fallback: hand every unmatched path to index.html.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    headers:
+      # The ONNX graph and the ORT wasm are content-hashed or version-pinned and
+      # never change in place; caching them hard is what makes the second visit
+      # fast instead of another 21 MB download.
+      - path: /models/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      # index.html must NOT be cached, or a deploy ships new assets that the
+      # stale HTML never references.
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      # The camera and microphone are the app; Permissions-Policy must allow
+      # them for this origin or the browser blocks getUserMedia outright.
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(self), microphone=(self)
