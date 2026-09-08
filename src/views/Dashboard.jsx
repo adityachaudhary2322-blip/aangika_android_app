@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   BatteryMedium, Wifi, WifiOff, Hand, Mic, Video, CloudOff,
-  AudioLines, Users, Database, Settings as SettingsIcon, Languages,
+  AudioLines, Users, Database, Settings as SettingsIcon, Languages, FileVideo,
 } from 'lucide-react';
 import { LANGUAGES, getLanguage } from '../config/languages.js';
 import { describeMode, MODE_OFFLINE } from '../services/translationService.js';
@@ -13,14 +13,14 @@ const TILES = [
   { id: 'hearing', label: 'Hearing Mode', hint: 'Speech → text', Icon: Mic, tint: 'text-secondary' },
   { id: 'call', label: 'Realtime Call', hint: 'P2P video', Icon: Video, tint: 'text-amber' },
   { id: 'offline', label: 'Offline Engine', hint: 'Toggle pipeline', Icon: CloudOff, tint: 'text-amber' },
-  { id: 'record', label: 'Audio Recording', hint: 'Capture & save', Icon: AudioLines, tint: 'text-rose' },
+  { id: 'recorded', label: 'Recorded Video', hint: 'File to subtitles', Icon: FileVideo, tint: 'text-rose' },
   { id: 'group', label: 'Group Room', hint: 'Multi-party', Icon: Users, tint: 'text-secondary' },
   { id: 'models', label: 'Models & Data', hint: '21 MB tagger', Icon: Database, tint: 'text-primary' },
   { id: 'settings', label: 'Settings', hint: 'Keys & voice', Icon: SettingsIcon, tint: 'text-ink-dim' },
 ];
 
 /** Tiles with no view behind them yet. Saying so beats a dead tap. */
-const UNBUILT = new Set(['record', 'group', 'models']);
+const UNBUILT = new Set(['group', 'models']);
 
 export default function Dashboard({
   language, setLanguage, online, onNavigate, mode, togglePipeline,

@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "ISL Connect \u2014 Meeting Captions",
+  "version": "0.1.0",
+  "description": "Overlay Indian Sign Language captions on Google Meet, Zoom and WhatsApp Web, and drop the translation straight into the chat.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://meet.google.com/*",
+    "https://app.zoom.us/*",
+    "https://web.whatsapp.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://meet.google.com/*",
+        "https://app.zoom.us/*",
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_title": "ISL Connect",
+    "default_popup": "popup.html"
+  }
+}

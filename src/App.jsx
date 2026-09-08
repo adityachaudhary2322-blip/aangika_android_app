@@ -4,6 +4,7 @@ import SignTranslator from './views/SignTranslator.jsx';
 import HearingMode from './views/HearingMode.jsx';
 import VideoCall from './views/VideoCall.jsx';
 import Settings from './views/Settings.jsx';
+import RecordedVideoTranslator from './views/RecordedVideoTranslator.jsx';
 import cameraManager from './services/cameraManager.js';
 import { DEFAULT_LANGUAGE_CODE } from './config/languages.js';
 import { setMode as setModeInternal } from './services/translationService.js';
@@ -92,6 +93,7 @@ export default function App() {
       {view === 'sign' && <SignTranslator {...shared} cameraError={cameraError} />}
       {view === 'hearing' && <HearingMode {...shared} />}
       {view === 'call' && <VideoCall {...shared} cameraError={cameraError} />}
+      {view === 'recorded' && <RecordedVideoTranslator {...shared} />}
       {view === 'settings' && <Settings {...shared} />}
     </div>
   );
