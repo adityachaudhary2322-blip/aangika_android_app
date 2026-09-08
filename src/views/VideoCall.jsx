@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Mic, MicOff, SwitchCamera, Captions, PhoneOff, Copy, Video,
+  ArrowLeft, Mic, MicOff, FlipHorizontal, Captions, PhoneOff, Copy, Video,
 } from 'lucide-react';
 import CameraStage from '../components/CameraStage.jsx';
 import LandmarkCanvas from '../components/LandmarkCanvas.jsx';
@@ -9,6 +9,7 @@ import EngineToggle from '../components/EngineToggle.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
 import cameraManager from '../services/cameraManager.js';
 import { translate } from '../services/translationService.js';
+import { unlockAudio } from '../services/ttsService.js';
 import { durationString } from '../lib/utils.js';
 
 /**
@@ -51,7 +52,10 @@ export default function VideoCall({
   const [phase, setPhase] = useState('lobby');   // lobby | waiting | live
   const [muted, setMuted] = useState(false);
   const [captions, setCaptions] = useState(true);
-  const [mirrored, setMirrored] = useState(true);
+  const [mirrored, setMirrored] = useState(() => cameraManager.isFrontCamera());
+
+  // Mirroring follows the manager, never a local toggle.
+  useEffect(() => cameraManager.subscribe((s) => setMirrored(s.isFrontCamera)), []);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState(null);
   const [signerLine, setSignerLine] = useState('');
@@ -158,6 +162,7 @@ export default function VideoCall({
     setError(null);
     setPhase('waiting');
     try {
+      await unlockAudio();   // inside the click, before any await that matters
       await buildLocalStream();
       await ensurePeer();
     } catch (err) {
@@ -171,6 +176,7 @@ export default function VideoCall({
     setError(null);
     setPhase('waiting');
     try {
+      await unlockAudio();
       const stream = await buildLocalStream();
       const peer = await ensurePeer();
       const call = peer.call(remoteId.trim(), stream);
@@ -317,18 +323,18 @@ export default function VideoCall({
       {/* Local PiP, top-right under the scrim. Deliberately larger than a
           WhatsApp thumbnail: a signer must see their own hands. */}
       <div className="absolute right-3 top-16 z-30 h-44 w-32 overflow-hidden rounded-2xl border border-white/25 bg-surface-low shadow-2xl">
-        <CameraStage mirrored={mirrored} className="absolute inset-0" />
+        <CameraStage className="absolute inset-0" />
         <LandmarkCanvas frameRef={frameRef} mirrored={mirrored} />
         <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 font-mono text-[9px]">
           {stats.fps} fps
         </span>
         <button
           type="button"
-          onClick={() => { cameraManager.flip(); setMirrored((v) => !v); }}
+          onClick={() => cameraManager.flip()}
           className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 backdrop-blur"
-          aria-label="Flip camera"
+          aria-label={mirrored ? 'Switch to back camera' : 'Switch to front camera'}
         >
-          <SwitchCamera size={13} />
+          <FlipHorizontal size={13} />
         </button>
       </div>
 

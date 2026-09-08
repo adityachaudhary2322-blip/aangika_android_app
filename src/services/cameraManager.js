@@ -61,11 +61,25 @@ export function getResolution() {
   return state.resolution;
 }
 
+/**
+ * True while the front (selfie) camera is active.
+ *
+ * This is the ONE source of truth for mirroring. Views used to keep their own
+ * `mirrored` flag next to a flip() call, which desynchronised the moment a flip
+ * failed -- the preview would mirror while the camera had not actually
+ * switched, so the drawn landmarks no longer lined up with the video.
+ */
+export function isFrontCamera() {
+  return state.facingMode === 'user';
+}
+
 export function getStatus() {
   return {
     resolution: state.resolution,
     active: Boolean(state.stream && state.stream.active),
     facingMode: state.facingMode,
+    isFrontCamera: state.facingMode === 'user',
+    switching: Boolean(state.starting),
     error: state.error,
     hasVideoElement: Boolean(state.video),
   };
@@ -101,12 +115,17 @@ export async function start({ facingMode = state.facingMode } = {}) {
         );
       }
 
-      // Swapping facing mode: release the old tracks first, or a phone with a
-      // single camera pipeline will refuse the second acquire.
+      // Swapping facing mode: release EVERY track first. Most phones expose a
+      // single camera pipeline, and asking for the back camera while the front
+      // one is still held returns NotReadableError or, worse, silently hands
+      // back the old stream.
       if (state.stream) {
         state.stream.getTracks().forEach((t) => t.stop());
         state.stream = null;
       }
+      // Detach immediately so the preview shows black rather than a frozen
+      // last frame from the camera we just released.
+      if (video.srcObject) video.srcObject = null;
 
       // 480x360 is a deliberate downscale. MediaPipe's cost scales with the
       // pixels it is handed, and a phone happily reports a 1280x720 (or
@@ -175,10 +194,30 @@ export function attachTo(container) {
   };
 }
 
-/** Flip between the front and rear camera, keeping the same element. */
+/**
+ * Flip between the front and rear camera, keeping the same <video> element.
+ *
+ * On failure the previous facing mode is restored and re-acquired, because a
+ * phone with no back camera would otherwise be left with no stream at all.
+ */
 export async function flip() {
-  const next = state.facingMode === 'user' ? 'environment' : 'user';
-  return start({ facingMode: next });
+  const previous = state.facingMode;
+  const next = previous === 'user' ? 'environment' : 'user';
+  try {
+    const video = await start({ facingMode: next });
+    notify();
+    return video;
+  } catch (err) {
+    state.error = `Could not switch camera: ${err?.message || err}`;
+    try {
+      const video = await start({ facingMode: previous });
+      notify();
+      return video;
+    } catch {
+      notify();
+      throw err;
+    }
+  }
 }
 
 /** The shared element, for MediaPipe / canvas consumers. */
@@ -212,5 +251,5 @@ export function stop() {
 
 export default {
   start, stop, flip, attachTo, subscribe, getStatus, getResolution,
-  getVideoElement, getStream, isReady,
+  isFrontCamera, getVideoElement, getStream, isReady,
 };

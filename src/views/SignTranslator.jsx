@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  ArrowLeft, Volume2, Copy, Eraser, SwitchCamera, Waypoints, Loader2,
+  ArrowLeft, Volume2, Copy, Eraser, FlipHorizontal, Waypoints, Loader2, Play,
 } from 'lucide-react';
 import CameraStage from '../components/CameraStage.jsx';
 import LandmarkCanvas from '../components/LandmarkCanvas.jsx';
@@ -11,7 +11,7 @@ import useSignPipeline from '../hooks/useSignPipeline.js';
 import cameraManager from '../services/cameraManager.js';
 import landmarker from '../services/landmarker.js';
 import { getKeys } from '../services/translator.js';
-import { speak } from '../services/ttsService.js';
+import { speak, unlockAudio } from '../services/ttsService.js';
 import { translate, describeMode } from '../services/translationService.js';
 import { getLanguage } from '../config/languages.js';
 
@@ -19,7 +19,13 @@ export default function SignTranslator({
   language, setLanguage, online, onBack, cameraError, mode, togglePipeline,
   visionEngine, chooseVision,
 }) {
-  const [mirrored, setMirrored] = useState(true);
+  const [mirrored, setMirrored] = useState(() => cameraManager.isFrontCamera());
+  const [started, setStarted] = useState(false);
+  const [flipping, setFlipping] = useState(false);
+
+  // Single source of truth: the manager tells us which camera is live, so the
+  // overlay can never mirror while the back camera is running.
+  useEffect(() => cameraManager.subscribe((s) => setMirrored(s.isFrontCamera)), []);
   const [showMesh, setShowMesh] = useState(true);
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -27,8 +33,38 @@ export default function SignTranslator({
   const [note, setNote] = useState(null);
   const [manualTags, setManualTags] = useState(null);
 
-  const { status, progress, words, closest, stats, error, frameRef, clear } =
-    useSignPipeline({ enabled: true, mirrored, visionEngine });
+  const {
+    status, progress, words, closest, stats, error, frameRef, clear, spoken,
+  } = useSignPipeline({
+    enabled: started,
+    mirrored,
+    visionEngine,
+    autoSpeak: true,     // speak the moment a sign is held; no button press
+    language,
+    mode,
+  });
+
+  /**
+   * The one gesture that unlocks audio for the session.
+   *
+   * Mobile browsers refuse programmatic playback until the user has interacted
+   * with the page, and they only count the interaction synchronously inside the
+   * handler -- so unlockAudio() is called here, first, before any await.
+   */
+  const startTranslating = async () => {
+    await unlockAudio();
+    setStarted(true);
+    cameraManager.start().catch(() => {});
+  };
+
+  const flipCamera = async () => {
+    setFlipping(true);
+    try {
+      await cameraManager.flip();
+    } finally {
+      setFlipping(false);
+    }
+  };
 
   // Which delegate and resolution the device ACTUALLY gave us. A phone that
   // silently fell back to the CPU delegate, or ignored the 480x360 request and
@@ -96,7 +132,7 @@ export default function SignTranslator({
     <div className="relative flex h-full flex-col">
       {/* ── Camera ─────────────────────────────────────────────────── */}
       <div className="relative flex-1 overflow-hidden">
-        <CameraStage mirrored={mirrored} className="absolute inset-0" />
+        <CameraStage className="absolute inset-0" />
         {showMesh && <LandmarkCanvas frameRef={frameRef} mirrored={mirrored} />}
 
         {/* Top chrome */}
@@ -148,19 +184,38 @@ export default function SignTranslator({
             </button>
             <button
               type="button"
-              onClick={() => {
-                cameraManager.flip();
-                setMirrored((v) => !v);
-              }}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55 backdrop-blur"
+              onClick={flipCamera}
+              disabled={flipping}
+              aria-label={mirrored ? 'Switch to back camera' : 'Switch to front camera'}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55 backdrop-blur disabled:opacity-50"
             >
-              <SwitchCamera size={16} />
+              {flipping
+                ? <Loader2 size={16} className="animate-spin" />
+                : <FlipHorizontal size={16} />}
             </button>
           </div>
         </div>
 
+        {/* Start gate: one tap unlocks audio AND starts the camera. */}
+        {!started && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-surface/90 px-8 text-center">
+            <button
+              type="button"
+              onClick={startTranslating}
+              className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary shadow-glow active:scale-95"
+            >
+              <Play size={38} className="ml-1 text-surface" />
+            </button>
+            <p className="text-sm font-semibold">Start translating</p>
+            <p className="max-w-xs text-[11px] leading-relaxed text-ink-dim">
+              Hold a sign for about a third of a second and it is spoken
+              automatically. No buttons to press while signing.
+            </p>
+          </div>
+        )}
+
         {/* Loading / error */}
-        {(status === 'loading' || status === 'error' || cameraError) && (
+        {started && (status === 'loading' || status === 'error' || cameraError) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface/85 px-6 text-center">
             {status === 'loading' && (
               <>
@@ -229,8 +284,22 @@ export default function SignTranslator({
           />
         </div>
 
+        {/* Auto-speech: what the app said aloud, without being asked. */}
+        {spoken && (
+          <div className="mt-3 rounded-xl border border-primary/40 bg-primary/10 px-3 py-2">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+              <Volume2 size={11} /> Spoken automatically
+            </p>
+            <p className="mt-0.5 text-lg font-bold leading-snug">{spoken.text}</p>
+            {spoken.english !== spoken.text && (
+              <p className="text-[11px] text-ink-dim">{spoken.english}</p>
+            )}
+          </div>
+        )}
+
         <p className="mt-3 text-sm text-ink-dim">
-          {result?.english || 'Sign, then press Build.'}
+          {result?.english
+            || (started ? 'Hold a sign — it will be spoken automatically.' : 'Tap start to begin.')}
         </p>
         {result?.translated && (
           <p className="mt-1 text-2xl font-bold leading-snug">
