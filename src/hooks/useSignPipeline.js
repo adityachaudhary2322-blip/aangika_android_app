@@ -30,11 +30,29 @@ export default function useSignPipeline({
 
   const frameRef = useRef(null);      // latest raw frame, for the canvas
   const bufferRef = useRef([]);       // rolling window of normalised frames
-  const busyRef = useRef(false);
+  // Mutex: true while an inference is in flight. A frame that arrives during
+  // one is DROPPED, never queued -- a queue would report gestures the user
+  // finished seconds ago and would grow without bound on a slow phone.
+  const isProcessingRef = useRef(false);
   const seenRef = useRef(0);
   const handFramesRef = useRef(0);
   const timestampRef = useRef(0);
   const fpsRef = useRef({ start: 0, count: 0 });
+
+  // rAF runs at display rate (often 60 Hz) while the camera delivers 30 fps,
+  // so half of all callbacks would re-run both detectors on a frame already
+  // processed. Skipping those is close to a free doubling of throughput.
+  const lastVideoTimeRef = useRef(-1);
+
+  // Telemetry is written here every frame and copied into React state at most
+  // once a second. Putting FPS in state directly re-rendered the whole screen
+  // at camera rate, which cost far more than it measured.
+  const telemetryRef = useRef({ fps: 0, latencyMs: 0, handCoverage: 0 });
+  const lastStatsPushRef = useRef(0);
+
+  // Last emitted token set, so an unchanged classification does not allocate a
+  // new array and force a render.
+  const lastTokenKeyRef = useRef('');
 
   // ── Load models once ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -79,6 +97,10 @@ export default function useSignPipeline({
       const video = cameraManager.getVideoElement();
       if (!video || video.readyState < 2) return;
 
+      // Same decoded frame as last time: nothing new to see.
+      if (video.currentTime === lastVideoTimeRef.current) return;
+      lastVideoTimeRef.current = video.currentTime;
+
       // MediaPipe rejects a non-increasing timestamp, and rAF can fire twice
       // inside one millisecond.
       const now = performance.now();
@@ -100,37 +122,54 @@ export default function useSignPipeline({
       if (!fps.start) fps.start = now;
       fps.count += 1;
       if (now - fps.start >= 1000) {
-        const measured = fps.count;
+        telemetryRef.current.fps = fps.count;
+        telemetryRef.current.handCoverage = seenRef.current
+          ? Math.round((handFramesRef.current * 100) / seenRef.current)
+          : 0;
         fps.count = 0;
         fps.start = now;
-        setStats((s) => ({
-          ...s,
-          fps: measured,
-          handCoverage: seenRef.current
-            ? Math.round((handFramesRef.current * 100) / seenRef.current)
-            : 0,
-        }));
+      }
+
+      // One telemetry render per second, whatever the frame rate.
+      if (now - lastStatsPushRef.current >= 1000) {
+        lastStatsPushRef.current = now;
+        setStats({ ...telemetryRef.current });
       }
 
       // ── SignBridge: classify this frame alone, then stop ─────────────
       if (usingSignBridge) {
         const hit = classifySignBridgeFrame(result.hands, result.pose);
-        if (hit && hit.label) {
-          setWords([{
-            word: hit.label,
-            index: hit.label,
-            confidence: hit.confidence,
-            peakFrame: 0,
-            engine: 'signbridge',
-            ambiguous: hit.ambiguous,
-          }]);
-          setStats((s) => ({ ...s, latencyMs: Number(hit.latencyMs.toFixed(3)) }));
-          setClosest((hit.alternatives || []).map((a) => ({
-            word: a.label, index: a.label, confidence: a.confidence,
-            engine: 'signbridge',
-          })));
-        } else {
-          setWords([]);
+        // classifySignBridgeFrame returns `token`, not `label`. Reading the
+        // wrong field made every frame look like a miss, which then called
+        // setWords([]) with a fresh array 30x/second -- a full re-render per
+        // frame that also guaranteed nothing was ever detected.
+        const token = hit?.token || null;
+
+        telemetryRef.current.latencyMs = hit
+          ? Number(hit.latencyMs.toFixed(3))
+          : 0;
+
+        // Only touch React state when the classification actually changes.
+        const key = token ? `${token}:${hit.confidence.toFixed(2)}` : '';
+        if (key !== lastTokenKeyRef.current) {
+          lastTokenKeyRef.current = key;
+          if (token) {
+            setWords([{
+              word: token,
+              index: token,
+              confidence: hit.confidence,
+              peakFrame: 0,
+              engine: 'signbridge',
+              ambiguous: hit.ambiguous,
+              motionAssumed: hit.motionAssumed,
+            }]);
+            setClosest((hit.alternatives || []).map((label) => ({
+              word: label, index: label, confidence: 0, engine: 'signbridge',
+            })));
+          } else {
+            setWords([]);
+            setClosest([]);
+          }
         }
         return;
       }
@@ -142,19 +181,19 @@ export default function useSignPipeline({
 
       if (buffer.length < WINDOW) return;
       if (seenRef.current % STRIDE !== 0) return;
-      if (busyRef.current) return;   // drop, never queue: a backlog reports
-      busyRef.current = true;        // gestures the user finished seconds ago
+      if (isProcessingRef.current) return;   // drop this frame, never queue
+      isProcessingRef.current = true;
 
       recognizer
         .recognize(buffer.slice())
         .then((r) => {
           setWords(r.words.map((w) => ({ ...w, engine: 'aangika' })));
           setClosest(r.closest.map((w) => ({ ...w, engine: 'aangika' })));
-          setStats((s) => ({ ...s, latencyMs: r.latencyMs }));
+          telemetryRef.current.latencyMs = r.latencyMs;
           setError(null);
         })
         .catch((err) => setError(err.message))
-        .finally(() => { busyRef.current = false; });
+        .finally(() => { isProcessingRef.current = false; });
     };
 
     raf = requestAnimationFrame(tick);
@@ -169,6 +208,9 @@ export default function useSignPipeline({
     frameRef.current = null;
     seenRef.current = 0;
     handFramesRef.current = 0;
+    lastTokenKeyRef.current = '';
+    lastVideoTimeRef.current = -1;
+    telemetryRef.current = { fps: 0, latencyMs: 0, handCoverage: 0 };
     setWords([]);
     setClosest([]);
     setStats({ fps: 0, latencyMs: 0, handCoverage: 0 });

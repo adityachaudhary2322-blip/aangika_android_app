@@ -25,6 +25,9 @@ let handLandmarker = null;
 let poseLandmarker = null;
 let loading = null;
 
+/** Which delegate actually got used. GPU init can fail silently on mobile. */
+export let activeDelegate = 'unknown';
+
 export async function load(onProgress = () => {}) {
   if (handLandmarker && poseLandmarker) return true;
   if (loading) return loading;
@@ -33,25 +36,45 @@ export async function load(onProgress = () => {}) {
     onProgress('Loading MediaPipe runtime…');
     const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
 
-    onProgress('Loading hand landmarker…');
-    handLandmarker = await HandLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: HAND_MODEL, delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numHands: 2,
-      minHandDetectionConfidence: 0.5,
-      minHandPresenceConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
+    // Both models are the float16 builds -- roughly half the weights of the
+    // float32 ones and the variants MediaPipe ships for mobile.
+    const build = async (delegate) => {
+      onProgress(`Loading hand landmarker (${delegate})…`);
+      handLandmarker = await HandLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: HAND_MODEL, delegate },
+        runningMode: 'VIDEO',
+        numHands: 2,
+        minHandDetectionConfidence: 0.5,
+        minHandPresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
 
-    onProgress('Loading pose landmarker…');
-    poseLandmarker = await PoseLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: POSE_MODEL, delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numPoses: 1,
-      minPoseDetectionConfidence: 0.5,
-      minPosePresenceConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
+      onProgress(`Loading pose landmarker (${delegate})…`);
+      poseLandmarker = await PoseLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: POSE_MODEL, delegate },
+        runningMode: 'VIDEO',
+        numPoses: 1,
+        minPoseDetectionConfidence: 0.5,
+        minPosePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+      activeDelegate = delegate;
+    };
+
+    // GPU first. On phones without a working WebGL path this throws, and
+    // falling back to CPU beats failing outright -- but the UI is told which
+    // one it got, because CPU is several times slower and that explains a low
+    // frame rate that would otherwise look like a bug.
+    try {
+      await build('GPU');
+    } catch (gpuError) {
+      console.warn('[landmarker] GPU delegate unavailable, using CPU', gpuError);
+      try { handLandmarker?.close(); } catch { /* not created */ }
+      try { poseLandmarker?.close(); } catch { /* not created */ }
+      handLandmarker = null;
+      poseLandmarker = null;
+      await build('CPU');
+    }
 
     onProgress('Ready');
     return true;
@@ -67,6 +90,10 @@ export async function load(onProgress = () => {}) {
 
 export function isLoaded() {
   return Boolean(handLandmarker && poseLandmarker);
+}
+
+export function getDelegate() {
+  return activeDelegate;
 }
 
 /**
@@ -129,4 +156,6 @@ export const POSE_BONES = [
   [11, 23], [12, 24], [23, 24],
 ];
 
-export default { load, isLoaded, detect, close, HAND_BONES, POSE_BONES };
+export default {
+  load, isLoaded, detect, close, getDelegate, HAND_BONES, POSE_BONES,
+};

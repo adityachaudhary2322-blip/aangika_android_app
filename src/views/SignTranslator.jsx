@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Volume2, Copy, Eraser, SwitchCamera, Waypoints, Loader2,
 } from 'lucide-react';
@@ -9,6 +9,7 @@ import EngineToggle from '../components/EngineToggle.jsx';
 import EngineBadge from '../components/EngineBadge.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
 import cameraManager from '../services/cameraManager.js';
+import landmarker from '../services/landmarker.js';
 import { getKeys } from '../services/translator.js';
 import { speak } from '../services/ttsService.js';
 import { translate, describeMode } from '../services/translationService.js';
@@ -28,6 +29,24 @@ export default function SignTranslator({
 
   const { status, progress, words, closest, stats, error, frameRef, clear } =
     useSignPipeline({ enabled: true, mirrored, visionEngine });
+
+  // Which delegate and resolution the device ACTUALLY gave us. A phone that
+  // silently fell back to the CPU delegate, or ignored the 480x360 request and
+  // handed back 1080p, is the first thing to check when the frame rate is low.
+  const [runtime, setRuntime] = useState({
+    delegate: "unknown", width: null, height: null,
+  });
+  useEffect(() => {
+    const id = setInterval(() => {
+      const res = cameraManager.getResolution();
+      setRuntime({
+        delegate: landmarker.getDelegate(),
+        width: res.width,
+        height: res.height,
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const active = getLanguage(language);
   const badge = describeMode(mode, {
@@ -91,6 +110,14 @@ export default function SignTranslator({
           </button>
           <span className="pill bg-black/55 text-ink backdrop-blur">
             {stats.fps} FPS · {stats.latencyMs} ms
+            {runtime.delegate !== "unknown" && (
+              <span className={runtime.delegate === "GPU" ? "text-primary" : "text-amber"}>
+                {runtime.delegate}
+              </span>
+            )}
+            {runtime.width && (
+              <span className="text-ink-dim">{runtime.width}x{runtime.height}</span>
+            )}
           </span>
           <button
             type="button"

@@ -19,6 +19,7 @@
  */
 
 const state = {
+  resolution: { width: null, height: null, frameRate: null },
   video: null,
   stream: null,
   starting: null,       // in-flight getUserMedia promise, so parallel callers share one
@@ -56,8 +57,13 @@ function notify() {
   }
 }
 
+export function getResolution() {
+  return state.resolution;
+}
+
 export function getStatus() {
   return {
+    resolution: state.resolution,
     active: Boolean(state.stream && state.stream.active),
     facingMode: state.facingMode,
     error: state.error,
@@ -102,15 +108,29 @@ export async function start({ facingMode = state.facingMode } = {}) {
         state.stream = null;
       }
 
+      // 480x360 is a deliberate downscale. MediaPipe's cost scales with the
+      // pixels it is handed, and a phone happily reports a 1280x720 (or
+      // 1920x1080) stream that then has to be resampled for every detector on
+      // every frame. Landmarks are normalised to 0..1, so nothing downstream
+      // cares about the source resolution -- only the per-frame cost does.
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
+          width: { ideal: 480, max: 640 },
+          height: { ideal: 360, max: 480 },
+          frameRate: { ideal: 30, max: 30 },
         },
         audio: false,
       });
+
+      // Report what the device actually granted: constraints are a request,
+      // not a guarantee, and a phone that ignored them is worth knowing about.
+      const settings = stream.getVideoTracks()[0]?.getSettings?.() || {};
+      state.resolution = {
+        width: settings.width || null,
+        height: settings.height || null,
+        frameRate: settings.frameRate || null,
+      };
 
       state.stream = stream;
       video.srcObject = stream;
@@ -191,6 +211,6 @@ export function stop() {
 }
 
 export default {
-  start, stop, flip, attachTo, subscribe, getStatus,
+  start, stop, flip, attachTo, subscribe, getStatus, getResolution,
   getVideoElement, getStream, isReady,
 };

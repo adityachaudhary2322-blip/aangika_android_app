@@ -25,10 +25,14 @@ export default function LandmarkCanvas({ frameRef, mirrored = true, className })
     const draw = () => {
       raf = requestAnimationFrame(draw);
 
+      // The overlay is thin lines and dots over live video, so a device-pixel
+      // backing store buys nothing visible and costs a full clear plus redraw
+      // of ~4x the pixels every frame on a 2x phone. Cap the backing store at
+      // the camera's own resolution instead of the display's.
       const rect = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = Math.round(rect.width * dpr);
-      const h = Math.round(rect.height * dpr);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
+      const w = Math.min(Math.round(rect.width * dpr), 640);
+      const h = Math.min(Math.round(rect.height * dpr), 640);
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
