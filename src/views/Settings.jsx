@@ -1,19 +1,20 @@
 import { useState } from 'react';
-import { ArrowLeft, KeyRound, ShieldAlert, Cloud, CloudOff } from 'lucide-react';
+import { ArrowLeft, KeyRound, ShieldAlert, Check } from 'lucide-react';
 import { getKeys, setKey } from '../services/translator.js';
 import {
-  describeMode, MODE_OFFLINE, MODE_ONLINE,
-} from '../services/translationService.js';
+  VISION_ENGINES, GRAMMAR_ENGINES, VISION_AANGIKA, VISION_SIGNBRIDGE,
+  GRAMMAR_QWEN_OFFLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS,
+} from '../services/engineState.js';
 import { LANGUAGES } from '../config/languages.js';
 
 export default function Settings({
-  language, setLanguage, onBack, online, mode, togglePipeline,
+  language, setLanguage, onBack, online,
+  visionEngine, chooseVision, grammarEngine, chooseGrammar,
 }) {
   const initial = getKeys();
   const [gemini, setGemini] = useState(initial.gemini);
   const [sarvam, setSarvam] = useState(initial.sarvam);
   const [saved, setSaved] = useState(false);
-  const badge = describeMode(mode, { online, hasKey: Boolean(gemini) });
 
   const save = () => {
     setKey('gemini', gemini);
@@ -33,54 +34,45 @@ export default function Settings({
 
       <section className="rounded-2xl border border-white/10 bg-card p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
-          Translation engine
+          Vision engine
         </p>
-
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => mode !== MODE_ONLINE && togglePipeline()}
-            className={
-              'flex flex-col items-start gap-1 rounded-xl border p-3 text-left ' +
-              (mode === MODE_ONLINE
-                ? 'border-primary/50 bg-primary/10'
-                : 'border-white/10')
-            }
-          >
-            <Cloud size={18} className={mode === MODE_ONLINE ? 'text-primary' : 'text-ink-dim'} />
-            <span className="text-sm font-semibold">Online</span>
-            <span className="text-[10px] text-ink-dim">Gemini Flash</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => mode !== MODE_OFFLINE && togglePipeline()}
-            className={
-              'flex flex-col items-start gap-1 rounded-xl border p-3 text-left ' +
-              (mode === MODE_OFFLINE
-                ? 'border-amber/50 bg-amber/10'
-                : 'border-white/10')
-            }
-          >
-            <CloudOff size={18} className={mode === MODE_OFFLINE ? 'text-amber' : 'text-ink-dim'} />
-            <span className="text-sm font-semibold">Offline</span>
-            <span className="text-[10px] text-ink-dim">Local ISL rules</span>
-          </button>
+        <p className="mt-1 text-[11px] text-ink-dim">
+          How landmarks become words.
+        </p>
+        <div className="mt-3 space-y-2">
+          {[VISION_AANGIKA, VISION_SIGNBRIDGE].map((id) => (
+            <EngineCard
+              key={id}
+              engine={VISION_ENGINES[id]}
+              selected={visionEngine === id}
+              onSelect={() => chooseVision(id)}
+            />
+          ))}
         </div>
-
-        <p className="mt-3 rounded-lg border border-white/10 bg-surface p-3 text-[11px] leading-relaxed">
-          <span className="font-semibold text-ink">{badge.icon} {badge.label}</span>
-          <br />
-          <span className="text-ink-dim">{badge.detail}</span>
+        <p className="mt-3 text-[11px] leading-relaxed text-ink-dim">
+          SignBridge sees one frame at a time, so it recognises handshapes and
+          fingerspelling but nothing defined by movement. Aangika reads a
+          40-frame window and can, but costs ~200x the latency per inference.
         </p>
+      </section>
 
-        <p className="mt-2 text-[11px] leading-relaxed text-ink-dim">
-          The offline engine runs the ISL grammar rules — pro-drop recovery,
-          SOV→SVO reordering, tense from the time word, kinship possessives — as
-          plain code in this tab. No model weights are downloaded and no request
-          is made. It produces English only; other languages need the online
-          engine.
+      <section className="mt-4 rounded-2xl border border-white/10 bg-card p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
+          Grammar engine
         </p>
+        <p className="mt-1 text-[11px] text-ink-dim">
+          How words become a sentence.
+        </p>
+        <div className="mt-3 space-y-2">
+          {[GRAMMAR_GEMINI_ONLINE, GRAMMAR_QWEN_OFFLINE, GRAMMAR_RAW_GLOSS].map((id) => (
+            <EngineCard
+              key={id}
+              engine={GRAMMAR_ENGINES[id]}
+              selected={grammarEngine === id}
+              onSelect={() => chooseGrammar(id)}
+            />
+          ))}
+        </div>
       </section>
 
       <section className="mt-4 rounded-2xl border border-white/10 bg-card p-4">
@@ -162,5 +154,39 @@ export default function Settings({
         </p>
       </section>
     </div>
+  );
+}
+
+/** One selectable engine, with the honest description from engineState. */
+function EngineCard({ engine, selected, onSelect }) {
+  const tone = {
+    primary: 'border-primary/50 bg-primary/10',
+    secondary: 'border-secondary/50 bg-secondary/10',
+    amber: 'border-amber/50 bg-amber/10',
+    ink: 'border-white/25 bg-white/5',
+  }[engine.tone] || 'border-white/25 bg-white/5';
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={
+        'w-full rounded-xl border p-3 text-left transition ' +
+        (selected ? tone : 'border-white/10')
+      }
+    >
+      <span className="flex items-center gap-2">
+        <span className="text-base">{engine.icon}</span>
+        <span className="text-sm font-semibold">{engine.name}</span>
+        {selected && <Check size={14} className="ml-auto" />}
+      </span>
+      <span className="mt-0.5 block text-[11px] font-medium text-ink-dim">
+        {engine.tagline}
+      </span>
+      <span className="mt-1.5 block text-[10px] leading-relaxed text-ink-dim">
+        {engine.detail}
+      </span>
+    </button>
   );
 }

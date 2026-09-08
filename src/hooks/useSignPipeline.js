@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import cameraManager from '../services/cameraManager.js';
 import landmarker from '../services/landmarker.js';
 import recognizer from '../services/signRecognizer.js';
+import { classifySignBridgeFrame } from '../services/signbridgeEngine.js';
+import { VISION_SIGNBRIDGE } from '../services/engineState.js';
 
 /** Frames retained. The model was trained at 192; see MODEL_CARD.md. */
 const WINDOW = 40;
@@ -16,7 +18,9 @@ const STRIDE = 20;
  * (on the Android build, where the same mistake was made) tore the camera down
  * on every frame. Only inference RESULTS reach state, at ~1.5 Hz.
  */
-export default function useSignPipeline({ enabled = true, mirrored = true } = {}) {
+export default function useSignPipeline({
+  enabled = true, mirrored = true, visionEngine = 'aangika',
+} = {}) {
   const [status, setStatus] = useState('idle');
   const [progress, setProgress] = useState('');
   const [words, setWords] = useState([]);
@@ -55,8 +59,16 @@ export default function useSignPipeline({ enabled = true, mirrored = true } = {}
   }, []);
 
   // ── Detection loop ───────────────────────────────────────────────────────
+  // SignBridge classifies a single frame geometrically, so it only needs the
+  // landmarker -- not the 21 MB ONNX graph. Gating it on the tagger's load
+  // would make an "ultra-low latency" engine wait on the slow one.
+  const usingSignBridge = visionEngine === VISION_SIGNBRIDGE;
+  const pipelineReady = usingSignBridge
+    ? status === 'ready' || status === 'landmarker-ready'
+    : status === 'ready';
+
   useEffect(() => {
-    if (!enabled || status !== 'ready') return undefined;
+    if (!enabled || !pipelineReady) return undefined;
     let raf = 0;
     let stopped = false;
 
@@ -83,10 +95,6 @@ export default function useSignPipeline({ enabled = true, mirrored = true } = {}
       seenRef.current += 1;
       if (hasHand) handFramesRef.current += 1;
 
-      const buffer = bufferRef.current;
-      buffer.push(recognizer.bodyNormalise(raw));
-      if (buffer.length > WINDOW) buffer.shift();
-
       // FPS over a one-second window; a per-frame estimate jitters unreadably.
       const fps = fpsRef.current;
       if (!fps.start) fps.start = now;
@@ -104,6 +112,34 @@ export default function useSignPipeline({ enabled = true, mirrored = true } = {}
         }));
       }
 
+      // ── SignBridge: classify this frame alone, then stop ─────────────
+      if (usingSignBridge) {
+        const hit = classifySignBridgeFrame(result.hands, result.pose);
+        if (hit && hit.label) {
+          setWords([{
+            word: hit.label,
+            index: hit.label,
+            confidence: hit.confidence,
+            peakFrame: 0,
+            engine: 'signbridge',
+            ambiguous: hit.ambiguous,
+          }]);
+          setStats((s) => ({ ...s, latencyMs: Number(hit.latencyMs.toFixed(3)) }));
+          setClosest((hit.alternatives || []).map((a) => ({
+            word: a.label, index: a.label, confidence: a.confidence,
+            engine: 'signbridge',
+          })));
+        } else {
+          setWords([]);
+        }
+        return;
+      }
+
+      // ── Aangika: accumulate a temporal window ────────────────────────
+      const buffer = bufferRef.current;
+      buffer.push(recognizer.bodyNormalise(raw));
+      if (buffer.length > WINDOW) buffer.shift();
+
       if (buffer.length < WINDOW) return;
       if (seenRef.current % STRIDE !== 0) return;
       if (busyRef.current) return;   // drop, never queue: a backlog reports
@@ -112,8 +148,8 @@ export default function useSignPipeline({ enabled = true, mirrored = true } = {}
       recognizer
         .recognize(buffer.slice())
         .then((r) => {
-          setWords(r.words);
-          setClosest(r.closest);
+          setWords(r.words.map((w) => ({ ...w, engine: 'aangika' })));
+          setClosest(r.closest.map((w) => ({ ...w, engine: 'aangika' })));
           setStats((s) => ({ ...s, latencyMs: r.latencyMs }));
           setError(null);
         })
@@ -126,7 +162,7 @@ export default function useSignPipeline({ enabled = true, mirrored = true } = {}
       stopped = true;
       cancelAnimationFrame(raf);
     };
-  }, [enabled, status, mirrored]);
+  }, [enabled, pipelineReady, mirrored, usingSignBridge]);
 
   const clear = useCallback(() => {
     bufferRef.current = [];
@@ -138,5 +174,8 @@ export default function useSignPipeline({ enabled = true, mirrored = true } = {}
     setStats({ fps: 0, latencyMs: 0, handCoverage: 0 });
   }, []);
 
-  return { status, progress, words, closest, stats, error, frameRef, clear };
+  return {
+    status, progress, words, closest, stats, error, frameRef, clear,
+    visionEngine,
+  };
 }

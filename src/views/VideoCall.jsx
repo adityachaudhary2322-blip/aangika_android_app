@@ -5,6 +5,7 @@ import {
 import CameraStage from '../components/CameraStage.jsx';
 import LandmarkCanvas from '../components/LandmarkCanvas.jsx';
 import LanguageSelect from '../components/LanguageSelect.jsx';
+import EngineToggle from '../components/EngineToggle.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
 import cameraManager from '../services/cameraManager.js';
 import { translate } from '../services/translationService.js';
@@ -43,6 +44,7 @@ const ICE_SERVERS = [
 
 export default function VideoCall({
   language, setLanguage, online, onBack, cameraError, mode,
+  visionEngine, chooseVision,
 }) {
   const [peerId, setPeerId] = useState('');
   const [remoteId, setRemoteId] = useState('');
@@ -63,6 +65,7 @@ export default function VideoCall({
   const { words, stats, frameRef } = useSignPipeline({
     enabled: phase === 'live',
     mirrored,
+    visionEngine,
   });
 
   useEffect(() => {
@@ -301,6 +304,7 @@ export default function VideoCall({
             ⚡ P2P
           </span>
           <div className="ml-auto flex items-center gap-2">
+            <EngineToggle value={visionEngine} onChange={chooseVision} compact />
             <LanguageSelect
               value={language}
               onChange={setLanguage}

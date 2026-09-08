@@ -6,7 +6,12 @@ import VideoCall from './views/VideoCall.jsx';
 import Settings from './views/Settings.jsx';
 import cameraManager from './services/cameraManager.js';
 import { DEFAULT_LANGUAGE_CODE } from './config/languages.js';
+import { setMode as setModeInternal } from './services/translationService.js';
 import { getMode, toggleMode } from './services/translationService.js';
+import {
+  getVisionEngine, setVisionEngine,
+  getGrammarEngine, setGrammarEngine, grammarToPipelineMode,
+} from './services/engineState.js';
 
 /**
  * Shell and router.
@@ -34,6 +39,20 @@ export default function App() {
   // The offline tile flips the whole translation pipeline, so the choice
   // lives here and every view reads the same value.
   const togglePipeline = useCallback(() => setModeState(toggleMode()), []);
+
+  const [visionEngine, setVisionState] = useState(() => getVisionEngine());
+  const [grammarEngine, setGrammarState] = useState(() => getGrammarEngine());
+
+  const chooseVision = useCallback((id) => setVisionState(setVisionEngine(id)), []);
+
+  // The grammar choice and translationService's online/offline mode are two
+  // views of one decision, so keep them in step rather than letting the badge
+  // disagree with what actually runs.
+  const chooseGrammar = useCallback((id) => {
+    const next = setGrammarEngine(id);
+    setGrammarState(next);
+    setModeState(setModeInternal(grammarToPipelineMode(next)));
+  }, []);
 
   useEffect(() => {
     try {
@@ -63,6 +82,7 @@ export default function App() {
 
   const shared = {
     language, setLanguage, online, mode, togglePipeline,
+    visionEngine, chooseVision, grammarEngine, chooseGrammar,
     onBack: () => go('dashboard'),
   };
 

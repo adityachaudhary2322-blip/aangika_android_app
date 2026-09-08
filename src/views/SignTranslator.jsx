@@ -5,6 +5,8 @@ import {
 import CameraStage from '../components/CameraStage.jsx';
 import LandmarkCanvas from '../components/LandmarkCanvas.jsx';
 import LanguageSelect from '../components/LanguageSelect.jsx';
+import EngineToggle from '../components/EngineToggle.jsx';
+import EngineBadge from '../components/EngineBadge.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
 import cameraManager from '../services/cameraManager.js';
 import { getKeys } from '../services/translator.js';
@@ -14,6 +16,7 @@ import { getLanguage } from '../config/languages.js';
 
 export default function SignTranslator({
   language, setLanguage, online, onBack, cameraError, mode, togglePipeline,
+  visionEngine, chooseVision,
 }) {
   const [mirrored, setMirrored] = useState(true);
   const [showMesh, setShowMesh] = useState(true);
@@ -24,7 +27,7 @@ export default function SignTranslator({
   const [manualTags, setManualTags] = useState(null);
 
   const { status, progress, words, closest, stats, error, frameRef, clear } =
-    useSignPipeline({ enabled: true, mirrored });
+    useSignPipeline({ enabled: true, mirrored, visionEngine });
 
   const active = getLanguage(language);
   const badge = describeMode(mode, {
@@ -103,6 +106,7 @@ export default function SignTranslator({
             {badge.icon} {badge.short}
           </button>
           <div className="ml-auto flex items-center gap-2">
+            <EngineToggle value={visionEngine} onChange={chooseVision} compact />
             <LanguageSelect
               value={language}
               onChange={setLanguage}
@@ -162,10 +166,13 @@ export default function SignTranslator({
                   (words.length ? 'border-primary/50' : 'border-white/10 opacity-60')
                 }
               >
-                <b className="text-ink">{w.word.toUpperCase()}</b>
-                <span className={words.length ? 'text-primary' : 'text-ink-dim'}>
-                  {(w.confidence * 100).toFixed(1)}%
+                <span className="flex flex-col leading-tight">
+                  <b className="text-ink">{w.word.toUpperCase()}</b>
+                  <EngineBadge engine={w.engine} confidence={w.confidence} />
                 </span>
+                {w.ambiguous && (
+                  <span className="text-[9px] text-amber">ambiguous</span>
+                )}
               </span>
             ))}
             {!words.length && !closest.length && (
