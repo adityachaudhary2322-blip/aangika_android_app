@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, Mic, Square, Loader2, Copy, Trash2, Volume2, X, Type,
 } from 'lucide-react';
-import { transcribe, speak } from '../services/translator.js';
+import { transcribe } from '../services/translator.js';
+import { speak } from '../services/ttsService.js';
 import { getLanguage } from '../config/languages.js';
 
 const QUICK_REPLIES = [

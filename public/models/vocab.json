@@ -1706,5 +1706,36 @@
     "recall": 0.1656,
     "words_per_clip": 1.12,
     "val_clips": 5854
+  },
+  "custom_signs": {
+    "_comment": "Signs available to the grammar engine and manual entry but NOT emitted by sanketvani_word_tagger.onnx. The model has exactly 1500 output channels; \"words\" maps them 1:1 and must never grow. Recognising these from video would require retraining the tagger.",
+    "entries": [
+      {
+        "token": "NAMASTE",
+        "type": "greeting",
+        "in_model": false
+      },
+      {
+        "token": "HELLO",
+        "type": "greeting",
+        "in_model": false
+      },
+      {
+        "token": "MY",
+        "type": "pronoun",
+        "in_model": false
+      },
+      {
+        "token": "NAME",
+        "type": "noun",
+        "in_model": true,
+        "model_index": 59
+      },
+      {
+        "token": "ADITYA",
+        "type": "proper_noun",
+        "in_model": false
+      }
+    ]
   }
 }

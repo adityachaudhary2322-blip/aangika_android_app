@@ -27,6 +27,7 @@
  */
 
 import { ISL_FEW_SHOT } from './qwenRules.js';
+import { KNOWN_NAMES, buildIntroduction } from '../config/greetings.js';
 
 // ── Lexicon ──────────────────────────────────────────────────────────────────
 
@@ -103,6 +104,15 @@ const VERBS = {
   SIT: { base: 'sit', past: 'sat', gerund: 'sitting' },
   OPEN: { base: 'open', past: 'opened', gerund: 'opening' },
 };
+
+/**
+ * Greeting signs. Not emitted by the tagger -- see custom_signs in vocab.json --
+ * but reachable through manual entry and demo flows, and cheap to support.
+ */
+const GREETING_TOKENS = new Set(['NAMASTE', 'HELLO', 'HI', 'GREETINGS']);
+
+/** NAME + a known name token is a self-introduction, not a generic phrase. */
+const NAME_TOKENS = new Set(['NAME', 'CALLED']);
 
 const QUESTIONS = {
   WHAT: 'what', WHERE: 'where', WHO: 'who',
@@ -256,13 +266,36 @@ const FEW_SHOT_INDEX = new Map(
  * @param {string[]} tags
  * @returns {{ english: string, rule: string }}
  */
-export function expand(tags) {
+export function expand(tags, languageCode = 'en-IN') {
   const tokens = (tags || []).map(norm).filter(Boolean);
-  if (tokens.length === 0) return { english: '', rule: 'empty' };
+  if (tokens.length === 0) return { english: '', rule: 'empty', translated: '' };
+
+  // 0. Greetings and self-introduction.
+  //
+  // This is the one family of phrases the offline engine can render in a
+  // language other than English, because the templates are fixed (see
+  // config/greetings.js). Checked first so "NAME ADITYA" never falls through to
+  // the generic SOV path and comes out as "I name a aditya."
+  const greetToken = tokens.find((t) => GREETING_TOKENS.has(t));
+  const nameToken = tokens.find((t) => KNOWN_NAMES.has(t));
+  const hasNameWord = tokens.some((t) => NAME_TOKENS.has(t));
+
+  if (greetToken || (hasNameWord && nameToken)) {
+    const introduce = Boolean(nameToken && (hasNameWord || greetToken));
+    return {
+      english: buildIntroduction(introduce ? nameToken : null, 'en-IN', {
+        greet: Boolean(greetToken) || introduce,
+      }),
+      translated: buildIntroduction(introduce ? nameToken : null, languageCode, {
+        greet: Boolean(greetToken) || introduce,
+      }),
+      rule: introduce ? 'greeting-introduction' : 'greeting',
+    };
+  }
 
   // 1. Exact few-shot match.
   const exact = FEW_SHOT_INDEX.get(tokens.join(' '));
-  if (exact) return { english: exact, rule: 'few-shot' };
+  if (exact) return { english: exact, rule: 'few-shot', translated: '' };
 
   const c = classify(tokens);
   const tense = c.time ? c.time.tense : 'present';
@@ -297,6 +330,7 @@ export function expand(tags) {
         [c.question, noun ? 'is' : '', noun ? nounPhrase(noun) : ''],
         { question: true }
       ),
+      translated: '',
       rule: 'question-bare',
     };
   }
@@ -312,6 +346,7 @@ export function expand(tags) {
           c.subject.subject, conjugate(VERBS.NEED, tense, c.subject),
           not ? 'not' : '', possessivePhrase(person), 'help', timePhrase,
         ]),
+        translated: '',
         rule: 'need-help-possessive',
       };
     }
@@ -329,6 +364,7 @@ export function expand(tags) {
           object ? nounPhrase(object, { definite: PERSON_ROLE.has(object) }) : '',
           timePhrase,
         ]),
+        translated: '',
         rule: 'need-to-verb',
       };
     }
@@ -352,7 +388,7 @@ export function expand(tags) {
   // 5. General SOV -> SVO.
   const verb = c.verbs[0];
   if (!verb) {
-    return { english: finish(tokens.map(lower)), rule: 'passthrough' };
+    return { english: finish(tokens.map(lower)), rule: 'passthrough', translated: '' };
   }
 
   // Present tense with a third-person subject and a concrete object reads more
@@ -378,6 +414,7 @@ export function expand(tags) {
 
   return {
     english: finish([c.subject.subject, verbPhrase, ...objects, timePhrase]),
+    translated: '',
     rule: useProgressive ? 'svo-progressive' : `svo-${tense}`,
   };
 }

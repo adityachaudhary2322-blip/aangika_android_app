@@ -4,14 +4,16 @@ import {
 } from 'lucide-react';
 import CameraStage from '../components/CameraStage.jsx';
 import LandmarkCanvas from '../components/LandmarkCanvas.jsx';
+import LanguageSelect from '../components/LanguageSelect.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
 import cameraManager from '../services/cameraManager.js';
-import { speak, getKeys } from '../services/translator.js';
+import { getKeys } from '../services/translator.js';
+import { speak } from '../services/ttsService.js';
 import { translate, describeMode } from '../services/translationService.js';
 import { getLanguage } from '../config/languages.js';
 
 export default function SignTranslator({
-  language, online, onBack, cameraError, mode, togglePipeline,
+  language, setLanguage, online, onBack, cameraError, mode, togglePipeline,
 }) {
   const [mirrored, setMirrored] = useState(true);
   const [showMesh, setShowMesh] = useState(true);
@@ -19,6 +21,7 @@ export default function SignTranslator({
   const [busy, setBusy] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [note, setNote] = useState(null);
+  const [manualTags, setManualTags] = useState(null);
 
   const { status, progress, words, closest, stats, error, frameRef, clear } =
     useSignPipeline({ enabled: true, mirrored });
@@ -32,12 +35,21 @@ export default function SignTranslator({
     ? (words.reduce((a, w) => a + w.confidence, 0) / words.length) * 100
     : 0;
 
-  const build = async () => {
-    if (!words.length) return;
+  const activeTags = manualTags || words.map((w) => w.word);
+
+  const build = async (tags = activeTags) => {
+    if (!tags.length) return;
     setBusy(true);
-    const r = await translate(words.map((w) => w.word), language, { mode });
+    const r = await translate(tags, language, { mode });
     setResult(r);
     setBusy(false);
+  };
+
+  // NAMASTE and ADITYA are not among the model's 1500 output channels, so the
+  // greeting rules can only be reached through explicit entry.
+  const runDemo = (tags) => {
+    setManualTags(tags);
+    build(tags);
   };
 
   const play = async () => {
@@ -46,14 +58,9 @@ export default function SignTranslator({
     setSpeaking(true);
     const outcome = await speak(text, language);
     setSpeaking(false);
-    if (outcome.source === 'browser') {
-      setNote(outcome.voiceFound
-        ? 'Cloud voice unavailable - used the device voice.'
-        : `No ${active.name} voice installed on this device.`);
-      setTimeout(() => setNote(null), 3500);
-    } else if (outcome.source === 'none') {
-      setNote(outcome.error || 'No speech engine available.');
-      setTimeout(() => setNote(null), 3500);
+    if (outcome.warning) {
+      setNote(outcome.warning);
+      setTimeout(() => setNote(null), 4000);
     }
   };
 
@@ -95,7 +102,12 @@ export default function SignTranslator({
           >
             {badge.icon} {badge.short}
           </button>
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex items-center gap-2">
+            <LanguageSelect
+              value={language}
+              onChange={setLanguage}
+              variant="overlay"
+            />
             <button
               type="button"
               onClick={() => setShowMesh((v) => !v)}
@@ -192,11 +204,36 @@ export default function SignTranslator({
           </p>
         )}
 
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <span className="shrink-0 text-[10px] uppercase tracking-wider text-ink-dim">
+            Demo
+          </span>
+          {[['NAMASTE'], ['NAME', 'ADITYA'], ['I', 'WANT', 'WATER']].map((tags) => (
+            <button
+              key={tags.join('-')}
+              type="button"
+              onClick={() => runDemo(tags)}
+              className="pill shrink-0 border-white/10 bg-card-high text-[10px] text-ink-dim"
+            >
+              {tags.join(' ')}
+            </button>
+          ))}
+          {manualTags && (
+            <button
+              type="button"
+              onClick={() => { setManualTags(null); setResult(null); }}
+              className="pill shrink-0 border-amber/40 text-[10px] text-amber"
+            >
+              using demo · clear
+            </button>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
           <button
             type="button"
-            onClick={build}
-            disabled={!words.length || busy}
+            onClick={() => build()}
+            disabled={!activeTags.length || busy}
             className="rounded-lg bg-card-highest px-3 py-2 text-xs font-semibold disabled:opacity-40"
           >
             {busy ? 'Building…' : 'Build'}
@@ -211,7 +248,7 @@ export default function SignTranslator({
           </button>
           <button
             type="button"
-            onClick={() => { clear(); setResult(null); }}
+            onClick={() => { clear(); setResult(null); setManualTags(null); }}
             className="flex h-9 w-9 items-center justify-center rounded-lg bg-card-high"
           >
             <Eraser size={15} />
