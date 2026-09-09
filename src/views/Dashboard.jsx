@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  BatteryMedium, Wifi, WifiOff, Hand, Mic, Video, CloudOff,
-  AudioLines, Users, Database, Settings as SettingsIcon, Languages, FileVideo,
+  BatteryMedium, Wifi, WifiOff, Hand, Mic, MessageSquare, CloudOff,
+  ArrowLeft, Users, Database, Settings as SettingsIcon, Languages, FileVideo,
 } from 'lucide-react';
 import { LANGUAGES, getLanguage } from '../config/languages.js';
 import { describeMode, MODE_OFFLINE } from '../services/translationService.js';
@@ -12,7 +12,7 @@ import ThemeToggle from '../components/ThemeToggle.jsx';
 const TILES = [
   { id: 'sign', label: 'Sign Translator', hint: 'Camera → words', Icon: Hand, tint: 'text-primary' },
   { id: 'hearing', label: 'Hearing Mode', hint: 'Speech → text', Icon: Mic, tint: 'text-secondary' },
-  { id: 'call', label: 'Realtime Call', hint: 'P2P video', Icon: Video, tint: 'text-amber' },
+  { id: 'messenger', label: 'Messages', hint: 'Chat & call', Icon: MessageSquare, tint: 'text-amber' },
   { id: 'offline', label: 'Offline Engine', hint: 'Toggle pipeline', Icon: CloudOff, tint: 'text-amber' },
   { id: 'recorded', label: 'Recorded Video', hint: 'File to subtitles', Icon: FileVideo, tint: 'text-rose' },
   { id: 'group', label: 'Group Room', hint: 'Multi-party', Icon: Users, tint: 'text-secondary' },
@@ -74,6 +74,14 @@ export default function Dashboard({
     <div className="flex h-full flex-col">
       {/* ── Status bar ─────────────────────────────────────────────── */}
       <header className="flex items-center gap-2 px-4 py-3 text-[11px] text-ink-dim">
+        <button
+          type="button"
+          onClick={() => onNavigate('messenger')}
+          aria-label="Back to messages"
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-card-high text-ink"
+        >
+          <ArrowLeft size={14} />
+        </button>
         <span className="font-mono text-ink">{clock}</span>
         <span className="pill border-subtle">
           {online ? (

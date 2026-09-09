@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
+import { CallProvider } from './context/CallContext.jsx';
 import './index.css';
 import { armAudioUnlock } from './services/ttsService.js';
 
@@ -13,7 +14,11 @@ armAudioUnlock();
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ThemeProvider>
-      <App />
+      {/* CallProvider sits above the router so the Peer registration outlives
+          every view and a call can arrive while the user is anywhere. */}
+      <CallProvider>
+        <App />
+      </CallProvider>
     </ThemeProvider>
   </React.StrictMode>
 );
