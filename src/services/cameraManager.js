@@ -18,8 +18,35 @@
  * shows a live frame immediately rather than a black rectangle.
  */
 
+/**
+ * Capture profiles.
+ *
+ * 'standard' is a deliberate downscale: MediaPipe's cost scales with the pixels
+ * it is handed, and a phone happily reports 1280x720 (or 1920x1080) that then
+ * has to be resampled for every detector on every frame. Landmarks are
+ * normalised to 0..1, so nothing downstream cares about the source resolution
+ * -- only the per-frame cost does.
+ *
+ * 'high' exists for the one case where no detector runs at all: a call between
+ * two signers, where the sign IS the payload and every dropped detail is a
+ * word the other person has to guess at.
+ */
+const QUALITY = {
+  standard: {
+    width: { ideal: 480, max: 640 },
+    height: { ideal: 360, max: 480 },
+    frameRate: { ideal: 30, max: 30 },
+  },
+  high: {
+    width: { ideal: 1280, max: 1280 },
+    height: { ideal: 720, max: 720 },
+    frameRate: { ideal: 30, max: 30 },
+  },
+};
+
 const state = {
   resolution: { width: null, height: null, frameRate: null },
+  quality: 'standard',
   video: null,
   stream: null,
   starting: null,       // in-flight getUserMedia promise, so parallel callers share one
@@ -73,9 +100,14 @@ export function isFrontCamera() {
   return state.facingMode === 'user';
 }
 
+export function getQuality() {
+  return state.quality;
+}
+
 export function getStatus() {
   return {
     resolution: state.resolution,
+    quality: state.quality,
     active: Boolean(state.stream && state.stream.active),
     facingMode: state.facingMode,
     isFrontCamera: state.facingMode === 'user',
@@ -95,15 +127,22 @@ export function subscribe(fn) {
  * Acquire the camera. Safe to call repeatedly: if a stream is already live it
  * is reused, and concurrent callers share a single in-flight request.
  */
-export async function start({ facingMode = state.facingMode } = {}) {
+export async function start({
+  facingMode = state.facingMode,
+  quality = state.quality,
+} = {}) {
   const video = ensureVideoElement();
 
-  if (state.stream && state.stream.active && facingMode === state.facingMode) {
+  if (
+    state.stream && state.stream.active
+    && facingMode === state.facingMode && quality === state.quality
+  ) {
     return video;
   }
   if (state.starting) return state.starting;
 
   state.facingMode = facingMode;
+  state.quality = QUALITY[quality] ? quality : 'standard';
   state.error = null;
 
   state.starting = (async () => {
@@ -127,18 +166,9 @@ export async function start({ facingMode = state.facingMode } = {}) {
       // last frame from the camera we just released.
       if (video.srcObject) video.srcObject = null;
 
-      // 480x360 is a deliberate downscale. MediaPipe's cost scales with the
-      // pixels it is handed, and a phone happily reports a 1280x720 (or
-      // 1920x1080) stream that then has to be resampled for every detector on
-      // every frame. Landmarks are normalised to 0..1, so nothing downstream
-      // cares about the source resolution -- only the per-frame cost does.
+      // See QUALITY above for why 'standard' is far below what the camera can do.
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode,
-          width: { ideal: 480, max: 640 },
-          height: { ideal: 360, max: 480 },
-          frameRate: { ideal: 30, max: 30 },
-        },
+        video: { facingMode, ...QUALITY[state.quality] },
         audio: false,
       });
 
@@ -192,6 +222,42 @@ export function attachTo(container) {
       container.removeChild(video);
     }
   };
+}
+
+/**
+ * Switch capture profile on the LIVE track.
+ *
+ * applyConstraints() is used rather than a re-acquire because the track object
+ * survives it: an RTCRtpSender already sending that track picks up the new
+ * resolution with no renegotiation, and no black frame appears mid-call. If the
+ * device refuses the profile the old one simply stays in force, which is why
+ * `state.quality` is only recorded after the constraint is accepted.
+ */
+export async function setQuality(level) {
+  const next = QUALITY[level] ? level : 'standard';
+  if (next === state.quality) return state.quality;
+
+  const track = state.stream?.getVideoTracks()[0];
+  if (!track || !track.applyConstraints) {
+    state.quality = next;      // takes effect on the next start()
+    return state.quality;
+  }
+
+  try {
+    await track.applyConstraints(QUALITY[next]);
+    state.quality = next;
+    const settings = track.getSettings?.() || {};
+    state.resolution = {
+      width: settings.width || null,
+      height: settings.height || null,
+      frameRate: settings.frameRate || null,
+    };
+  } catch {
+    // Keep whatever the camera is actually producing rather than claiming a
+    // resolution it rejected.
+  }
+  notify();
+  return state.quality;
 }
 
 /**
@@ -251,5 +317,5 @@ export function stop() {
 
 export default {
   start, stop, flip, attachTo, subscribe, getStatus, getResolution,
-  isFrontCamera, getVideoElement, getStream, isReady,
+  isFrontCamera, getVideoElement, getStream, isReady, setQuality, getQuality,
 };
