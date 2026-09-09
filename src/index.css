@@ -2,9 +2,73 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Dual theme: Bright Pastel Light and Modern Deep Dark.
+ *
+ * Values are space-separated RGB channels, not hex or rgb() strings, so that
+ * `rgb(var(--x) / <alpha-value>)` in tailwind.config.js keeps working and
+ * `bg-card/60` still resolves. A hex here would break every alpha variant in
+ * the app at once, silently.
+ *
+ * LIGHT IS NOT "DARK WITH THE NUMBERS INVERTED". The accents move down the
+ * ramp (emerald-700 rather than the dark theme's mint) because a colour chosen
+ * to glow on navy has roughly 1.5:1 contrast on white and is unreadable as
+ * text. Every accent below was picked to clear 4.5:1 against its own theme's
+ * page background AND to carry white/near-black text when used as a fill.
+ */
+
 @layer base {
+  /* ── Bright Pastel Light ─────────────────────────────────────────────── */
   :root {
+    color-scheme: light;
+
+    --bg-main: 244 247 245; /* off-white, faint green cast */
+    --bg-surface: 255 255 255;
+    --bg-surface-high: 236 245 240;
+    --bg-surface-highest: 222 235 228;
+    --bg-deep: 231 240 235;
+
+    --text-primary: 15 23 42; /* slate-900  — 16.7:1 on --bg-main */
+    --text-muted: 71 85 105; /* slate-600  —  7.4:1 on --bg-main */
+
+    --accent-brand: 4 120 87; /* emerald-700 — 4.9:1, carries white text */
+    --accent-cyan: 14 116 144; /* cyan-700    — 4.9:1 */
+    --accent-amber: 180 83 9; /* amber-700   — 5.2:1 */
+    --accent-rose: 190 18 60; /* rose-700    — 6.4:1 */
+
+    --border-subtle: 209 250 229; /* emerald-100 */
+    --border-strong: 167 243 208; /* emerald-200 */
+
+    --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.06),
+      0 1px 3px 0 rgb(15 23 42 / 0.1);
+  }
+
+  /* ── Modern Deep Dark ────────────────────────────────────────────────── */
+  /* Same specificity as :root, so this must stay BELOW it to win. */
+  .dark {
     color-scheme: dark;
+
+    --bg-main: 11 19 38;
+    --bg-surface: 23 31 51;
+    --bg-surface-high: 34 42 61;
+    --bg-surface-highest: 45 52 73;
+    --bg-deep: 6 14 32;
+
+    --text-primary: 226 232 240; /* slate-200 */
+    --text-muted: 148 163 184; /* slate-400 */
+
+    --accent-brand: 78 222 163;
+    --accent-cyan: 76 215 246;
+    --accent-amber: 245 158 11;
+    --accent-rose: 244 63 94;
+
+    /* white/10 and white/16 flattened against --bg-main. A translucent
+       hairline over live video reads as smear; a solid one does not. */
+    --border-subtle: 35 43 61;
+    --border-strong: 52 61 82;
+
+    --shadow-card: 0 20px 25px -5px rgb(0 0 0 / 0.5),
+      0 8px 10px -6px rgb(0 0 0 / 0.4);
   }
 
   html,
@@ -21,6 +85,8 @@
       'Noto Sans Bengali', sans-serif;
     /* The app is a full-screen device UI; page-level scroll fights the layout. */
     overscroll-behavior: none;
+    /* Only the palette animates, never layout, so the flip does not reflow. */
+    transition: background-color 200ms ease, color 200ms ease;
   }
 
   /* Respect the notch / home indicator on phones. */
@@ -31,18 +97,67 @@
 }
 
 @layer components {
+  /**
+   * The standard raised card.
+   *
+   * Light leans on a hairline and a whisper of shadow; dark drops the shadow's
+   * job onto contrast instead, because a drop shadow on a near-black page is
+   * invisible and only the depth of the fill separates the layers.
+   */
+  .surface-card {
+    @apply rounded-2xl border border-emerald-100/80 bg-white/90 text-slate-900
+           shadow-sm dark:border-white/10 dark:bg-slate-900/85 dark:text-white
+           dark:shadow-2xl;
+  }
+
   .glass {
-    @apply bg-card/90 backdrop-blur-md border border-white/10;
+    @apply border border-emerald-100/80 bg-white/80 backdrop-blur-md
+           dark:border-white/10 dark:bg-slate-900/80;
   }
 
   .tile {
-    @apply flex flex-col items-start gap-2 rounded-2xl border border-white/10
-           bg-card p-4 text-left transition active:scale-[0.97];
+    @apply flex flex-col items-start gap-2 rounded-2xl border
+           border-emerald-100/80 bg-white/90 p-4 text-left text-slate-900
+           shadow-sm transition active:scale-[0.97]
+           dark:border-white/10 dark:bg-slate-900/85 dark:text-white
+           dark:shadow-2xl;
   }
 
   .pill {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-white/10
+    @apply inline-flex items-center gap-1.5 rounded-full border border-subtle
            px-2.5 py-1 text-[11px] font-medium;
+  }
+
+  /**
+   * Chrome that floats ON TOP OF LIVE VIDEO — pills, caption cards, the dock.
+   *
+   * This cannot use the page tokens: the backdrop is whatever the camera is
+   * pointed at, not the theme's background. So it commits to an opaque-enough
+   * plate and simply flips which way round it is — white plate in light, black
+   * plate in dark. The pay-off is that `text-ink` / `text-ink-dim` / `text-primary`
+   * keep working unchanged on top of it in BOTH themes, because the plate always
+   * moves in the same direction as the type tokens do.
+   */
+  .chrome-plate {
+    /* Opacity is set by the WORST-CASE frame behind it, not by taste: at /55 a
+       bright frame bleeds through hard enough to drop slate-200 body text to
+       ~3.4:1. These two values keep the text over 4.5:1 against both a fully
+       white and a fully black frame. */
+    @apply bg-white/90 backdrop-blur dark:bg-black/70;
+  }
+
+  /* Same idea for the gradients that keep controls readable at the frame edge. */
+  .scrim-top {
+    @apply bg-gradient-to-b from-white/85 to-transparent dark:from-black/70;
+  }
+
+  .scrim-bottom {
+    @apply bg-gradient-to-t from-white/90 to-transparent dark:from-black/80;
+  }
+
+  /** A round control sitting on video: filled when on, ghosted when off. */
+  .chrome-ghost {
+    @apply bg-slate-900/10 text-slate-900 dark:bg-white/15 dark:text-white;
   }
 }
 

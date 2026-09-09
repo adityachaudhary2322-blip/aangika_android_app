@@ -1,28 +1,58 @@
 /** @type {import('tailwindcss').Config} */
+
+/**
+ * Every semantic colour resolves through a CSS variable rather than a literal
+ * hex, which is what makes one class name mean two different things in the two
+ * themes. `bg-card` is the same class in both; only the variable underneath it
+ * moves. That is why adding the light theme did not require rewriting hundreds
+ * of `bg-card` / `text-ink` call sites.
+ *
+ * The variables hold SPACE-SEPARATED RGB CHANNELS ("15 23 42"), not `rgb(...)`
+ * strings, so that Tailwind's `<alpha-value>` placeholder still works: without
+ * that, `bg-card/60` would silently produce an invalid colour and render
+ * nothing. See src/index.css for the values.
+ */
+const themed = (name) => `rgb(var(${name}) / <alpha-value>)`;
+
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
+  // Theme is switched by putting `.dark` on <html>, not by the OS media query,
+  // because the user's explicit choice has to be able to disagree with the OS.
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        // Stitch dark palette
-        surface: '#0B1326',
-        'surface-low': '#060E20',
-        card: '#171F33',
-        'card-high': '#222A3D',
-        'card-highest': '#2D3449',
-        primary: '#4EDEA3',
-        secondary: '#4CD7F6',
-        amber: '#F59E0B',
-        rose: '#F43F5E',
-        ink: '#DAE2FD',
-        'ink-dim': '#BBCAAF',
+        // Page and raised surfaces, lightest-to-deepest in whichever theme.
+        surface: themed('--bg-main'),
+        'surface-low': themed('--bg-deep'),
+        card: themed('--bg-surface'),
+        'card-high': themed('--bg-surface-high'),
+        'card-highest': themed('--bg-surface-highest'),
+
+        // Accents. In light these are the 600/700 ramp so they stay legible as
+        // TEXT on white; in dark they are the bright 300/400 ramp.
+        primary: themed('--accent-brand'),
+        secondary: themed('--accent-cyan'),
+        amber: themed('--accent-amber'),
+        rose: themed('--accent-rose'),
+
+        // Type.
+        ink: themed('--text-primary'),
+        'ink-dim': themed('--text-muted'),
+
+        // Hairlines. Solid colours rather than white-at-low-alpha: a
+        // `border-white/10` is invisible on an off-white page.
+        subtle: themed('--border-subtle'),
+        strong: themed('--border-strong'),
       },
       borderColor: {
-        subtle: 'rgba(255,255,255,0.08)',
+        subtle: themed('--border-subtle'),
+        strong: themed('--border-strong'),
       },
       boxShadow: {
-        glow: '0 0 24px -4px rgba(78,222,163,0.45)',
-        'glow-cyan': '0 0 24px -4px rgba(76,215,246,0.45)',
+        glow: '0 0 24px -4px rgb(var(--accent-brand) / 0.45)',
+        'glow-cyan': '0 0 24px -4px rgb(var(--accent-cyan) / 0.45)',
+        card: 'var(--shadow-card)',
       },
       fontFamily: {
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],

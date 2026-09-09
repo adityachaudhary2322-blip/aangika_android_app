@@ -1,10 +1,36 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0B1326" />
     <title>ISL Connect</title>
+    <script>
+      /*
+       * Paint the theme BEFORE React exists.
+       *
+       * ThemeProvider applies the class from an effect, which runs after first
+       * paint -- so without this a dark-mode user gets a full white flash on
+       * every cold load, and a light-mode user gets a navy one. This is the one
+       * place outside ThemeContext allowed to touch the class; the provider
+       * reads it back on mount so the two never disagree.
+       */
+      (function () {
+        try {
+          var saved = localStorage.getItem('app_theme');
+          var dark = saved
+            ? saved === 'dark'
+            : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+          document
+            .querySelector('meta[name="theme-color"]')
+            .setAttribute('content', dark ? '#0B1326' : '#F4F7F5');
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -143,7 +143,7 @@ export default function HearingMode({ language, online, onBack }) {
       </header>
 
       {/* ── Transcription board ────────────────────────────────────── */}
-      <section className="overflow-hidden rounded-2xl border border-white/10 bg-card">
+      <section className="overflow-hidden surface-card">
         <div className="flex items-center gap-2 bg-card-high px-4 py-2.5 text-xs">
           <span className="font-semibold">Dr. Sharma</span>
           <span className="text-ink-dim">• Primary Physician</span>
@@ -211,7 +211,7 @@ export default function HearingMode({ language, online, onBack }) {
       </div>
       <div className="-mt-3 mb-4 flex justify-center">
         <span className={'pill ' + (recording
-          ? 'border-primary/40 text-primary' : 'border-white/10 text-ink-dim')}>
+          ? 'border-primary/40 text-primary' : 'border-subtle text-ink-dim')}>
           {recording
             ? `VOICE DETECTED • ${Math.round(20 + level * 60)} dB`
             : 'MICROPHONE IDLE'}

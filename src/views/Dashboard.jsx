@@ -7,6 +7,7 @@ import { LANGUAGES, getLanguage } from '../config/languages.js';
 import { describeMode, MODE_OFFLINE } from '../services/translationService.js';
 import { getKeys } from '../services/translator.js';
 import { clockString } from '../lib/utils.js';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 
 const TILES = [
   { id: 'sign', label: 'Sign Translator', hint: 'Camera → words', Icon: Hand, tint: 'text-primary' },
@@ -74,7 +75,7 @@ export default function Dashboard({
       {/* ── Status bar ─────────────────────────────────────────────── */}
       <header className="flex items-center gap-2 px-4 py-3 text-[11px] text-ink-dim">
         <span className="font-mono text-ink">{clock}</span>
-        <span className="pill border-white/10">
+        <span className="pill border-subtle">
           {online ? (
             <><Wifi size={12} className="text-primary" /> Online</>
           ) : (
@@ -82,7 +83,7 @@ export default function Dashboard({
           )}
         </span>
         {battery !== null && (
-          <span className="pill border-white/10">
+          <span className="pill border-subtle">
             <BatteryMedium size={12} className="text-primary" /> {battery}%
           </span>
         )}
@@ -105,10 +106,11 @@ export default function Dashboard({
         >
           <Languages size={12} /> {active.script}
         </button>
+        <ThemeToggle compact />
       </header>
 
       {pickerOpen && (
-        <div className="mx-4 mb-2 grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-card-high p-2">
+        <div className="mx-4 mb-2 grid grid-cols-2 gap-1 rounded-xl border border-subtle bg-card-high p-2">
           {LANGUAGES.map((l) => (
             <button
               key={l.code}
@@ -167,7 +169,7 @@ export default function Dashboard({
           </p>
         )}
 
-        <p className="mt-4 rounded-xl border border-white/10 bg-card/60 p-3 text-[11px] leading-relaxed text-ink-dim">
+        <p className="mt-4 surface-card rounded-xl p-3 text-[11px] leading-relaxed text-ink-dim">
           <span className="font-semibold text-ink">
             {badge.icon} {badge.label}
           </span>

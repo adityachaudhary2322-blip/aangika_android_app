@@ -31,7 +31,7 @@ export default function LanguageSelect({
 
   const trigger =
     variant === 'overlay'
-      ? 'pill bg-black/55 text-ink backdrop-blur border-white/20'
+      ? 'pill chrome-plate text-ink backdrop-blur border-subtle'
       : 'pill border-secondary/40 bg-secondary/10 text-secondary';
 
   return (
@@ -52,7 +52,7 @@ export default function LanguageSelect({
           role="listbox"
           className={
             'absolute z-50 mt-1 max-h-64 w-44 overflow-y-auto rounded-xl ' +
-            'border border-white/10 bg-card-high p-1 shadow-xl no-scrollbar ' +
+            'border border-subtle bg-card-high p-1 shadow-xl no-scrollbar ' +
             (align === 'right' ? 'right-0' : 'left-0')
           }
         >

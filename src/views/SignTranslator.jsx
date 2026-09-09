@@ -7,6 +7,7 @@ import LandmarkCanvas from '../components/LandmarkCanvas.jsx';
 import LanguageSelect from '../components/LanguageSelect.jsx';
 import EngineToggle from '../components/EngineToggle.jsx';
 import EngineBadge from '../components/EngineBadge.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
 import cameraManager from '../services/cameraManager.js';
 import landmarker from '../services/landmarker.js';
@@ -140,11 +141,11 @@ export default function SignTranslator({
           <button
             type="button"
             onClick={onBack}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55 backdrop-blur"
+            className="flex h-9 w-9 items-center justify-center rounded-full chrome-plate"
           >
             <ArrowLeft size={18} />
           </button>
-          <span className="pill bg-black/55 text-ink backdrop-blur">
+          <span className="pill chrome-plate text-ink backdrop-blur">
             {stats.fps} FPS · {stats.latencyMs} ms
             {runtime.delegate !== "unknown" && (
               <span className={runtime.delegate === "GPU" ? "text-primary" : "text-amber"}>
@@ -160,7 +161,7 @@ export default function SignTranslator({
             onClick={togglePipeline}
             title="Switch translation engine"
             className={
-              'pill bg-black/55 backdrop-blur ' +
+              'pill chrome-plate ' +
               (badge.tone === 'primary'
                 ? 'border-primary/50 text-primary'
                 : 'border-amber/50 text-amber')
@@ -175,10 +176,11 @@ export default function SignTranslator({
               onChange={setLanguage}
               variant="overlay"
             />
+            <ThemeToggle variant="overlay" />
             <button
               type="button"
               onClick={() => setShowMesh((v) => !v)}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55 backdrop-blur"
+              className="flex h-9 w-9 items-center justify-center rounded-full chrome-plate"
             >
               <Waypoints size={16} className={showMesh ? 'text-primary' : 'text-ink-dim'} />
             </button>
@@ -187,7 +189,7 @@ export default function SignTranslator({
               onClick={flipCamera}
               disabled={flipping}
               aria-label={mirrored ? 'Switch to back camera' : 'Switch to front camera'}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55 backdrop-blur disabled:opacity-50"
+              className="flex h-9 w-9 items-center justify-center rounded-full chrome-plate disabled:opacity-50"
             >
               {flipping
                 ? <Loader2 size={16} className="animate-spin" />
@@ -244,8 +246,8 @@ export default function SignTranslator({
               <span
                 key={w.index}
                 className={
-                  'pill shrink-0 bg-black/60 backdrop-blur ' +
-                  (words.length ? 'border-primary/50' : 'border-white/10 opacity-60')
+                  'pill shrink-0 chrome-plate ' +
+                  (words.length ? 'border-primary/50' : 'border-subtle opacity-60')
                 }
               >
                 <span className="flex flex-col leading-tight">
@@ -316,7 +318,7 @@ export default function SignTranslator({
               key={tags.join('-')}
               type="button"
               onClick={() => runDemo(tags)}
-              className="pill shrink-0 border-white/10 bg-card-high text-[10px] text-ink-dim"
+              className="pill shrink-0 border-subtle bg-card-high text-[10px] text-ink-dim"
             >
               {tags.join(' ')}
             </button>

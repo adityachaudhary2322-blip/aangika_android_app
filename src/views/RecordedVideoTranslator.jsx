@@ -3,6 +3,7 @@ import {
   ArrowLeft, Upload, Play, Pause, Download, Loader2, FileVideo, AlertTriangle,
 } from 'lucide-react';
 import LanguageSelect from '../components/LanguageSelect.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 import landmarker from '../services/landmarker.js';
 import { classifySignBridgeFrame } from '../services/signbridgeEngine.js';
 import { translate } from '../services/translationService.js';
@@ -198,8 +199,9 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-lg font-bold">Recorded Video</h1>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           <LanguageSelect value={language} onChange={setLanguage} />
+          <ThemeToggle />
         </div>
       </header>
 
@@ -215,7 +217,7 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
       )}
 
       {/* Picker */}
-      <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-white/20 bg-card p-4">
+      <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-subtle bg-card p-4">
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-card-high">
           <Upload size={20} className="text-primary" />
         </span>
@@ -239,7 +241,7 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
 
       {/* Player + overlay */}
       {videoUrl && (
-        <div className="relative mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black">
+        <div className="relative mt-3 overflow-hidden rounded-2xl border border-subtle bg-black">
           <video
             ref={videoRef}
             src={videoUrl}
@@ -252,7 +254,7 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
 
           {/* Live VTT overlay */}
           {activeCue && (
-            <div className="pointer-events-none absolute inset-x-3 bottom-14 rounded-xl bg-black/70 px-3 py-2 backdrop-blur">
+            <div className="pointer-events-none absolute inset-x-3 bottom-14 rounded-xl chrome-plate px-3 py-2 backdrop-blur">
               <p className="text-center text-base font-semibold leading-snug text-ink">
                 {activeCue.text}
               </p>
@@ -263,7 +265,7 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
           )}
 
           {status === 'scanning' && (
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
+            <div className="absolute inset-x-0 bottom-0 h-1 chrome-plate">
               <div
                 className="h-full bg-primary transition-all"
                 style={{ width: `${progress * 100}%` }}
@@ -330,7 +332,7 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
 
       {/* Transcript */}
       {cues.length > 0 && (
-        <section className="my-4 rounded-2xl border border-white/10 bg-card p-4">
+        <section className="my-4 surface-card p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
             Transcript · {cues.length} cue{cues.length === 1 ? '' : 's'}
           </p>

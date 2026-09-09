@@ -7,6 +7,7 @@ import {
   GRAMMAR_QWEN_OFFLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS,
 } from '../services/engineState.js';
 import { LANGUAGES } from '../config/languages.js';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 
 export default function Settings({
   language, setLanguage, onBack, online,
@@ -39,9 +40,12 @@ export default function Settings({
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-lg font-bold">Settings</h1>
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
       </header>
 
-      <section className="rounded-2xl border border-white/10 bg-card p-4">
+      <section className="surface-card p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
           Vision engine
         </p>
@@ -65,7 +69,7 @@ export default function Settings({
         </p>
       </section>
 
-      <section className="mt-4 rounded-2xl border border-white/10 bg-card p-4">
+      <section className="mt-4 surface-card p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
           Grammar engine
         </p>
@@ -84,7 +88,7 @@ export default function Settings({
         </div>
       </section>
 
-      <section className="mt-4 rounded-2xl border border-white/10 bg-card p-4">
+      <section className="mt-4 surface-card p-4">
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-dim">
           <KeyRound size={14} /> API keys
         </p>
@@ -95,7 +99,7 @@ export default function Settings({
           value={gemini}
           onChange={(e) => setGemini(e.target.value)}
           placeholder="Sentence reconstruction + translation"
-          className="mt-1 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+          className="mt-1 w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
         />
 
         <label className="mt-3 block text-xs text-ink-dim">Sarvam API key</label>
@@ -104,7 +108,7 @@ export default function Settings({
           value={sarvam}
           onChange={(e) => setSarvam(e.target.value)}
           placeholder="Speech in and out"
-          className="mt-1 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+          className="mt-1 w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
         />
 
         <button
@@ -125,7 +129,7 @@ export default function Settings({
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          className="mt-1 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+          className="mt-1 w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
         />
 
         <label className="mt-3 block text-xs text-ink-dim">TURN credential</label>
@@ -134,7 +138,7 @@ export default function Settings({
           value={turnKey}
           onChange={(e) => setTurnKey(e.target.value)}
           placeholder="Metered API key"
-          className="mt-1 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+          className="mt-1 w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
         />
         <p className="mt-1.5 text-[10px] leading-relaxed text-ink-dim">
           Without valid TURN credentials the relay silently fails to allocate
@@ -154,7 +158,7 @@ export default function Settings({
         </p>
       </section>
 
-      <section className="mt-4 rounded-2xl border border-white/10 bg-card p-4">
+      <section className="mt-4 surface-card p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
           Output language
         </p>
@@ -168,7 +172,7 @@ export default function Settings({
                 'rounded-lg border px-3 py-2 text-left ' +
                 (l.code === language
                   ? 'border-primary/50 bg-primary/10 text-primary'
-                  : 'border-white/10 text-ink')
+                  : 'border-subtle text-ink')
               }
             >
               <div className="text-sm font-medium">{l.script}</div>
@@ -178,7 +182,7 @@ export default function Settings({
         </div>
       </section>
 
-      <section className="my-4 rounded-2xl border border-white/10 bg-card p-4 text-[11px] leading-relaxed text-ink-dim">
+      <section className="my-4 surface-card p-4 text-[11px] leading-relaxed text-ink-dim">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider">
           What to expect
         </p>
@@ -200,8 +204,8 @@ function EngineCard({ engine, selected, onSelect }) {
     primary: 'border-primary/50 bg-primary/10',
     secondary: 'border-secondary/50 bg-secondary/10',
     amber: 'border-amber/50 bg-amber/10',
-    ink: 'border-white/25 bg-white/5',
-  }[engine.tone] || 'border-white/25 bg-white/5';
+    ink: 'border-strong bg-card-high',
+  }[engine.tone] || 'border-strong bg-card-high';
 
   return (
     <button
@@ -210,7 +214,7 @@ function EngineCard({ engine, selected, onSelect }) {
       aria-pressed={selected}
       className={
         'w-full rounded-xl border p-3 text-left transition ' +
-        (selected ? tone : 'border-white/10')
+        (selected ? tone : 'border-subtle')
       }
     >
       <span className="flex items-center gap-2">

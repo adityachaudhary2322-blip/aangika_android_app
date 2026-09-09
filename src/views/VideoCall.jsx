@@ -6,6 +6,7 @@ import {
 import LandmarkCanvas from '../components/LandmarkCanvas.jsx';
 import LanguageSelect from '../components/LanguageSelect.jsx';
 import EngineToggle from '../components/EngineToggle.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
 import cameraManager from '../services/cameraManager.js';
 import { translate } from '../services/translationService.js';
@@ -615,14 +616,15 @@ export default function VideoCall({
             <ArrowLeft size={18} />
           </button>
           <h1 className="text-lg font-bold">Realtime Call</h1>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <LanguageSelect value={language} onChange={setLanguage} />
+            <ThemeToggle />
           </div>
         </header>
 
         <div className="flex flex-1 flex-col justify-center gap-4 pb-6">
           {/* Role */}
-          <div className="rounded-2xl border border-white/10 bg-card p-4">
+          <div className="surface-card p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
               I am joining as
             </p>
@@ -660,7 +662,7 @@ export default function VideoCall({
           </div>
 
           {/* Room code */}
-          <div className="rounded-2xl border border-white/10 bg-card p-4">
+          <div className="surface-card p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
               Your room code
             </p>
@@ -702,7 +704,7 @@ export default function VideoCall({
           </div>
 
           {/* Join */}
-          <div className="rounded-2xl border border-white/10 bg-card p-4">
+          <div className="surface-card p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
               Join a room
             </p>
@@ -713,7 +715,7 @@ export default function VideoCall({
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
-              className="mt-2 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 font-mono text-sm outline-none focus:border-secondary"
+              className="mt-2 w-full rounded-lg border border-subtle bg-surface px-3 py-2 font-mono text-sm outline-none focus:border-secondary"
             />
             <button
               type="button"
@@ -756,7 +758,7 @@ export default function VideoCall({
           {cameraError && <p className="text-center text-xs text-rose">{cameraError}</p>}
 
           {/* Connection test */}
-          <div className="rounded-2xl border border-white/10 bg-card p-4">
+          <div className="surface-card p-4">
             <div className="flex items-center gap-2">
               <Signal size={14} className="text-ink-dim" />
               <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
@@ -817,7 +819,7 @@ export default function VideoCall({
   const MAIN_BOX = 'absolute inset-0 z-0 h-full w-full bg-black';
   const PIP_BOX =
     'absolute right-3 top-16 z-30 h-44 w-32 cursor-pointer overflow-hidden ' +
-    'rounded-2xl border border-white/25 bg-surface-low shadow-2xl active:scale-95';
+    'rounded-2xl border border-subtle bg-surface-low shadow-2xl active:scale-95';
 
   const swap = () => setSwapped((v) => !v);
   const incomingSpeech = remoteLine?.kind === 'speech' ? remoteLine.text : '';
@@ -839,7 +841,7 @@ export default function VideoCall({
           className="h-full w-full object-cover"
         />
         {swapped && (
-          <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 font-mono text-[9px]">
+          <span className="absolute bottom-1 left-1 rounded chrome-plate px-1.5 py-0.5 font-mono text-[9px]">
             THEM
           </span>
         )}
@@ -862,20 +864,20 @@ export default function VideoCall({
           className={'h-full w-full object-cover ' + (mirrored ? 'scale-x-[-1]' : '')}
         />
         {signingActive && <LandmarkCanvas frameRef={frameRef} mirrored={mirrored} />}
-        <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 font-mono text-[9px]">
+        <span className="absolute bottom-1 left-1 rounded chrome-plate px-1.5 py-0.5 font-mono text-[9px]">
           {signingActive ? `${stats.fps} fps` : 'YOU'}
         </span>
       </div>
 
       {/* Top scrim */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-40 bg-gradient-to-b from-black/70 to-transparent p-3">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-40 scrim-top p-3">
         <div className="pointer-events-auto flex items-center gap-2">
-          <span className="pill bg-black/45 font-mono text-ink backdrop-blur">
+          <span className="pill chrome-plate font-mono text-ink backdrop-blur">
             {durationString(seconds)}
           </span>
           <span
             className={
-              'pill bg-black/45 backdrop-blur ' +
+              'pill chrome-plate ' +
               (connectionState === 'connected' || connectionState === 'completed'
                 ? 'text-primary'
                 : connectionState === 'failed' ? 'text-rose' : 'text-ink-dim')
@@ -890,6 +892,7 @@ export default function VideoCall({
             {!cleanVideo && (
               <LanguageSelect value={language} onChange={setLanguage} variant="overlay" />
             )}
+            <ThemeToggle variant="overlay" />
           </div>
         </div>
 
@@ -901,7 +904,7 @@ export default function VideoCall({
             onClick={() => chooseRole(myRole === ROLE_SIGNER ? ROLE_SPEAKER : ROLE_SIGNER)}
             aria-label="Switch your role"
             className={
-              'pill bg-black/45 backdrop-blur ' +
+              'pill chrome-plate ' +
               (myRole === ROLE_SIGNER ? 'text-primary' : 'text-secondary')
             }
           >
@@ -909,7 +912,7 @@ export default function VideoCall({
             YOU · {myRole === ROLE_SIGNER ? 'SIGN' : 'SPEAK'}
           </button>
 
-          <span className={'pill bg-black/45 backdrop-blur ' + (peerRole ? 'text-ink' : 'text-ink-dim')}>
+          <span className={'pill chrome-plate ' + (peerRole ? 'text-ink' : 'text-ink-dim')}>
             {peerRole === ROLE_SPEAKER ? <Ear size={11} /> : <Hand size={11} />}
             THEM · {peerRole
               ? (peerRole === ROLE_SIGNER ? 'SIGN' : 'SPEAK')
@@ -919,7 +922,7 @@ export default function VideoCall({
           {listeningActive && (
             <span
               className={
-                'pill bg-black/45 backdrop-blur ' +
+                'pill chrome-plate ' +
                 (sttState === 'listening' ? 'text-primary' : 'text-amber')
               }
             >
@@ -984,13 +987,13 @@ export default function VideoCall({
       )}
 
       {diagnostic && (
-        <p className="absolute inset-x-4 bottom-24 z-40 rounded-lg bg-black/75 px-3 py-2 text-center text-xs text-amber backdrop-blur">
+        <p className="absolute inset-x-4 bottom-24 z-40 rounded-lg chrome-plate px-3 py-2 text-center text-xs text-amber backdrop-blur">
           {diagnostic.message}
         </p>
       )}
 
       {/* Bottom dock */}
-      <div className="absolute inset-x-0 bottom-0 z-40 bg-gradient-to-t from-black/80 to-transparent pb-7 pt-10">
+      <div className="absolute inset-x-0 bottom-0 z-40 scrim-bottom pb-7 pt-10">
         <div className="flex items-center justify-center gap-3.5">
           <CallButton onClick={toggleMute} active={!muted} label={muted ? 'Unmute' : 'Mute'}>
             {muted ? <MicOff size={20} /> : <Mic size={20} />}
@@ -1049,7 +1052,7 @@ export default function VideoCall({
 
 function CaptionCard({ label, tone, text, placeholder, large = false }) {
   return (
-    <div className="rounded-2xl bg-black/60 px-4 py-2.5 backdrop-blur">
+    <div className="rounded-2xl chrome-plate px-4 py-2.5 backdrop-blur">
       <p className={
         'text-[10px] font-bold tracking-wide ' +
         (tone === 'primary' ? 'text-primary' : 'text-secondary')
@@ -1077,7 +1080,7 @@ function RoleCard({ icon, title, subtitle, detail, active, tint, onClick }) {
       aria-pressed={active}
       className={
         'rounded-xl border p-3 text-left ' +
-        (active ? ring : 'border-white/10 bg-card-high text-ink-dim')
+        (active ? ring : 'border-subtle bg-card-high text-ink-dim')
       }
     >
       <span className="flex items-center gap-2">
@@ -1090,10 +1093,18 @@ function RoleCard({ icon, title, subtitle, detail, active, tint, onClick }) {
   );
 }
 
+/**
+ * A round dock control over live video.
+ *
+ * The OFF state is the one that breaks: a white-at-15% ghost is legible on a
+ * dark dock and completely invisible on a light one, so it inverts with the
+ * theme (.chrome-ghost) rather than staying white. The ON state is a solid
+ * fill, which needs no such help.
+ */
 function CallButton({ children, onClick, active, tint = 'ink', label }) {
   const on = tint === 'secondary'
-    ? 'bg-secondary text-surface'
-    : 'bg-white/90 text-surface';
+    ? 'bg-secondary text-white'
+    : 'bg-slate-900 text-white dark:bg-white/90 dark:text-slate-900';
   return (
     <button
       type="button"
@@ -1102,8 +1113,8 @@ function CallButton({ children, onClick, active, tint = 'ink', label }) {
       aria-pressed={active}
       className={
         'flex h-12 w-12 items-center justify-center rounded-full ' +
-        'backdrop-blur active:scale-95 ' +
-        (active ? on : 'bg-white/15 text-white')
+        'backdrop-blur transition active:scale-95 ' +
+        (active ? on : 'chrome-ghost')
       }
     >
       {children}

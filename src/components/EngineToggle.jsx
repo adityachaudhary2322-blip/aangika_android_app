@@ -13,7 +13,7 @@ export default function EngineToggle({ value, onChange, compact = false }) {
     <div
       role="radiogroup"
       aria-label="Vision engine"
-      className="inline-flex items-center rounded-full border border-white/20 bg-black/55 p-0.5 backdrop-blur"
+      className="inline-flex items-center rounded-full border border-subtle chrome-plate p-0.5 backdrop-blur"
     >
       {options.map((id) => {
         const e = VISION_ENGINES[id];
