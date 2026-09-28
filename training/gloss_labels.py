@@ -304,7 +304,15 @@ def main():
     r = sub.add_parser("run")
     r.add_argument("--yes", action="store_true")
     args = ap.parse_args()
-    {"estimate": cmd_estimate, "sample": cmd_sample, "run": cmd_run}[args.cmd](args)
+    try:
+        {"estimate": cmd_estimate, "sample": cmd_sample, "run": cmd_run}[args.cmd](args)
+    except RuntimeError as err:
+        msg = str(err)
+        if "HTTP 401" in msg or "HTTP 403" in msg:
+            sys.exit("Gemini rejected the key (HTTP 401/403). Use an API key from "
+                     "https://aistudio.google.com/apikey - it starts with 'AIza'. "
+                     "Put it in .env as: GEMINI_API_KEY=AIza...")
+        sys.exit(f"Gemini request failed: {msg[:300]}")
 
 
 if __name__ == "__main__":
