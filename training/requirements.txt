@@ -1,0 +1,12 @@
+# Python 3.10-3.12. torch is NOT listed here: setup.sh installs the CUDA or CPU
+# build depending on whether nvidia-smi works.
+numpy>=1.26,<2.2
+h5py>=3.10
+# Same release as WASM_BASE in src/services/landmarker.js (tasks-vision@0.10.14),
+# so Python and the browser run the same inference engine on the same .task files.
+mediapipe==0.10.14
+# cv2 comes from mediapipe's own opencv-contrib-python dependency; adding
+# opencv-python(-headless) as well would install two conflicting cv2 packages.
+onnxruntime>=1.18
+tqdm>=4.66
+pytest>=8
