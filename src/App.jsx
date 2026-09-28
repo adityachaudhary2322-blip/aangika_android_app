@@ -15,6 +15,9 @@ import {
 import { fillPendingTranslations } from './services/customSignTranslations.js';
 import IncomingCall from './components/IncomingCall.jsx';
 import BottomNav from './components/BottomNav.jsx';
+import SideNav from './components/SideNav.jsx';
+import Ambient from './components/Ambient.jsx';
+import Mascot from './components/Mascot.jsx';
 import * as chatStore from './services/chatStorage.js';
 import { useCall } from './context/CallContext.jsx';
 import cameraManager from './services/cameraManager.js';
@@ -162,35 +165,55 @@ export default function App() {
     onBack: () => go('dashboard'),
   };
 
+  // Content width per view. Phones get the full width everywhere; on a wide
+  // screen reading views stay at a comfortable measure, while the camera and
+  // the two-pane messenger take the room they can use.
+  const width = {
+    messenger: 'max-w-3xl lg:max-w-6xl',
+    sign: 'max-w-md lg:max-w-none',
+    dashboard: 'max-w-md lg:max-w-5xl',
+  }[view] || 'max-w-md lg:max-w-3xl';
+
   return (
     <>
-      {/* The messenger is wider than the other views: two panes need the room,
-          and clamping it to a phone width would waste a desktop screen. */}
-      <div
-        className={
-          'mx-auto flex h-full flex-col '
-          + (view === 'messenger' ? 'max-w-3xl' : 'max-w-md')
-        }
-      >
-        <div key={view} className="flex min-h-0 flex-1 animate-fade-up flex-col">
-          {view === 'messenger' && (
-            <MessengerView onNavigate={go} onChatOpenChange={setChatOpen} />
+      <Ambient />
+      <div className="flex h-full">
+        <SideNav view={view} onNavigate={go} unread={unread} />
+        <div className={'mx-auto flex h-full w-full min-w-0 flex-col ' + width}>
+          <div key={view} className="flex min-h-0 flex-1 animate-fade-up flex-col">
+            {view === 'messenger' && (
+              <MessengerView onNavigate={go} onChatOpenChange={setChatOpen} />
+            )}
+            {view === 'dashboard' && <Dashboard {...shared} onNavigate={go} />}
+            {view === 'sign' && (
+              <SignTranslator {...shared} cameraError={cameraError} onNavigate={go} />
+            )}
+            {view === 'mysigns' && (
+              <MySigns {...shared} cameraError={cameraError} onBack={() => go(returnTo)} />
+            )}
+            {view === 'hearing' && <HearingMode {...shared} />}
+            {view === 'recorded' && <RecordedVideoTranslator {...shared} />}
+            {view === 'settings' && <Settings {...shared} onNavigate={go} />}
+            {view === 'words' && <WordList {...shared} onNavigate={go} />}
+            {view === 'phrases' && <Phrases {...shared} cameraError={cameraError} />}
+          </div>
+          {showNav && (
+            <div className="lg:hidden">
+              <BottomNav view={view} onNavigate={go} unread={unread} />
+            </div>
           )}
-          {view === 'dashboard' && <Dashboard {...shared} onNavigate={go} />}
-          {view === 'sign' && (
-            <SignTranslator {...shared} cameraError={cameraError} onNavigate={go} />
-          )}
-          {view === 'mysigns' && (
-            <MySigns {...shared} cameraError={cameraError} onBack={() => go(returnTo)} />
-          )}
-          {view === 'hearing' && <HearingMode {...shared} />}
-          {view === 'recorded' && <RecordedVideoTranslator {...shared} />}
-          {view === 'settings' && <Settings {...shared} onNavigate={go} />}
-          {view === 'words' && <WordList {...shared} onNavigate={go} />}
-          {view === 'phrases' && <Phrases {...shared} cameraError={cameraError} />}
         </div>
-        {showNav && <BottomNav view={view} onNavigate={go} unread={unread} />}
       </div>
+
+      {/* The guide stays out of the way of the camera and of a call. */}
+      {!inCall && (
+        <Mascot
+          view={view}
+          onNavigate={go}
+          raised={showNav}
+          hidden={view === 'sign' || view === 'mysigns' || (view === 'messenger' && chatOpen)}
+        />
+      )}
 
       {/* Above the router, in ringing order: an unanswered call first, then the
           call surface itself once it is dialling or up. */}

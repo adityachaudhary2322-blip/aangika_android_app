@@ -200,10 +200,10 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 no-scrollbar">
       <header className="flex items-center gap-2 py-3">
-        <button type="button" onClick={onBack} className="flex h-9 w-9 items-center justify-center rounded-full bg-card-high">
+        <button type="button" onClick={onBack} aria-label="Back" className="btn-icon lg:hidden">
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-lg font-bold">Recorded Video</h1>
+        <h1 className="display text-2xl">Recorded video</h1>
         <div className="ml-auto flex items-center gap-2">
           <LanguageSelect value={language} onChange={setLanguage} />
           <ThemeToggle />

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyRound, ShieldAlert, Check } from 'lucide-react';
+import { KeyRound, ShieldAlert, Check, Sun, Moon, Wand2, Palette } from 'lucide-react';
 import { getKeys, setKey } from '../services/translator.js';
 import { getTurnCredentials, setTurnCredentials } from '../services/iceConfig.js';
 import {
@@ -8,6 +8,8 @@ import {
 } from '../services/engineState.js';
 import { LANGUAGES } from '../config/languages.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
+import { PALETTES, CUSTOM } from '../config/themes.js';
 
 export default function Settings({
   language, setLanguage, onBack, online,
@@ -35,15 +37,17 @@ export default function Settings({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-5 no-scrollbar">
-      <header className="flex items-center gap-2 pb-3 pt-4">
-        <h1 className="text-2xl font-extrabold tracking-tight">Settings</h1>
-        <div className="ml-auto">
+      <header className="flex items-center gap-2 pb-3 pt-4 lg:pt-6">
+        <h1 className="display text-3xl">Settings</h1>
+        <div className="ml-auto lg:hidden">
           <ThemeToggle />
         </div>
       </header>
 
-      <section className="surface-card p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
+      <Appearance />
+
+      <section className="mt-4 surface-card p-4">
+        <p className="eyebrow">
           Vision engine
         </p>
         <p className="mt-1 text-[11px] text-ink-dim">
@@ -68,7 +72,7 @@ export default function Settings({
 
       {onNavigate && (
         <section className="mt-4 surface-card p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
+          <p className="eyebrow">
             My signs
           </p>
           <p className="mt-1 text-[11px] text-ink-dim">
@@ -78,7 +82,7 @@ export default function Settings({
           <button
             type="button"
             onClick={() => onNavigate('mysigns')}
-            className="mt-3 w-full rounded-xl bg-card-highest py-2.5 text-sm font-semibold"
+            className="btn-quiet mt-3 w-full"
           >
             Open My signs
           </button>
@@ -86,7 +90,7 @@ export default function Settings({
       )}
 
       <section className="mt-4 surface-card p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
+        <p className="eyebrow">
           Grammar engine
         </p>
         <p className="mt-1 text-[11px] text-ink-dim">
@@ -115,7 +119,7 @@ export default function Settings({
           value={gemini}
           onChange={(e) => setGemini(e.target.value)}
           placeholder="Sentence reconstruction + translation"
-          className="mt-1 w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+          className="field mt-1"
         />
 
         <label className="mt-3 block text-xs text-ink-dim">Sarvam API key</label>
@@ -124,13 +128,13 @@ export default function Settings({
           value={sarvam}
           onChange={(e) => setSarvam(e.target.value)}
           placeholder="Speech in and out"
-          className="mt-1 w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+          className="field mt-1"
         />
 
         <button
           type="button"
           onClick={save}
-          className="mt-4 w-full rounded-xl bg-primary py-2.5 font-semibold text-surface"
+          className="btn-primary mt-4 w-full"
         >
           {saved ? 'Saved' : 'Save keys'}
         </button>
@@ -145,7 +149,7 @@ export default function Settings({
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          className="mt-1 w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+          className="field mt-1"
         />
 
         <label className="mt-3 block text-xs text-ink-dim">TURN credential</label>
@@ -154,7 +158,7 @@ export default function Settings({
           value={turnKey}
           onChange={(e) => setTurnKey(e.target.value)}
           placeholder="Metered API key"
-          className="mt-1 w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+          className="field mt-1"
         />
         <p className="mt-1.5 text-[10px] leading-relaxed text-ink-dim">
           Without valid TURN credentials the relay silently fails to allocate
@@ -175,7 +179,7 @@ export default function Settings({
       </section>
 
       <section className="mt-4 surface-card p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
+        <p className="eyebrow">
           Output language
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -247,5 +251,156 @@ function EngineCard({ engine, selected, onSelect }) {
         {engine.detail}
       </span>
     </button>
+  );
+}
+
+const CUSTOM_PRESETS = ['#E11D48', '#0EA5E9', '#16A34A', '#F59E0B', '#8B5CF6', '#64748B'];
+
+/** Mode, palette (including animated seasons), custom colour, mascot. */
+function Appearance() {
+  const {
+    isDark, setTheme, palette, setPalette, customAccent, setCustomAccent,
+    ambientOn, setAmbient, mascotOn, setMascot,
+  } = useTheme();
+
+  return (
+    <section className="surface-card p-4">
+      <div className="flex items-center gap-2">
+        <Palette size={15} className="text-primary" />
+        <p className="eyebrow">Appearance</p>
+      </div>
+
+      {/* Mode */}
+      <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-card-high p-1">
+        {[
+          { dark: false, label: 'Light', Icon: Sun },
+          { dark: true, label: 'Dark', Icon: Moon },
+        ].map(({ dark, label, Icon }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => setTheme(dark ? 'dark' : 'light')}
+            aria-pressed={isDark === dark}
+            className={
+              'flex items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold transition '
+              + (isDark === dark ? 'bg-card text-ink shadow-card' : 'text-ink-dim hover:text-ink')
+            }
+          >
+            <Icon size={15} /> {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Palettes */}
+      <p className="mt-5 text-sm font-semibold">Palette</p>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {PALETTES.map((p) => {
+          const on = palette === p.id;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setPalette(p.id)}
+              aria-pressed={on}
+              className={
+                'relative overflow-hidden rounded-2xl border p-2.5 text-left transition '
+                + (on ? 'border-primary ring-2 ring-primary/20' : 'border-subtle hover:border-strong')
+              }
+            >
+              <span
+                className="block h-10 rounded-xl"
+                style={{ background: `linear-gradient(135deg, ${p.swatch[0]}, ${p.swatch[1]})` }}
+              />
+              <span className="mt-2 flex items-center gap-1 text-xs font-semibold">
+                {p.name}
+                {on && <Check size={12} className="ml-auto text-primary" />}
+              </span>
+              {p.ambient && (
+                <span className="mt-0.5 flex items-center gap-1 text-[10px] text-ink-dim">
+                  <Wand2 size={10} /> Animated
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Custom */}
+      <p className="mt-5 text-sm font-semibold">Your own colour</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {CUSTOM_PRESETS.map((hex) => (
+          <button
+            key={hex}
+            type="button"
+            onClick={() => setCustomAccent(hex)}
+            aria-label={`Use ${hex}`}
+            className={
+              'h-8 w-8 rounded-full ring-offset-2 ring-offset-card transition hover:scale-110 '
+              + (palette === CUSTOM && customAccent.toLowerCase() === hex.toLowerCase() ? 'ring-2 ring-primary' : '')
+            }
+            style={{ background: hex }}
+          />
+        ))}
+        <label
+          className={
+            'relative flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition '
+            + (palette === CUSTOM ? 'border-primary text-primary' : 'border-subtle text-ink-dim hover:border-strong')
+          }
+        >
+          <span className="h-4 w-4 rounded-full border border-subtle" style={{ background: customAccent }} />
+          Pick…
+          <input
+            type="color"
+            value={customAccent}
+            onChange={(e) => setCustomAccent(e.target.value)}
+            className="absolute inset-0 cursor-pointer opacity-0"
+            aria-label="Pick a custom colour"
+          />
+        </label>
+      </div>
+      <p className="mt-1.5 text-[11px] text-ink-dim">
+        The shade is adjusted automatically so text stays readable in both modes.
+      </p>
+
+      {/* Switches */}
+      <div className="mt-5 divide-y divide-subtle rounded-2xl border border-subtle">
+        <Switch
+          label="Seasonal animations"
+          detail="Petals, leaves, snow or fireflies on animated palettes."
+          on={ambientOn}
+          onChange={setAmbient}
+        />
+        <Switch
+          label="Mudra, the guide"
+          detail="The little helper in the corner. Tap it and ask anything."
+          on={mascotOn}
+          onChange={setMascot}
+        />
+      </div>
+    </section>
+  );
+}
+
+function Switch({ label, detail, on, onChange }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-3 px-3.5 py-3">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium">{label}</span>
+        <span className="block text-[11px] text-ink-dim">{detail}</span>
+      </span>
+      <input
+        type="checkbox"
+        role="switch"
+        checked={on}
+        onChange={(e) => onChange(e.target.checked)}
+        className="peer sr-only"
+      />
+      <span
+        aria-hidden="true"
+        className="relative h-6 w-11 shrink-0 rounded-full bg-card-highest transition peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40"
+      >
+        <span className={'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ' + (on ? 'left-[1.375rem]' : 'left-0.5')} />
+      </span>
+    </label>
   );
 }

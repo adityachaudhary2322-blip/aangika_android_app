@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 /**
- * Dual theme: Lavender Mist (light) and Midnight Ink (dark).
+ * Light and dark modes, each in several palettes (data-palette on <html>),
+ * plus a user-picked custom accent applied inline by ThemeContext.
  *
  * Values are space-separated RGB channels, not hex or rgb() strings, so that
  * `rgb(var(--x) / <alpha-value>)` in tailwind.config.js keeps working and
@@ -18,59 +19,317 @@
  */
 
 @layer base {
-  /* ── Light: lavender mist ────────────────────────────────────────────── */
+  /* ── Mode-level tokens (shared by every palette) ─────────────────────── */
   :root {
     color-scheme: light;
-
-    --bg-main: 247 246 251; /* near-white, faint violet cast */
-    --bg-surface: 255 255 255;
-    --bg-surface-high: 241 239 249;
-    --bg-surface-highest: 229 226 243;
-    --bg-deep: 236 234 246;
-
-    --text-primary: 24 22 43; /* 16:1 on --bg-main */
-    --text-muted: 92 88 118; /*  6.3:1 on --bg-main */
-
-    --accent-brand: 124 58 237; /* violet-600 — 5.7:1, carries white text */
-    --accent-cyan: 15 118 110; /* teal-700   — 5.4:1 */
-    --accent-amber: 180 83 9; /* amber-700  — 5.2:1 */
-    --accent-rose: 190 18 60; /* rose-700   — 6.4:1 */
-
-    --border-subtle: 233 230 245;
-    --border-strong: 214 209 237;
-
+    --accent-amber: 180 83 9; /* amber-700 — 5.2:1 */
+    --accent-rose: 190 18 60; /* rose-700  — 6.4:1 */
     --shadow-card: 0 1px 2px 0 rgb(24 22 43 / 0.04),
-      0 8px 24px -12px rgb(76 29 149 / 0.18);
+      0 10px 30px -18px rgb(var(--fill-b) / 0.35);
   }
 
-  /* ── Dark: midnight ink ──────────────────────────────────────────────── */
-  /* Same specificity as :root, so this must stay BELOW it to win. */
   .dark {
     color-scheme: dark;
-
-    --bg-main: 12 11 20;
-    --bg-surface: 22 20 35;
-    --bg-surface-high: 32 30 49;
-    --bg-surface-highest: 44 41 65;
-    --bg-deep: 7 6 14;
-
-    --text-primary: 236 234 246;
-    --text-muted: 160 156 186;
-
-    /* Mid-ramp rather than pastel so white type on a filled button still
-       reads, while the colour clears 4.5:1 as text on the page. */
-    --accent-brand: 150 118 250;
-    --accent-cyan: 45 212 191;
     --accent-amber: 251 191 36;
     --accent-rose: 251 113 133;
+    --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.03) inset,
+      0 20px 40px -24px rgb(0 0 0 / 0.8);
+  }
 
-    /* Solid, not white-at-alpha: a translucent hairline over live video
-       reads as smear; a solid one does not. */
-    --border-subtle: 36 34 54;
-    --border-strong: 54 51 78;
+  /* ── Palettes ────────────────────────────────────────────────────────────
+     Generated from one definition per palette (accent pair + a tint hue for
+     the neutrals); every accent clears 4.5:1 as text on its own page colour
+     and every --fill-* carries white text at 3:1 or better. A palette block
+     always defines the same variables for light AND dark, because
+     `[data-palette]` has the same specificity as `.dark` and would otherwise
+     leak light values into dark mode. --fill-a/b and --fill-c/d are the two
+     gradient pairs used for filled buttons and hero cards. */
+  :root {
+    --bg-main: 247 246 251;
+    --bg-surface: 255 255 255;
+    --bg-surface-high: 239 237 247;
+    --bg-surface-highest: 225 221 238;
+    --bg-deep: 235 233 244;
+    --text-primary: 24 20 41;
+    --text-muted: 89 83 110;
+    --accent-brand: 124 58 237;
+    --accent-cyan: 15 118 110;
+    --border-subtle: 230 226 243;
+    --border-strong: 206 201 227;
+    --fill-a: 124 58 237;
+    --fill-b: 79 70 229;
+    --fill-c: 13 148 136;
+    --fill-d: 14 116 144;
+  }
 
-    --shadow-card: 0 20px 25px -5px rgb(0 0 0 / 0.5),
-      0 8px 10px -6px rgb(0 0 0 / 0.4);
+  .dark {
+    --bg-main: 12 10 18;
+    --bg-surface: 20 18 31;
+    --bg-surface-high: 32 29 45;
+    --bg-surface-highest: 46 42 63;
+    --bg-deep: 6 5 10;
+    --text-primary: 234 232 243;
+    --text-muted: 167 163 184;
+    --accent-brand: 157 128 250;
+    --accent-cyan: 45 212 191;
+    --border-subtle: 35 32 50;
+    --border-strong: 55 50 72;
+    --fill-a: 124 58 237;
+    --fill-b: 79 70 229;
+    --fill-c: 13 148 136;
+    --fill-d: 14 116 144;
+  }
+
+  [data-palette="ocean"] {
+    --bg-main: 246 248 251;
+    --bg-surface: 255 255 255;
+    --bg-surface-high: 237 242 247;
+    --bg-surface-highest: 221 228 238;
+    --bg-deep: 233 238 244;
+    --text-primary: 20 29 41;
+    --text-muted: 83 95 110;
+    --accent-brand: 29 78 216;
+    --accent-cyan: 14 116 144;
+    --border-subtle: 226 234 243;
+    --border-strong: 201 212 227;
+    --fill-a: 37 99 235;
+    --fill-b: 30 64 175;
+    --fill-c: 8 145 178;
+    --fill-d: 21 94 117;
+  }
+
+  .dark[data-palette="ocean"] {
+    --bg-main: 10 14 18;
+    --bg-surface: 18 23 31;
+    --bg-surface-high: 29 36 45;
+    --bg-surface-highest: 42 51 63;
+    --bg-deep: 5 7 10;
+    --text-primary: 232 236 243;
+    --text-muted: 163 172 184;
+    --accent-brand: 96 165 250;
+    --accent-cyan: 34 211 238;
+    --border-subtle: 32 40 50;
+    --border-strong: 50 60 72;
+    --fill-a: 37 99 235;
+    --fill-b: 30 64 175;
+    --fill-c: 8 145 178;
+    --fill-d: 21 94 117;
+  }
+
+  [data-palette="forest"] {
+    --bg-main: 247 250 249;
+    --bg-surface: 255 255 255;
+    --bg-surface-high: 238 246 242;
+    --bg-surface-highest: 223 236 230;
+    --bg-deep: 234 243 238;
+    --text-primary: 22 39 31;
+    --text-muted: 86 108 97;
+    --accent-brand: 4 120 87;
+    --accent-cyan: 180 83 9;
+    --border-subtle: 228 241 235;
+    --border-strong: 204 225 214;
+    --fill-a: 5 150 105;
+    --fill-b: 6 95 70;
+    --fill-c: 180 83 9;
+    --fill-d: 146 64 14;
+  }
+
+  .dark[data-palette="forest"] {
+    --bg-main: 11 17 14;
+    --bg-surface: 19 29 24;
+    --bg-surface-high: 30 43 37;
+    --bg-surface-highest: 44 61 52;
+    --bg-deep: 6 9 8;
+    --text-primary: 233 241 237;
+    --text-muted: 165 182 173;
+    --accent-brand: 52 211 153;
+    --accent-cyan: 251 191 36;
+    --border-subtle: 34 48 41;
+    --border-strong: 52 70 61;
+    --fill-a: 5 150 105;
+    --fill-b: 6 95 70;
+    --fill-c: 180 83 9;
+    --fill-d: 146 64 14;
+  }
+
+  [data-palette="ember"] {
+    --bg-main: 250 248 247;
+    --bg-surface: 255 255 255;
+    --bg-surface-high: 246 241 238;
+    --bg-surface-highest: 236 228 223;
+    --bg-deep: 243 237 234;
+    --text-primary: 39 28 22;
+    --text-muted: 108 94 86;
+    --accent-brand: 194 65 12;
+    --accent-cyan: 15 118 110;
+    --border-subtle: 241 233 228;
+    --border-strong: 225 211 204;
+    --fill-a: 234 88 12;
+    --fill-b: 194 65 12;
+    --fill-c: 15 118 110;
+    --fill-d: 17 94 89;
+  }
+
+  .dark[data-palette="ember"] {
+    --bg-main: 17 13 11;
+    --bg-surface: 29 23 19;
+    --bg-surface-high: 43 35 30;
+    --bg-surface-highest: 61 50 44;
+    --bg-deep: 9 7 6;
+    --text-primary: 241 236 233;
+    --text-muted: 182 171 165;
+    --accent-brand: 251 146 60;
+    --accent-cyan: 45 212 191;
+    --border-subtle: 48 39 34;
+    --border-strong: 70 59 52;
+    --fill-a: 234 88 12;
+    --fill-b: 194 65 12;
+    --fill-c: 15 118 110;
+    --fill-d: 17 94 89;
+  }
+
+  [data-palette="sakura"] {
+    --bg-main: 251 246 248;
+    --bg-surface: 255 255 255;
+    --bg-surface-high: 247 237 241;
+    --bg-surface-highest: 238 221 227;
+    --bg-deep: 244 233 237;
+    --text-primary: 41 20 28;
+    --text-muted: 110 83 93;
+    --accent-brand: 190 24 93;
+    --accent-cyan: 126 34 206;
+    --border-subtle: 243 226 232;
+    --border-strong: 227 201 211;
+    --fill-a: 219 39 119;
+    --fill-b: 190 24 93;
+    --fill-c: 147 51 234;
+    --fill-d: 126 34 206;
+  }
+
+  .dark[data-palette="sakura"] {
+    --bg-main: 18 10 13;
+    --bg-surface: 31 18 23;
+    --bg-surface-high: 45 29 35;
+    --bg-surface-highest: 63 42 49;
+    --bg-deep: 10 5 7;
+    --text-primary: 243 232 236;
+    --text-muted: 184 163 171;
+    --accent-brand: 244 114 182;
+    --accent-cyan: 192 132 252;
+    --border-subtle: 50 32 38;
+    --border-strong: 72 50 58;
+    --fill-a: 219 39 119;
+    --fill-b: 190 24 93;
+    --fill-c: 147 51 234;
+    --fill-d: 126 34 206;
+  }
+
+  [data-palette="autumn"] {
+    --bg-main: 251 248 246;
+    --bg-surface: 255 255 255;
+    --bg-surface-high: 247 242 237;
+    --bg-surface-highest: 238 229 221;
+    --bg-deep: 244 238 233;
+    --text-primary: 41 30 20;
+    --text-muted: 110 96 83;
+    --accent-brand: 180 83 9;
+    --accent-cyan: 159 18 57;
+    --border-subtle: 243 234 226;
+    --border-strong: 227 213 201;
+    --fill-a: 217 119 6;
+    --fill-b: 180 83 9;
+    --fill-c: 190 18 60;
+    --fill-d: 159 18 57;
+  }
+
+  .dark[data-palette="autumn"] {
+    --bg-main: 18 14 10;
+    --bg-surface: 31 24 18;
+    --bg-surface-high: 45 36 29;
+    --bg-surface-highest: 63 52 42;
+    --bg-deep: 10 7 5;
+    --text-primary: 243 237 232;
+    --text-muted: 184 173 163;
+    --accent-brand: 245 158 11;
+    --accent-cyan: 251 113 133;
+    --border-subtle: 50 40 32;
+    --border-strong: 72 60 50;
+    --fill-a: 217 119 6;
+    --fill-b: 180 83 9;
+    --fill-c: 190 18 60;
+    --fill-d: 159 18 57;
+  }
+
+  [data-palette="winter"] {
+    --bg-main: 246 249 251;
+    --bg-surface: 255 255 255;
+    --bg-surface-high: 237 243 247;
+    --bg-surface-highest: 221 231 238;
+    --bg-deep: 233 239 244;
+    --text-primary: 20 32 41;
+    --text-muted: 83 99 110;
+    --accent-brand: 3 105 161;
+    --accent-cyan: 67 56 202;
+    --border-subtle: 226 236 243;
+    --border-strong: 201 216 227;
+    --fill-a: 2 132 199;
+    --fill-b: 7 89 133;
+    --fill-c: 79 70 229;
+    --fill-d: 55 48 163;
+  }
+
+  .dark[data-palette="winter"] {
+    --bg-main: 10 15 18;
+    --bg-surface: 18 25 31;
+    --bg-surface-high: 29 38 45;
+    --bg-surface-highest: 42 54 63;
+    --bg-deep: 5 8 10;
+    --text-primary: 232 238 243;
+    --text-muted: 163 175 184;
+    --accent-brand: 125 211 252;
+    --accent-cyan: 165 180 252;
+    --border-subtle: 32 42 50;
+    --border-strong: 50 63 72;
+    --fill-a: 2 132 199;
+    --fill-b: 7 89 133;
+    --fill-c: 79 70 229;
+    --fill-d: 55 48 163;
+  }
+
+  [data-palette="fireflies"] {
+    --bg-main: 247 251 250;
+    --bg-surface: 255 255 255;
+    --bg-surface-high: 238 247 245;
+    --bg-surface-highest: 222 237 233;
+    --bg-deep: 233 244 241;
+    --text-primary: 21 40 35;
+    --text-muted: 85 109 103;
+    --accent-brand: 4 120 87;
+    --accent-cyan: 161 98 7;
+    --border-subtle: 227 242 238;
+    --border-strong: 202 226 220;
+    --fill-a: 21 128 61;
+    --fill-b: 22 101 52;
+    --fill-c: 161 98 7;
+    --fill-d: 133 77 14;
+  }
+
+  .dark[data-palette="fireflies"] {
+    --bg-main: 10 18 16;
+    --bg-surface: 19 30 27;
+    --bg-surface-high: 30 44 41;
+    --bg-surface-highest: 43 62 57;
+    --bg-deep: 6 10 9;
+    --text-primary: 232 242 240;
+    --text-muted: 164 183 178;
+    --accent-brand: 163 230 53;
+    --accent-cyan: 253 224 71;
+    --border-subtle: 33 49 45;
+    --border-strong: 51 71 66;
+    --fill-a: 21 128 61;
+    --fill-b: 22 101 52;
+    --fill-c: 161 98 7;
+    --fill-d: 133 77 14;
   }
 
   html,
@@ -88,13 +347,13 @@
     /* A soft wash of the brand colour behind everything, so empty space
        reads as designed rather than blank. */
     background-image:
-      radial-gradient(60rem 30rem at 110% -10%, rgb(var(--accent-brand) / 0.10), transparent 60%),
-      radial-gradient(40rem 24rem at -20% 110%, rgb(var(--accent-cyan) / 0.08), transparent 60%);
+      radial-gradient(60rem 30rem at 110% -10%, rgb(var(--accent-brand) / 0.08), transparent 60%),
+      radial-gradient(40rem 24rem at -20% 110%, rgb(var(--accent-cyan) / 0.06), transparent 60%);
     background-attachment: fixed;
     /* The app is a full-screen device UI; page-level scroll fights the layout. */
     overscroll-behavior: none;
     /* Only the palette animates, never layout, so the flip does not reflow. */
-    transition: background-color 200ms ease, color 200ms ease;
+    transition: background-color 300ms ease, color 300ms ease;
   }
 
   /* Respect the notch / home indicator on phones. */
@@ -147,9 +406,32 @@
 
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-2xl
-           bg-gradient-to-br from-[rgb(124_58_237)] to-[rgb(79_70_229)] px-4 py-3 text-sm
-           font-semibold text-white shadow-glow transition active:scale-[0.98]
+           bg-gradient-to-br from-fill-a to-fill-b px-4 py-3 text-sm
+           font-semibold text-white shadow-card transition
+           hover:brightness-110 active:scale-[0.98] disabled:opacity-40
+           disabled:hover:brightness-100;
+  }
+
+  .btn-quiet {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border
+           border-subtle bg-card px-4 py-3 text-sm font-semibold text-ink
+           transition hover:border-strong hover:bg-card-high
+           active:scale-[0.98] disabled:opacity-40;
+  }
+
+  .btn-icon {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full
+           border border-subtle bg-card text-ink-dim transition
+           hover:border-strong hover:text-ink active:scale-90
            disabled:opacity-40;
+  }
+
+  /** Display type for page titles: a soft serif, used sparingly. */
+  .display {
+    font-family: 'Fraunces', ui-serif, Georgia, serif;
+    font-optical-sizing: auto;
+    font-variation-settings: 'SOFT' 60;
+    @apply font-semibold tracking-tight;
   }
 
   .pill {
@@ -226,8 +508,31 @@
   animation: fade-up 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-22deg); }
+  75% { transform: rotate(14deg); }
+}
+
+@keyframes pop-in {
+  from { transform: translateY(12px) scale(0.96); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+.animate-bob { animation: bob 3.2s ease-in-out infinite; }
+.animate-wave { animation: wave 0.9s ease-in-out 2; transform-origin: 20% 80%; }
+.animate-pop-in { animation: pop-in 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both; transform-origin: bottom right; }
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade-up {
+  .animate-fade-up,
+  .animate-bob,
+  .animate-wave,
+  .animate-pop-in {
     animation: none;
   }
 }

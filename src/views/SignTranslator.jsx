@@ -161,9 +161,9 @@ export default function SignTranslator({
   };
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative flex h-full flex-col lg:flex-row lg:gap-4 lg:p-4">
       {/* ── Camera ─────────────────────────────────────────────────── */}
-      <div className="relative flex-1 overflow-hidden">
+      <div className="relative flex-1 overflow-hidden lg:rounded-3xl lg:border lg:border-subtle lg:shadow-card">
         <CameraStage className="absolute inset-0" />
         {showMesh && <LandmarkCanvas frameRef={frameRef} mirrored={mirrored} />}
 
@@ -246,9 +246,9 @@ export default function SignTranslator({
             <button
               type="button"
               onClick={startTranslating}
-              className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary shadow-glow active:scale-95"
+              className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-fill-a to-fill-b shadow-glow active:scale-95"
             >
-              <Play size={38} className="ml-1 text-surface" />
+              <Play size={38} className="ml-1 text-white" />
             </button>
             <p className="text-sm font-semibold">Start translating</p>
             <p className="max-w-xs text-[11px] leading-relaxed text-ink-dim">
@@ -311,11 +311,9 @@ export default function SignTranslator({
       </div>
 
       {/* ── Glass interpretation card ──────────────────────────────── */}
-      <section className="glass rounded-t-3xl p-4">
+      <section className="glass max-h-[55%] overflow-y-auto rounded-t-3xl p-4 no-scrollbar lg:max-h-none lg:w-[400px] lg:shrink-0 lg:rounded-3xl lg:p-5">
         <div className="flex items-center">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
-            Live Interpretation
-          </span>
+          <span className="eyebrow">Live interpretation</span>
           <span className="ml-auto text-xs font-semibold text-primary">
             {confidence.toFixed(1)}% confidence
           </span>
@@ -465,11 +463,11 @@ export default function SignTranslator({
             type="button"
             onClick={play}
             disabled={!result || speaking}
-            className="ml-auto flex h-13 w-13 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary p-4 disabled:opacity-40"
+            className="ml-auto flex h-13 w-13 items-center justify-center rounded-full bg-gradient-to-br from-fill-a to-fill-b p-4 disabled:opacity-40"
           >
             {speaking
-              ? <Loader2 size={20} className="animate-spin text-surface" />
-              : <Volume2 size={20} className="text-surface" />}
+              ? <Loader2 size={20} className="animate-spin text-white" />
+              : <Volume2 size={20} className="text-white" />}
           </button>
         </div>
 

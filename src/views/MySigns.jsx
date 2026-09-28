@@ -129,10 +129,10 @@ export default function MySigns({ onBack, online, cameraError }) {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <header className="flex items-center gap-2 px-4 py-3">
-        <button type="button" onClick={back} aria-label="Back" className="flex h-9 w-9 items-center justify-center rounded-full bg-card-high">
+        <button type="button" onClick={back} aria-label="Back" className="btn-icon">
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-lg font-bold">
+        <h1 className="display text-2xl">
           {screen.name === 'list' ? 'My signs'
             : screen.name === 'try' ? `Try ${screen.sign.token}`
             : screen.name === 'capture' ? 'Record sign'

@@ -41,7 +41,7 @@ export default function Phrases({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2 px-5 pb-2 pt-4">
+      <header className="flex items-center gap-2 px-5 pb-2 pt-4 lg:pt-6">
         <button
           type="button"
           onClick={back}
