@@ -269,3 +269,16 @@ def test_mirrored_swap_semantics():
     swapped = F.pack_frame(None, [{"landmarks": hand, "handedness": "Left"}], mirrored=True)
     assert plain[F.LEFT_HAND_START] != 0 and not plain[F.RIGHT_HAND_START:].any()
     assert swapped[F.RIGHT_HAND_START] != 0 and not swapped[F.LEFT_HAND_START:F.RIGHT_HAND_START].any()
+
+
+def test_batch_normalise_equals_rowwise():
+    """body_normalise_batch (used for training) == body_normalise (JS-exact)."""
+    rng = np.random.default_rng(SEED + 1)
+    frames = np.stack([np.array(_norm_frame(rng), dtype=np.float32) for _ in range(3000)])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        batch = F.body_normalise_batch(frames)
+        rows = np.stack([F.body_normalise(f) for f in frames])
+    same = _same_bits(batch, rows)
+    bad = np.argwhere(~same)
+    assert same.all(), f"{len(bad)} values differ, first at {bad[:3].tolist()}"

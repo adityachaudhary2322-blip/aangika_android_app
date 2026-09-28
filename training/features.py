@@ -169,8 +169,48 @@ def body_normalise(frame: np.ndarray) -> np.ndarray:
     return out
 
 
+def body_normalise_batch(frames: np.ndarray) -> np.ndarray:
+    """Vectorised body_normalise over (T, 225) -> (T, 225) float32.
+
+    Bit-identical to body_normalise() row by row (tests/parity checks it), so it
+    inherits JS parity. V8's hypot for two finite values reduces to
+    sqrt(n1*n1 + n2*n2) * max with n = |v| / max (the Kahan compensation term is
+    exactly 0 after the first addition), evaluated in that order here.
+    """
+    f = np.asarray(frames, dtype=np.float32)
+    if f.ndim != 2 or f.shape[1] != FEATURE_DIM:
+        raise ValueError(f"expected (T, {FEATURE_DIM}), got {f.shape}")
+    d = f.astype(np.float64)
+    l, r = L_SHOULDER * 3, R_SHOULDER * 3
+    dx = d[:, l] - d[:, r]
+    dy = d[:, l + 1] - d[:, r + 1]
+    ax, ay = np.abs(dx), np.abs(dy)
+    with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
+        mx = np.maximum(ax, ay)
+        n1 = ax / mx
+        n2 = ay / mx
+        span = np.sqrt(n1 * n1 + n2 * n2) * mx
+    # V8 special cases: any infinity -> inf, else any NaN -> NaN, max 0 -> 0.
+    span = np.where(np.isinf(ax) | np.isinf(ay), np.inf,
+                    np.where(np.isnan(ax) | np.isnan(ay), np.nan,
+                             np.where(mx == 0, 0.0, span)))
+    ok = span > 1e-6                                     # NaN compares False
+
+    cx = (d[:, l] + d[:, r]) / 2
+    cy = (d[:, l + 1] + d[:, r + 1]) / 2
+    cz = (d[:, l + 2] + d[:, r + 2]) / 2
+    xyz = d.reshape(len(d), -1, 3)
+    present = ~((xyz[..., 0] == 0) & (xyz[..., 1] == 0) & (xyz[..., 2] == 0))
+    centre = np.stack([cx, cy, cz], axis=1)[:, None, :]
+    safe_span = np.where(ok, span, 1.0)[:, None, None]
+    with np.errstate(invalid="ignore", over="ignore"):
+        out = ((xyz - centre) / safe_span).astype(np.float32)
+    out[~present] = 0.0
+    out[~ok] = 0.0
+    return out.reshape(len(d), FEATURE_DIM)
+
+
 def pack_and_normalise_sequence(frames_raw: np.ndarray) -> np.ndarray:
     """(T, 225) raw packed frames -> (T, 225) float32 body-normalised."""
     raw = np.asarray(frames_raw, dtype=np.float32)
-    return np.stack([body_normalise(row) for row in raw]) if len(raw) else \
-        np.zeros((0, FEATURE_DIM), np.float32)
+    return body_normalise_batch(raw) if len(raw) else np.zeros((0, FEATURE_DIM), np.float32)

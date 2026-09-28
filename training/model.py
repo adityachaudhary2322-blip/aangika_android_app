@@ -35,7 +35,7 @@ DEFAULT_ONNX = REPO / "public" / "models" / "sanketvani_word_tagger.onnx"
 class WordTagger(nn.Module):
     def __init__(self, feature_dim=225, conv_channels=256, hidden_dim=256,
                  lstm_layers=3, num_words=1500, conv_dropout=0.2,
-                 lstm_dropout=0.3, head_name="head"):
+                 lstm_dropout=0.3, head_name="head", head_dropout=0.0):
         super().__init__()
         self.frontend = nn.Sequential(
             nn.Conv1d(feature_dim, conv_channels, kernel_size=3, padding=1),
@@ -51,12 +51,14 @@ class WordTagger(nn.Module):
                             batch_first=True, bidirectional=True,
                             dropout=lstm_dropout if lstm_layers > 1 else 0.0)
         self.head_name = head_name
+        # Parameter-free, so it adds no state-dict keys (checkpoint compatible).
+        self.head_dropout = nn.Dropout(head_dropout)
         setattr(self, head_name, nn.Linear(2 * hidden_dim, num_words))
 
     def forward(self, x):                        # (B, T, 225) -> (B, T, V)
         x = self.frontend(x.transpose(1, 2)).transpose(1, 2)
         x, _ = self.lstm(x)
-        return getattr(self, self.head_name)(x)
+        return getattr(self, self.head_name)(self.head_dropout(x))
 
 
 def _torch_load(path: Path):
@@ -80,7 +82,7 @@ def _torch_load(path: Path):
     return torch.load(path, map_location="cpu", weights_only=False)
 
 
-def load_checkpoint(path: Path = DEFAULT_CKPT, verbose: bool = True):
+def load_checkpoint(path: Path = DEFAULT_CKPT, verbose: bool = True, head_dropout: float = 0.0):
     """-> (model in eval mode, checkpoint dict)."""
     if not path.exists():
         sys.exit(f"checkpoint not found: {path}\n"
@@ -101,7 +103,8 @@ def load_checkpoint(path: Path = DEFAULT_CKPT, verbose: bool = True):
     num_words = sd[f"{head}.weight"].shape[0]
 
     model = WordTagger(feature_dim=feat, conv_channels=conv_c, hidden_dim=hidden,
-                       lstm_layers=layers, num_words=num_words, head_name=head)
+                       lstm_layers=layers, num_words=num_words, head_name=head,
+                       head_dropout=head_dropout)
     model.load_state_dict(sd, strict=True)      # raises on any key/shape mismatch
     model.eval()
     if verbose:
