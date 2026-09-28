@@ -112,7 +112,7 @@ def api_key() -> str:
     key = os.environ.get("GEMINI_API_KEY", "")
     env = REPO / ".env"
     if not key and env.exists():
-        for line in env.read_text(encoding="utf-8").splitlines():
+        for line in env.read_text(encoding="utf-8-sig").splitlines():   # tolerate a BOM
             m = re.match(r"\s*GEMINI_API_KEY\s*=\s*(.+?)\s*$", line)
             if m:
                 key = m.group(1).strip().strip("'\"")
