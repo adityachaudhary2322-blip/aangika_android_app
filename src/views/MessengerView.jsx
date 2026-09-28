@@ -461,7 +461,7 @@ export default function MessengerView({ onChatOpenChange }) {
             </div>
             <p className="mt-2 text-[11px] text-ink-dim">
               You are{' '}
-              <code className="rounded-md bg-primary/10 px-1.5 py-0.5 font-mono font-semibold text-primary">
+              <code data-tour="my-id" className="rounded-md bg-primary/10 px-1.5 py-0.5 font-mono font-semibold text-primary">
                 @{profile.handle}
               </code>
               {' · '}share that, not a code.
@@ -525,6 +525,7 @@ export default function MessengerView({ onChatOpenChange }) {
             <button
               type="button"
               onClick={() => setAdding(true)}
+              data-tour="add-friend"
               className="btn-primary w-full"
             >
               <UserPlus size={16} /> Add friend

@@ -19,6 +19,7 @@ export default function BottomNav({ view, onNavigate, unread = 0 }) {
   return (
     <nav
       aria-label="Primary"
+      data-tour="nav"
       className="glass mx-3 mb-3 flex items-stretch justify-around rounded-3xl px-1 py-1.5 shadow-card"
     >
       {ITEMS.map(({ id, label, Icon }) => {

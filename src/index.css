@@ -525,6 +525,25 @@
 }
 
 .animate-bob { animation: bob 3.2s ease-in-out infinite; }
+
+/* Mudra running: a quick hop, feet stepping in turn. */
+@keyframes mudra-hop {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -5px; }
+}
+
+@keyframes mudra-step {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(-3px, -3px) rotate(-20deg); }
+}
+
+.mudra-hop { animation: mudra-hop 0.32s ease-in-out infinite; }
+.mudra-foot {
+  animation: mudra-step 0.32s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.mudra-foot-late { animation-delay: -0.16s; }
 .animate-wave { animation: wave 0.9s ease-in-out 2; transform-origin: 20% 80%; }
 .animate-pop-in { animation: pop-in 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both; transform-origin: bottom right; }
 
@@ -532,6 +551,8 @@
   .animate-fade-up,
   .animate-bob,
   .animate-wave,
+  .mudra-hop,
+  .mudra-foot,
   .animate-pop-in {
     animation: none;
   }

@@ -51,7 +51,7 @@ export default function SideNav({ view, onNavigate, unread = 0 }) {
         </span>
       </button>
 
-      <nav aria-label="Primary" className="mt-6 flex-1 space-y-5 overflow-y-auto no-scrollbar">
+      <nav aria-label="Primary" data-tour="nav" className="mt-6 flex-1 space-y-5 overflow-y-auto no-scrollbar">
         {GROUPS.map((g, gi) => (
           <div key={gi}>
             {g.label && <p className="eyebrow mb-1.5 px-3">{g.label}</p>}

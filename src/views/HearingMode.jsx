@@ -259,7 +259,7 @@ export default function HearingMode({ language, online, onBack }) {
 
       {/* ── Languages: theirs in, mine out ─────────────────────────── */}
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-        <label className="pill border-subtle bg-card py-1.5 text-ink">
+        <label className="pill border-subtle bg-card py-1.5 text-ink" data-tour="their-lang">
           <span className="text-ink-dim">They speak</span>
           <select
             value={theirLang}
@@ -283,7 +283,7 @@ export default function HearingMode({ language, online, onBack }) {
       </div>
 
       {/* ── Conversation log ───────────────────────────────────────── */}
-      <section className="surface-card flex min-h-0 flex-1 flex-col overflow-hidden">
+      <section className="surface-card flex min-h-0 flex-1 flex-col overflow-hidden" data-tour="hearing-log">
         <div className="flex items-center gap-2 border-b border-subtle px-4 py-2.5 text-xs">
           <span className="font-semibold">Conversation</span>
           <span className="text-ink-dim">
@@ -352,7 +352,7 @@ export default function HearingMode({ language, online, onBack }) {
       </section>
 
       {/* ── Quick replies ──────────────────────────────────────────── */}
-      <div className="mt-4">
+      <div className="mt-4" data-tour="quick-replies">
         <p className="eyebrow mb-2">Quick replies · tap to speak</p>
         <div className="-mx-5 flex gap-2 overflow-x-auto px-5 no-scrollbar">
           {QUICK_REPLIES.map((r) => (
@@ -409,6 +409,7 @@ export default function HearingMode({ language, online, onBack }) {
               onClick={recording ? stopRecording : startRecording}
               disabled={busy}
               aria-label={recording ? 'Stop and transcribe' : 'Start listening'}
+              data-tour="mic"
               className={
                 'relative flex h-20 w-20 items-center justify-center rounded-full text-white transition ' +
                 (recording

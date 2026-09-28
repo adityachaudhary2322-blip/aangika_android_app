@@ -89,7 +89,7 @@ export default function Settings({
         </section>
       )}
 
-      <section className="mt-4 surface-card p-4">
+      <section className="mt-4 surface-card p-4" data-tour="grammar">
         <p className="eyebrow">
           Grammar engine
         </p>
@@ -108,7 +108,7 @@ export default function Settings({
         </div>
       </section>
 
-      <section className="mt-4 surface-card p-4">
+      <section className="mt-4 surface-card p-4" data-tour="keys">
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-dim">
           <KeyRound size={14} /> API keys
         </p>
@@ -271,7 +271,7 @@ function Appearance() {
   } = useTheme();
 
   return (
-    <section className="surface-card p-4">
+    <section className="surface-card p-4" data-tour="appearance">
       <div className="flex items-center gap-2">
         <Palette size={15} className="text-primary" />
         <p className="eyebrow">Appearance</p>

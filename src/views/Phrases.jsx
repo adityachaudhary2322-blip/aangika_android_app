@@ -94,10 +94,10 @@ function PhraseList({ phrases, language, onNew, onType, onEdit }) {
       </p>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <button type="button" onClick={onNew} className="btn-primary">
+        <button type="button" onClick={onNew} className="btn-primary" data-tour="phrase-record">
           <Video size={16} /> Record signs
         </button>
-        <button type="button" onClick={onType} className="btn-quiet">
+        <button type="button" onClick={onType} className="btn-quiet" data-tour="phrase-type">
           <Keyboard size={16} /> Type signs
         </button>
       </div>
