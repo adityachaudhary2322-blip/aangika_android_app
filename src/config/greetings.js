@@ -80,8 +80,9 @@ function titleCase(token) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function nameIn(token, code) {
-  const forms = NAME_FORMS[String(token).toUpperCase()];
+/** `override` carries a taught name's own forms ({langCode: text}). */
+export function nameIn(token, code, override = null) {
+  const forms = override || NAME_FORMS[String(token).toUpperCase()];
   if (!forms) return titleCase(token);
   return forms[code] || forms['en-IN'] || titleCase(token);
 }
@@ -97,7 +98,7 @@ export function terminator(code) {
  * @param {string} code       BCP-47 tag from languages.js
  * @param {{ greet?: boolean }} options
  */
-export function buildIntroduction(nameToken, code, { greet = true } = {}) {
+export function buildIntroduction(nameToken, code, { greet = true, forms = null } = {}) {
   const lang = GREETING[code] ? code : 'en-IN';
   const end = terminator(lang);
   const parts = [];
@@ -106,7 +107,7 @@ export function buildIntroduction(nameToken, code, { greet = true } = {}) {
 
   if (nameToken) {
     const template = MY_NAME_IS[lang] || MY_NAME_IS['en-IN'];
-    parts.push(template.replace('{name}', nameIn(nameToken, lang)));
+    parts.push(template.replace('{name}', nameIn(nameToken, lang, forms)));
   }
 
   if (parts.length === 0) return '';

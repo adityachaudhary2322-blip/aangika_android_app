@@ -29,6 +29,7 @@
 import { ISL_FEW_SHOT } from './qwenRules.js';
 import { KNOWN_NAMES, buildIntroduction } from '../config/greetings.js';
 import { sentenceFor } from '../config/gestureSentences.js';
+import { findByToken } from './customSigns.js';
 
 // ── Lexicon ──────────────────────────────────────────────────────────────────
 
@@ -147,6 +148,14 @@ const VOWELS = new Set(['a', 'e', 'i', 'o', 'u']);
 const norm = (t) => String(t || '').trim().toUpperCase().replace(/[^A-Z']/g, '');
 const lower = (t) => t.toLowerCase();
 
+/**
+ * The user's own signs, for the duration of one expand() call:
+ * key -> {text, name}. A name is a proper noun shown exactly as taught; a word
+ * renders as its taught text. Keys are letter-only placeholders, because
+ * norm() strips the underscores and digits a taught token may contain.
+ */
+let customLexicon = new Map();
+
 function article(word) {
   return VOWELS.has(word[0]) ? 'an' : 'a';
 }
@@ -154,6 +163,8 @@ function article(word) {
 /** "school" -> "school"; "market" -> "the market"; "teacher" -> "a teacher". */
 function nounPhrase(token, { definite = false } = {}) {
   const key = norm(token);
+  const custom = customLexicon.get(key);
+  if (custom) return custom.name ? custom.text : custom.text.toLowerCase();
   const word = lower(key);
   // A proper noun keeps its capital and never takes an article.
   if (PROPER_NOUNS.has(key)) return key.charAt(0) + word.slice(1);
@@ -165,6 +176,8 @@ function nounPhrase(token, { definite = false } = {}) {
 
 function possessivePhrase(token) {
   const key = norm(token);
+  const custom = customLexicon.get(key);
+  if (custom?.name) return `${custom.text}'s`;
   const word = lower(key);
   if (PROPER_NOUNS.has(key)) return `${key.charAt(0) + word.slice(1)}'s`;
   if (KINSHIP.has(key)) return `my ${word}'s`;
@@ -225,7 +238,7 @@ function classify(tokens) {
   // replaced by "I" -- that was the exact failure the Android/Python work hit.
   if (!out.subject) {
     const personIndex = out.nouns.findIndex(
-      (n) => KINSHIP.has(n) || PERSON_ROLE.has(n)
+      (n) => KINSHIP.has(n) || PERSON_ROLE.has(n) || customLexicon.get(n)?.name
     );
     // Only promote a person noun to subject when there is something left for it
     // to act on; "DOCTOR HELP NEED" is the signer needing a doctor, not a
@@ -237,9 +250,11 @@ function classify(tokens) {
       const token = out.nouns[personIndex];
       out.nouns.splice(personIndex, 1);
       out.subjectToken = token;
+      const custom = customLexicon.get(token);
       out.subject = {
         subject: KINSHIP.has(token) ? `my ${lower(token)}` : nounPhrase(token),
-        possessive: `${KINSHIP.has(token) ? `my ${lower(token)}` : lower(token)}'s`,
+        possessive: custom?.name ? `${custom.text}'s`
+          : `${KINSHIP.has(token) ? `my ${lower(token)}` : lower(token)}'s`,
         person: 3,
       };
     } else {
@@ -267,8 +282,23 @@ const FEW_SHOT_INDEX = new Map(
  * @param {string[]} tags
  * @returns {{ english: string, rule: string }}
  */
-export function expand(tags, languageCode = 'en-IN') {
-  const tokens = (tags || []).map(norm).filter(Boolean);
+export function expand(tags, languageCode = 'en-IN', { lookup = findByToken } = {}) {
+  customLexicon = new Map();
+  const nameForms = {};
+  let placeholder = 0;
+  const tokens = (tags || []).map((raw) => {
+    const sign = lookup(raw);
+    const type = sign?.output?.type;
+    if (type !== 'word' && type !== 'name') return norm(raw);
+    // Letter-only placeholder: survives norm() and cannot collide with a word.
+    const key = `ZQX${String.fromCharCode(65 + (placeholder++ % 26))}`;
+    const text = String(sign.output.text_en || raw).trim();
+    customLexicon.set(key, { text, name: type === 'name' });
+    if (type === 'name') {
+      nameForms[key] = { 'en-IN': text, ...(sign.output.texts || {}) };
+    }
+    return key;
+  }).filter(Boolean);
   if (tokens.length === 0) return { english: '', rule: 'empty', translated: '' };
 
   // -1. A single SignBridge gesture token.
@@ -278,6 +308,15 @@ export function expand(tags, languageCode = 'en-IN') {
   // and because they are the only path that produces a non-English sentence
   // offline. Falling through to the SOV rules would emit "I water." instead.
   if (tags && tags.length === 1) {
+    // A taught sentence sign: its stored text, in every language it has.
+    const own = lookup(tags[0]);
+    if (own?.output?.type === 'sentence' && own.output.text_en) {
+      return {
+        english: own.output.text_en,
+        translated: own.output.texts?.[languageCode] || '',
+        rule: 'my-sign-sentence',
+      };
+    }
     // Look up the RAW tag: norm() strips underscores, which would turn
     // HOW_MUCH into HOWMUCH and miss the table entirely.
     const key = String(tags[0] || '').trim().toUpperCase().replace(/[^A-Z_]/g, '');
@@ -298,17 +337,19 @@ export function expand(tags, languageCode = 'en-IN') {
   // config/greetings.js). Checked first so "NAME ADITYA" never falls through to
   // the generic SOV path and comes out as "I name a aditya."
   const greetToken = tokens.find((t) => GREETING_TOKENS.has(t));
-  const nameToken = tokens.find((t) => KNOWN_NAMES.has(t));
+  // A taught name counts as a name here exactly like the built-in ADITYA.
+  const nameToken = tokens.find((t) => KNOWN_NAMES.has(t) || nameForms[t]);
   const hasNameWord = tokens.some((t) => NAME_TOKENS.has(t));
 
   if (greetToken || (hasNameWord && nameToken)) {
     const introduce = Boolean(nameToken && (hasNameWord || greetToken));
+    const forms = nameForms[nameToken];
     return {
       english: buildIntroduction(introduce ? nameToken : null, 'en-IN', {
-        greet: Boolean(greetToken) || introduce,
+        greet: Boolean(greetToken) || introduce, forms,
       }),
       translated: buildIntroduction(introduce ? nameToken : null, languageCode, {
-        greet: Boolean(greetToken) || introduce,
+        greet: Boolean(greetToken) || introduce, forms,
       }),
       rule: introduce ? 'greeting-introduction' : 'greeting',
     };
@@ -410,7 +451,11 @@ export function expand(tags, languageCode = 'en-IN') {
   // 5. General SOV -> SVO.
   const verb = c.verbs[0];
   if (!verb) {
-    return { english: finish(tokens.map(lower)), rule: 'passthrough', translated: '' };
+    return {
+      english: finish(tokens.map((t) => (customLexicon.has(t) ? nounPhrase(t) : lower(t)))),
+      rule: 'passthrough',
+      translated: '',
+    };
   }
 
   // Present tense with a third-person subject and a concrete object reads more

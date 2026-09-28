@@ -70,7 +70,7 @@ export function ruleBasedJoin(tags) {
  * the real request. Gemini takes system text separately, so that is returned
  * alongside rather than folded in.
  */
-export function buildGeminiRequest(tags, targetLanguage) {
+export function buildGeminiRequest(tags, targetLanguage, glossary = []) {
   const contents = [];
   for (const shot of ISL_FEW_SHOT) {
     contents.push({ role: 'user', parts: [{ text: shot.signs }] });
@@ -78,13 +78,37 @@ export function buildGeminiRequest(tags, targetLanguage) {
   }
   contents.push({ role: 'user', parts: [{ text: tags.join(', ') }] });
 
-  const systemInstruction = targetLanguage
+  let systemInstruction = targetLanguage
     ? `${ISL_SYSTEM_PROMPT}\n\nAlso provide a ${targetLanguage.name} ` +
       `(${targetLanguage.script}) translation. Return JSON only: ` +
       '{"english": "...", "translated": "..."}'
     : ISL_SYSTEM_PROMPT;
 
+  const block = glossaryBlock(glossary, targetLanguage?.code);
+  if (block) systemInstruction += `\n\n${block}`;
+
   return { systemInstruction, contents };
+}
+
+/**
+ * The user's own signs as a glossary for online prompts: what each token
+ * means, its word category, and that names are proper nouns to keep as given
+ * (transliterated, never translated).
+ *
+ * @param {{token, type, text_en, category?, texts?}[]} glossary
+ */
+export function glossaryBlock(glossary, targetCode) {
+  if (!glossary || !glossary.length) return '';
+  const lines = glossary.map((g) => {
+    const target = targetCode && g.texts?.[targetCode] ? `; in the target language: "${g.texts[targetCode]}"` : '';
+    if (g.type === 'name') {
+      return `- ${g.token}: a person's name, "${g.text_en}". A proper noun: keep it, ` +
+        `transliterate it, never translate it${target}.`;
+    }
+    const cat = g.category ? ` (${g.category})` : '';
+    return `- ${g.token}${cat}: means "${g.text_en}"${target}.`;
+  });
+  return "Glossary of the signer's own signs (use these meanings exactly):\n" + lines.join('\n');
 }
 
 export default {
@@ -93,4 +117,5 @@ export default {
   MAX_NEW_TOKENS,
   ruleBasedJoin,
   buildGeminiRequest,
+  glossaryBlock,
 };

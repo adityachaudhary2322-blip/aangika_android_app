@@ -11,7 +11,7 @@ import ThemeToggle from '../components/ThemeToggle.jsx';
 
 export default function Settings({
   language, setLanguage, onBack, online,
-  visionEngine, chooseVision, grammarEngine, chooseGrammar,
+  visionEngine, chooseVision, grammarEngine, chooseGrammar, onNavigate,
 }) {
   const initial = getKeys();
   const [gemini, setGemini] = useState(initial.gemini);
@@ -68,6 +68,25 @@ export default function Settings({
           40-frame window and can, but costs ~200x the latency per inference.
         </p>
       </section>
+
+      {onNavigate && (
+        <section className="mt-4 surface-card p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
+            My signs
+          </p>
+          <p className="mt-1 text-[11px] text-ink-dim">
+            Teach your own handshapes (words, names or whole sentences). They work
+            at once in SignBridge mode, next to the 20 built-in signs.
+          </p>
+          <button
+            type="button"
+            onClick={() => onNavigate('mysigns')}
+            className="mt-3 w-full rounded-xl bg-card-highest py-2.5 text-sm font-semibold"
+          >
+            Open My signs
+          </button>
+        </section>
+      )}
 
       <section className="mt-4 surface-card p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim">

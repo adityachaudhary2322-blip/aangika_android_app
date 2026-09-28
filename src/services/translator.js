@@ -76,7 +76,7 @@ function extractJson(raw) {
  * Reconstruct a sentence from sign tags. NEVER throws: any failure degrades to
  * the rule-based join, and the result says which path produced it.
  */
-export async function reconstruct(tags, languageCode) {
+export async function reconstruct(tags, languageCode, { glossary = [] } = {}) {
   const started = performance.now();
   const language = getLanguage(languageCode);
   const fallback = (error) => ({
@@ -95,7 +95,7 @@ export async function reconstruct(tags, languageCode) {
   if (!gemini) return fallback('No Gemini key set - open Settings to add one.');
   if (!isOnline()) return fallback('Device is offline.');
 
-  const { systemInstruction, contents } = buildGeminiRequest(tags, language);
+  const { systemInstruction, contents } = buildGeminiRequest(tags, language, glossary);
   const errors = [];
 
   for (const model of GEMINI_MODELS) {
@@ -210,6 +210,49 @@ export async function speak(text, languageCode) {
   }
 }
 
+const SARVAM_TRANSLATE_URL = 'https://api.sarvam.ai/translate';
+/** Mayura first; sarvam-translate:v1 covers anything Mayura rejects. */
+const TRANSLATE_MODELS = ['mayura:v1', 'sarvam-translate:v1'];
+const TRANSLATE_CHAR_LIMIT = 1000;
+
+/**
+ * English -> target language with Sarvam /translate (dev key path; Phase 9
+ * moves this behind the proxy). Throws on failure so callers can queue a retry.
+ */
+export async function sarvamTranslate(text, targetCode, { mode = 'modern-colloquial' } = {}) {
+  const { sarvam } = getKeys();
+  if (!sarvam) throw new Error('No Sarvam key set.');
+  const input = String(text || '').trim();
+  if (!input) return '';
+  if (targetCode === 'en-IN') return input;
+  if (input.length > TRANSLATE_CHAR_LIMIT) throw new Error('Text too long to translate.');
+
+  const errors = [];
+  for (const model of TRANSLATE_MODELS) {
+    try {
+      const response = await fetch(SARVAM_TRANSLATE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'api-subscription-key': sarvam },
+        body: JSON.stringify({
+          input,
+          source_language_code: 'en-IN',
+          target_language_code: targetCode,
+          model,
+          ...(model === 'mayura:v1' ? { mode, numerals_format: 'international' } : {}),
+        }),
+      });
+      if (!response.ok) { errors.push(`${model}: HTTP ${response.status}`); continue; }
+      const body = await response.json();
+      const out = String(body?.translated_text || '').trim();
+      if (out) return out;
+      errors.push(`${model}: empty reply`);
+    } catch (err) {
+      errors.push(`${model}: ${err.message}`);
+    }
+  }
+  throw new Error('Sarvam translate failed - ' + errors.join(' | '));
+}
+
 /** Transcribe a recorded Blob with Sarvam STT. Throws on failure. */
 export async function transcribe(blob, languageCode = 'unknown') {
   const { sarvam } = getKeys();
@@ -241,5 +284,5 @@ export async function transcribe(blob, languageCode = 'unknown') {
 }
 
 export default {
-  reconstruct, synthesize, speak, transcribe, getKeys, setKey, isOnline,
+  reconstruct, synthesize, speak, transcribe, sarvamTranslate, getKeys, setKey, isOnline,
 };

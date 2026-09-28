@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import cameraManager from '../services/cameraManager.js';
 import landmarker from '../services/landmarker.js';
 import recognizer from '../services/signRecognizer.js';
-import { classifySignBridgeFrame } from '../services/signbridgeEngine.js';
+import { classifyFrame } from '../services/signbridgeCombined.js';
 import { VISION_SIGNBRIDGE } from '../services/engineState.js';
 import { translate } from '../services/translationService.js';
 import { speak } from '../services/ttsService.js';
@@ -220,8 +220,9 @@ export default function useSignPipeline({
 
       // ── SignBridge: classify this frame alone, then stop ─────────────
       if (usingSignBridge) {
-        const hit = classifySignBridgeFrame(result.hands, result.pose);
-        // classifySignBridgeFrame returns `token`, not `label`. Reading the
+        // Built-in rules and the user's own signs ("My signs") together.
+        const hit = classifyFrame(result.hands, result.pose, { mirrored });
+        // classifyFrame returns `token`, not `label`. Reading the
         // wrong field made every frame look like a miss, which then called
         // setWords([]) with a fresh array 30x/second -- a full re-render per
         // frame that also guaranteed nothing was ever detected.
@@ -244,7 +245,7 @@ export default function useSignPipeline({
               index: token,
               confidence: hit.confidence,
               peakFrame: 0,
-              engine: 'signbridge',
+              engine: hit.engine === 'custom' ? 'custom' : 'signbridge',
               ambiguous: hit.ambiguous,
               motionAssumed: hit.motionAssumed,
             }]);

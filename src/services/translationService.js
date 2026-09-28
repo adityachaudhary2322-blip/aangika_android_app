@@ -22,6 +22,28 @@
 import { expand } from './islGrammar.js';
 import { reconstruct as geminiReconstruct } from './translator.js';
 import { getLanguage } from '../config/languages.js';
+import { findByToken, textFor } from './customSigns.js';
+
+/**
+ * The user's own signs among the tags, as a glossary for online prompts.
+ * Only word/name signs; a sentence sign never reaches a model.
+ */
+export function glossaryFor(tags) {
+  const out = [];
+  const seen = new Set();
+  for (const t of tags || []) {
+    const s = findByToken(t);
+    if (!s || seen.has(s.id)) continue;
+    const type = s.output?.type;
+    if (type !== 'word' && type !== 'name') continue;
+    seen.add(s.id);
+    out.push({
+      token: s.token, type, text_en: s.output.text_en,
+      category: s.output.category, texts: s.output.texts,
+    });
+  }
+  return out;
+}
 
 export const MODE_ONLINE = 'online';
 export const MODE_OFFLINE = 'offline';
@@ -119,28 +141,53 @@ export async function translate(tags, languageCode, { mode = getMode() } = {}) {
     };
   }
 
+  // ── A taught "sentence" sign: its stored text, no grammar, no model ─────
+  // It already carries a whole utterance in every language the user saved
+  // (filled online when it was created), so it works identically offline.
+  if (tags.length === 1) {
+    const sign = findByToken(tags[0]);
+    if (sign?.output?.type === 'sentence') {
+      const english = textFor(sign, 'en-IN') || '';
+      const stored = sign.output.texts?.[language.code];
+      return {
+        english,
+        translated: language.code === 'en-IN' ? '' : (stored || ''),
+        source: 'custom',
+        engine: 'my-sign',
+        language,
+        latencyMs: Math.round((performance.now() - started) * 100) / 100,
+        mode,
+        note: language.code !== 'en-IN' && !stored
+          ? `No ${language.name} text saved for this sign yet.`
+          : null,
+      };
+    }
+  }
+
   // ── Offline: no fetch, no await on anything remote ──────────────────────
   if (mode === MODE_OFFLINE) {
-    const { english, rule } = expand(tags);
+    const { english, rule, translated } = expand(tags, language.code);
+    // The rules produce non-English text only for fixed templates (built-in
+    // gestures, greetings, introductions). Everything else stays English --
+    // inventing a Hindi string we cannot produce would be worse than admitting
+    // the gap.
+    const target = language.code === 'en-IN' ? '' : (translated || '');
     return {
       english,
-      // The rules engine produces English only. Returning an empty string is
-      // the honest answer -- inventing a Hindi string we cannot produce would
-      // be worse than admitting the gap.
-      translated: '',
+      translated: target,
       source: 'offline',
       engine: `isl-rules:${rule}`,
       language,
       latencyMs: Math.round((performance.now() - started) * 100) / 100,
       mode,
-      note: language.code === 'en-IN'
+      note: language.code === 'en-IN' || target
         ? null
         : `${language.name} translation needs the online engine.`,
     };
   }
 
   // ── Online: Gemini, with the offline engine as the safety net ───────────
-  const result = await geminiReconstruct(tags, languageCode);
+  const result = await geminiReconstruct(tags, languageCode, { glossary: glossaryFor(tags) });
 
   if (result.source === 'gemini') {
     return {
@@ -157,10 +204,10 @@ export async function translate(tags, languageCode, { mode = getMode() } = {}) {
   // Gemini was unreachable. Fall through to the rules engine rather than the
   // bare word-join that translator.js would otherwise return -- the rules give
   // a real sentence for free.
-  const { english, rule } = expand(tags);
+  const { english, rule, translated } = expand(tags, language.code);
   return {
     english,
-    translated: '',
+    translated: language.code === 'en-IN' ? '' : (translated || ''),
     source: 'offline',
     engine: `isl-rules:${rule}`,
     language,
@@ -173,5 +220,5 @@ export async function translate(tags, languageCode, { mode = getMode() } = {}) {
 
 export default {
   MODE_ONLINE, MODE_OFFLINE,
-  getMode, setMode, toggleMode, describeMode, translate,
+  getMode, setMode, toggleMode, describeMode, translate, glossaryFor,
 };

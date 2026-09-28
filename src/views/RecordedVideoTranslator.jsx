@@ -5,7 +5,8 @@ import {
 import LanguageSelect from '../components/LanguageSelect.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import landmarker from '../services/landmarker.js';
-import { classifySignBridgeFrame } from '../services/signbridgeEngine.js';
+import { classifyFrame } from '../services/signbridgeCombined.js';
+import { init as initCustomSigns } from '../services/customSigns.js';
 import { translate } from '../services/translationService.js';
 import {
   buildCues, toSrt, toVtt, formatSrtTime, downloadText,
@@ -78,6 +79,7 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
     setStatus('loading');
     setError(null);
     try {
+      await initCustomSigns();
       await landmarker.load((m) => setProgress(0));
     } catch (err) {
       setStatus('error');
@@ -107,7 +109,10 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
 
       const result = landmarker.detect(video, ts);
       if (result) {
-        const hit = classifySignBridgeFrame(result.hands, result.pose);
+        // A file of a signer facing the camera has the geometry of the live
+        // front camera's raw frames, so it uses the same side convention
+        // (mirrored) as the frames "My signs" were recorded from.
+        const hit = classifyFrame(result.hands, result.pose, { mirrored: true });
         samplesRef.current.push({
           timeMs: mediaMs,
           token: hit?.token || null,

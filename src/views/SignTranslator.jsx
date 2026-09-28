@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  ArrowLeft, Volume2, Copy, Eraser, FlipHorizontal, Waypoints, Loader2, Play,
+  ArrowLeft, Volume2, Copy, Eraser, FlipHorizontal, Waypoints, Loader2, Play, Hand,
 } from 'lucide-react';
 import CameraStage from '../components/CameraStage.jsx';
 import LandmarkCanvas from '../components/LandmarkCanvas.jsx';
@@ -18,7 +18,7 @@ import { getLanguage } from '../config/languages.js';
 
 export default function SignTranslator({
   language, setLanguage, online, onBack, cameraError, mode, togglePipeline,
-  visionEngine, chooseVision,
+  visionEngine, chooseVision, onNavigate,
 }) {
   const [mirrored, setMirrored] = useState(() => cameraManager.isFrontCamera());
   const [started, setStarted] = useState(false);
@@ -177,6 +177,17 @@ export default function SignTranslator({
               variant="overlay"
             />
             <ThemeToggle variant="overlay" />
+            {onNavigate && (
+              <button
+                type="button"
+                onClick={() => onNavigate('mysigns')}
+                title="My signs"
+                aria-label="My signs: teach your own signs"
+                className="flex h-9 w-9 items-center justify-center rounded-full chrome-plate"
+              >
+                <Hand size={16} className="text-amber" />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setShowMesh((v) => !v)}

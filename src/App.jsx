@@ -6,6 +6,11 @@ import HearingMode from './views/HearingMode.jsx';
 import VideoCall from './views/VideoCall.jsx';
 import Settings from './views/Settings.jsx';
 import RecordedVideoTranslator from './views/RecordedVideoTranslator.jsx';
+import MySigns from './views/MySigns.jsx';
+import {
+  init as initCustomSigns, setReservedTokens, migrateFromVocab,
+} from './services/customSigns.js';
+import { fillPendingTranslations } from './services/customSignTranslations.js';
 import IncomingCall from './components/IncomingCall.jsx';
 import { useCall } from './context/CallContext.jsx';
 import cameraManager from './services/cameraManager.js';
@@ -72,6 +77,28 @@ export default function App() {
     } catch { /* private mode */ }
   }, [language]);
 
+  // "My signs": load the library, reserve the model's words so a taught sign
+  // can never shadow one, migrate vocab.json's custom_signs once, and finish
+  // any sentence translations that were saved while offline.
+  useEffect(() => {
+    (async () => {
+      try {
+        await initCustomSigns();
+        const vocab = await fetch('/models/vocab.json').then((r) => (r.ok ? r.json() : null));
+        if (vocab) {
+          setReservedTokens(vocab.words || []);
+          await migrateFromVocab(vocab);
+        }
+      } catch (err) {
+        console.warn('[custom signs] bootstrap', err);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (online) fillPendingTranslations().catch(() => {});
+  }, [online]);
+
   useEffect(() => {
     const on = () => setOnline(true);
     const off = () => setOnline(false);
@@ -87,13 +114,21 @@ export default function App() {
   // counts wherever the user happens to be standing when it starts.
   const inCall = call.status === 'live' || call.status === 'dialling'
     || call.status === 'preparing';
-  const needsCamera = view === 'sign' || inCall;
+  const needsCamera = view === 'sign' || view === 'mysigns' || inCall;
   useEffect(() => {
     if (!needsCamera) return;
     cameraManager.start().catch((err) => setCameraError(err.message));
   }, [needsCamera]);
 
-  const go = useCallback((next) => setView(next), []);
+  // "My signs" is opened from both the translator and Settings; Back returns
+  // to whichever one opened it.
+  const [returnTo, setReturnTo] = useState('dashboard');
+  const go = useCallback((next) => {
+    setView((cur) => {
+      if (next === 'mysigns' && cur !== 'mysigns') setReturnTo(cur);
+      return next;
+    });
+  }, []);
 
   const shared = {
     language, setLanguage, online, mode, togglePipeline,
@@ -113,10 +148,15 @@ export default function App() {
       >
         {view === 'messenger' && <MessengerView onNavigate={go} />}
         {view === 'dashboard' && <Dashboard {...shared} onNavigate={go} />}
-        {view === 'sign' && <SignTranslator {...shared} cameraError={cameraError} />}
+        {view === 'sign' && (
+          <SignTranslator {...shared} cameraError={cameraError} onNavigate={go} />
+        )}
+        {view === 'mysigns' && (
+          <MySigns {...shared} cameraError={cameraError} onBack={() => go(returnTo)} />
+        )}
         {view === 'hearing' && <HearingMode {...shared} />}
         {view === 'recorded' && <RecordedVideoTranslator {...shared} />}
-        {view === 'settings' && <Settings {...shared} />}
+        {view === 'settings' && <Settings {...shared} onNavigate={go} />}
       </div>
 
       {/* Above the router, in ringing order: an unanswered call first, then the
