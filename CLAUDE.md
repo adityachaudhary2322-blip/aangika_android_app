@@ -49,7 +49,7 @@ Camera sign recognition lives in:
 - The Python feature code must match `packFrame` / `bodyNormalise` in `signRecognizer.js` exactly. A Python-vs-node parity test must pass before any training.
 - `reference/signcam/` is reference code to borrow from. Do not ship it.
 - Ask before running any job expected to take longer than 10 minutes.
-- Work on branch `feature/v2`. Commit once per phase, then stop at the end of each phase with a summary.
+- Work on `main` (feature/v2 was merged in on 2026-09-28). Commit once per phase, then stop at the end of each phase with a summary.
 
 ## Handoff status (2026-09-28)
 
