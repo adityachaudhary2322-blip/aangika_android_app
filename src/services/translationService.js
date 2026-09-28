@@ -20,7 +20,9 @@
  */
 
 import { expand } from './islGrammar.js';
-import { reconstruct as geminiReconstruct } from './translator.js';
+import {
+  reconstruct as geminiReconstruct, sarvamReconstruct, sarvamTranslate, getKeys,
+} from './translator.js';
 import { getLanguage } from '../config/languages.js';
 import { findByToken, textFor } from './customSigns.js';
 
@@ -45,33 +47,48 @@ export function glossaryFor(tags) {
   return out;
 }
 
-export const MODE_ONLINE = 'online';
+export const MODE_ONLINE = 'online';     // Gemini
+export const MODE_SARVAM = 'sarvam';     // Sarvam chat + Mayura translation
 export const MODE_OFFLINE = 'offline';
 
+const MODES = [MODE_ONLINE, MODE_SARVAM, MODE_OFFLINE];
 const STORAGE_KEY = 'isl.pipelineMode';
+/** The last online engine chosen, so the offline toggle can restore it. */
+const LAST_ONLINE_KEY = 'isl.pipelineOnline';
 
 /** Persisted so the choice survives a reload. */
 export function getMode() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved === MODE_OFFLINE ? MODE_OFFLINE : MODE_ONLINE;
+    return MODES.includes(saved) ? saved : MODE_ONLINE;
   } catch {
     return MODE_ONLINE;
   }
 }
 
 export function setMode(mode) {
-  const value = mode === MODE_OFFLINE ? MODE_OFFLINE : MODE_ONLINE;
+  const value = MODES.includes(mode) ? mode : MODE_ONLINE;
   try {
     localStorage.setItem(STORAGE_KEY, value);
+    if (value !== MODE_OFFLINE) localStorage.setItem(LAST_ONLINE_KEY, value);
   } catch {
     // Private mode: the choice simply does not persist.
   }
   return value;
 }
 
+/**
+ * Offline <-> online. Going online restores the online engine used last,
+ * or picks whichever one has a key (Sarvam first: it covers all 11 languages
+ * in one service).
+ */
 export function toggleMode() {
-  return setMode(getMode() === MODE_OFFLINE ? MODE_ONLINE : MODE_OFFLINE);
+  if (getMode() !== MODE_OFFLINE) return setMode(MODE_OFFLINE);
+  let last = null;
+  try { last = localStorage.getItem(LAST_ONLINE_KEY); } catch { /* private mode */ }
+  if (last === MODE_SARVAM || last === MODE_ONLINE) return setMode(last);
+  const keys = getKeys();
+  return setMode(keys.sarvam || !keys.gemini ? MODE_SARVAM : MODE_ONLINE);
 }
 
 /**
@@ -81,8 +98,14 @@ export function toggleMode() {
  * network or no key still runs offline, and the badge says so rather than
  * promising a translation that will not arrive.
  */
-export function describeMode(mode = getMode(), { online = true, hasKey = true } = {}) {
-  const degraded = mode === MODE_ONLINE && (!online || !hasKey);
+export function describeMode(mode = getMode(), { online = true, hasKey } = {}) {
+  // Each online engine needs its own key; callers may only know Gemini's.
+  const keys = getKeys();
+  const keyed = mode === MODE_SARVAM
+    ? Boolean(keys.sarvam)
+    : (hasKey ?? Boolean(keys.gemini));
+  const degraded = mode !== MODE_OFFLINE && (!online || !keyed);
+  const engineName = mode === MODE_SARVAM ? 'Sarvam' : 'Gemini';
 
   if (mode === MODE_OFFLINE) {
     return {
@@ -106,7 +129,18 @@ export function describeMode(mode = getMode(), { online = true, hasKey = true } 
       tone: 'amber',
       detail: !online
         ? 'Online mode is selected but there is no connection.'
-        : 'Online mode is selected but no Gemini key is set.',
+        : `${engineName} is selected but no ${engineName} key is set (Settings).`,
+    };
+  }
+
+  if (mode === MODE_SARVAM) {
+    return {
+      effective: MODE_SARVAM,
+      icon: '🟢',
+      label: 'Online (Sarvam)',
+      short: 'Sarvam',
+      tone: 'primary',
+      detail: 'Sentences from Sarvam, spoken and translated in all 11 languages.',
     };
   }
 
@@ -114,7 +148,7 @@ export function describeMode(mode = getMode(), { online = true, hasKey = true } 
     effective: MODE_ONLINE,
     icon: '🟢',
     label: 'Online (Gemini)',
-    short: 'Online',
+    short: 'Gemini',
     tone: 'primary',
     detail: 'Sentences and translation come from Gemini Flash.',
   };
@@ -186,6 +220,41 @@ export async function translate(tags, languageCode, { mode = getMode() } = {}) {
     };
   }
 
+  // ── Sarvam: chat model, then rules + Mayura, then rules alone ──────────
+  if (mode === MODE_SARVAM) {
+    const glossary = glossaryFor(tags);
+    const r = await sarvamReconstruct(tags, languageCode, { glossary });
+    if (r.source === 'sarvam') {
+      let translated = r.translated;
+      // The chat model occasionally skips the translation; Mayura fills it.
+      if (!translated && language.code !== 'en-IN') {
+        translated = await sarvamTranslate(r.english, language.code).catch(() => '');
+      }
+      return {
+        english: r.english,
+        translated: language.code === 'en-IN' ? '' : translated,
+        source: 'online', engine: r.model, language,
+        latencyMs: Math.round(performance.now() - started), mode,
+      };
+    }
+    // Chat unavailable: the local grammar still makes the sentence, and
+    // Mayura can still put it into the user's language.
+    const { english, rule, translated: ruleText } = expand(tags, language.code);
+    let translated = language.code === 'en-IN' ? '' : (ruleText || '');
+    let engine = `isl-rules:${rule}`;
+    if (!translated && language.code !== 'en-IN') {
+      try {
+        translated = await sarvamTranslate(english, language.code);
+        engine += ' + mayura';
+      } catch { /* stays English, note says why */ }
+    }
+    return {
+      english, translated, source: translated || language.code === 'en-IN' ? 'online' : 'offline',
+      engine, language, latencyMs: Math.round(performance.now() - started), mode,
+      degraded: true, note: r.error || 'Sarvam chat unavailable — used the local rules.',
+    };
+  }
+
   // ── Online: Gemini, with the offline engine as the safety net ───────────
   const result = await geminiReconstruct(tags, languageCode, { glossary: glossaryFor(tags) });
 
@@ -219,6 +288,6 @@ export async function translate(tags, languageCode, { mode = getMode() } = {}) {
 }
 
 export default {
-  MODE_ONLINE, MODE_OFFLINE,
+  MODE_ONLINE, MODE_SARVAM, MODE_OFFLINE,
   getMode, setMode, toggleMode, describeMode, translate, glossaryFor,
 };

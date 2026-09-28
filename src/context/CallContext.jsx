@@ -4,6 +4,7 @@ import {
 import cameraManager from '../services/cameraManager.js';
 import { unlockAudio } from '../services/ttsService.js';
 import { buildIceServers } from '../services/iceConfig.js';
+import { peerServerOptions } from '../services/peerServer.js';
 import * as store from '../services/chatStorage.js';
 
 /**
@@ -68,7 +69,7 @@ const IDLE = { status: 'idle', handle: null, direction: null, startedAt: 0 };
 
 export function CallProvider({ children }) {
   // ── Registration ─────────────────────────────────────────────────────────
-  const [profile, setProfileState] = useState(() => store.getProfile());
+  const [profile, setProfileState] = useState(() => store.ensureProfile());
   const [registration, setRegistration] = useState('idle'); // idle|connecting|online|error
   const [regError, setRegError] = useState(null);
 
@@ -381,6 +382,7 @@ export function CallProvider({ children }) {
       if (cancelled) return;
 
       peer = new Peer(store.peerIdFor(profile.handle), {
+        ...peerServerOptions(),
         config: { iceServers: buildIceServers(), iceCandidatePoolSize: 4 },
         debug: 1,
       });

@@ -85,10 +85,10 @@ function Avatar({ name, role, online, size = 'md' }) {
  * works without one; only chat and calls need a handle, because the handle IS
  * the peer id.
  */
-function ProfileSetup({ onDone }) {
-  const [name, setName] = useState('');
-  const [handle, setHandle] = useState('');
-  const [role, setRole] = useState(store.ROLE_SIGNER);
+function ProfileSetup({ onDone, initial = null, onCancel = null }) {
+  const [name, setName] = useState(initial && !initial.auto ? initial.name : '');
+  const [handle, setHandle] = useState(initial?.handle || '');
+  const [role, setRole] = useState(initial?.role || store.ROLE_SIGNER);
   const [error, setError] = useState(null);
 
   const preview = store.normaliseHandle(handle);
@@ -105,8 +105,13 @@ function ProfileSetup({ onDone }) {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-5 no-scrollbar">
-      <header className="pb-2 pt-4">
-        <h1 className="display text-3xl">Messages</h1>
+      <header className="flex items-center gap-2 pb-2 pt-4">
+        {onCancel && (
+          <button type="button" onClick={onCancel} aria-label="Back" className="btn-icon">
+            <ArrowLeft size={18} />
+          </button>
+        )}
+        <h1 className="display text-3xl">{onCancel ? 'Your profile' : 'Messages'}</h1>
       </header>
 
       <form onSubmit={submit} className="my-auto flex flex-col gap-4 py-4">
@@ -118,8 +123,8 @@ function ProfileSetup({ onDone }) {
             Chat and call in sign
           </h2>
           <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-ink-dim">
-            Pick a handle so friends can reach you. It is your address:
-            no room codes, no accounts, nothing stored on a server.
+            Your ID is your address: friends message, call and invite you
+            with it. No accounts, nothing stored on a server.
           </p>
         </div>
 
@@ -136,7 +141,7 @@ function ProfileSetup({ onDone }) {
           </div>
 
           <div>
-            <label htmlFor="profile-handle" className="eyebrow">Handle</label>
+            <label htmlFor="profile-handle" className="eyebrow">Your ID</label>
             <div className="relative mt-2">
               <AtSign size={15} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-dim" />
               <input
@@ -193,7 +198,7 @@ function ProfileSetup({ onDone }) {
         )}
 
         <button type="submit" className="btn-primary w-full py-3.5">
-          Start messaging
+          {onCancel ? 'Save profile' : 'Start messaging'}
         </button>
         <p className="flex items-center justify-center gap-1.5 text-[11px] text-ink-dim">
           <ShieldCheck size={12} /> Peer-to-peer. Your chats stay on this device.
@@ -332,6 +337,7 @@ export default function MessengerView({ onChatOpenChange }) {
   const [draft, setDraft] = useState('');
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState(false);
   const [, forceRender] = useState(0);
 
   const scrollRef = useRef(null);
@@ -375,6 +381,15 @@ export default function MessengerView({ onChatOpenChange }) {
 
   if (!profile) {
     return <ProfileSetup onDone={() => forceRender((n) => n + 1)} />;
+  }
+  if (editing) {
+    return (
+      <ProfileSetup
+        initial={profile}
+        onCancel={() => setEditing(false)}
+        onDone={() => setEditing(false)}
+      />
+    );
   }
 
   function submitDraft(e) {
@@ -461,10 +476,13 @@ export default function MessengerView({ onChatOpenChange }) {
             </div>
             <p className="mt-2 text-[11px] text-ink-dim">
               You are{' '}
-              <code className="rounded-md bg-primary/10 px-1.5 py-0.5 font-mono font-semibold text-primary">
+              <code data-tour="my-id" className="rounded-md bg-primary/10 px-1.5 py-0.5 font-mono font-semibold text-primary">
                 @{profile.handle}
               </code>
-              {' · '}share that, not a code.
+              {' · '}
+              <button type="button" onClick={() => setEditing(true)} className="font-semibold text-primary">
+                {profile.auto ? 'Add your name' : 'Edit profile'}
+              </button>
             </p>
           </div>
 
@@ -525,6 +543,7 @@ export default function MessengerView({ onChatOpenChange }) {
             <button
               type="button"
               onClick={() => setAdding(true)}
+              data-tour="add-friend"
               className="btn-primary w-full"
             >
               <UserPlus size={16} /> Add friend

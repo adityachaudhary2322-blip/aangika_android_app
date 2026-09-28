@@ -128,6 +128,95 @@ export const TOPICS = [
   },
 ];
 
+TOPICS.push({
+  id: 'tour',
+  title: 'Show me around',
+  keys: ['tour', 'show me around', 'what can you do', 'features', 'feature', 'help me start', 'walk me', 'explain the app', 'what is this app'],
+  answer: 'Happy to! I’ll run to each feature on this screen and explain what it does.',
+  actions: [{ label: 'Start the tour', tour: true }],
+});
+
+TOPICS.push({
+  id: 'meet',
+  title: 'Start or join a meeting',
+  keys: ['meeting', 'meet', 'room', 'group', 'join', 'conference', 'share id', 'my id', 'user id', 'invite'],
+  answer:
+    'Everyone gets their own ID automatically. In Meet you can create a room, share its code or link, and others join by typing the code. Captions of your signing go to everyone in the room.',
+  actions: [{ label: 'Open Meet', go: 'meet' }],
+});
+
+TOPICS.push({
+  id: 'sarvam',
+  title: 'What is Sarvam?',
+  keys: ['sarvam', 'grammar engine', 'ai engine', 'which engine', 'bulbul', 'mayura', 'saaras'],
+  answer:
+    'Sarvam is an Indian-language AI service. With a Sarvam key (Settings), it turns your signs into a proper sentence, translates it into any of 11 languages, speaks it aloud, and writes down speech in those languages too.',
+  actions: [{ label: 'Open Settings', go: 'settings' }],
+});
+
+/**
+ * Guided tours, per screen. `target` matches a data-tour attribute; steps
+ * whose target is not on screen (hidden on this layout) are skipped.
+ */
+export const TOURS = {
+  dashboard: [
+    { target: 'hero-sign', title: 'Sign to speech', text: 'Point the camera at a signer. Each sign held for a moment is spoken aloud, and several in a row become a sentence.', go: 'sign' },
+    { target: 'hero-hearing', title: 'Speech to text', text: 'For the other direction: whatever is said becomes large captions, and your typed replies are read aloud.', go: 'hearing' },
+    { target: 'lang', title: 'Your language', text: 'Everything is spoken and translated into this language. There are 11 to choose from.' },
+    { target: 'engine', title: 'Online or offline', text: 'Tap to switch between the AI engine (Sarvam or Gemini) and the offline grammar rules, which need no internet.' },
+    { target: 'tool-phrases', title: 'Phrases', text: 'Sign a few words in a row and give them one meaning, like “Hi, I’m Asha”. The translator will say your sentence.', go: 'phrases' },
+    { target: 'tool-meet', title: 'Meet', text: 'Create a meeting room, share the code, and talk in a group with sign captions for everyone.', go: 'meet' },
+    { target: 'tool-mysigns', title: 'My signs', text: 'Teach a handshape for a name or a word the app does not know yet.', go: 'mysigns' },
+    { target: 'tool-words', title: 'Word list', text: 'Every sign Aangika can recognise. Search it before signing something unusual.', go: 'words' },
+    { target: 'theme-card', title: 'Make it yours', text: 'Switch palettes here. The seasonal ones are animated, with petals, leaves, snow or fireflies.' },
+    { target: 'nav', title: 'Getting around', text: 'Home, the translator, messages and settings are always one tap away here. And I’m always in the corner if you need me!' },
+  ],
+  hearing: [
+    { target: 'their-lang', title: 'Their language', text: 'Pick what the other person speaks, or let it auto-detect. Turn on “Also show in …” to see each line in your language too.' },
+    { target: 'hearing-log', title: 'The conversation', text: 'Every line they say and every reply you give is kept here. Copy it or save it as notes.' },
+    { target: 'quick-replies', title: 'Quick replies', text: 'One tap shows a big card and says it aloud. Handy at a counter or a clinic.' },
+    { target: 'mic', title: 'Listen', text: 'Tap to start listening, and tap again to turn what was said into text.' },
+  ],
+  phrases: [
+    { target: 'phrase-record', title: 'Record a phrase', text: 'Sign the words in order in front of the camera; I’ll collect them as you go.' },
+    { target: 'phrase-type', title: 'Or type it', text: 'No camera handy? Type the signs by name instead, then write the meaning.' },
+  ],
+  meet: [
+    { target: 'my-id', title: 'Your ID', text: 'This is yours alone. Share it so friends can call or message you.' },
+    { target: 'meet-create', title: 'Create a room', text: 'Makes a room with its own code. Share the code or link and people join straight in.' },
+    { target: 'meet-join', title: 'Join a room', text: 'Got a code from someone? Type it here to join their meeting.' },
+  ],
+  settings: [
+    { target: 'appearance', title: 'Appearance', text: 'Light or dark, eight palettes, your own colour, and switches for the animations and for me.' },
+    { target: 'grammar', title: 'Grammar engine', text: 'Choose how signs become sentences: Sarvam, Gemini, the offline rules, or the raw words.' },
+    { target: 'keys', title: 'Keys', text: 'Add a Sarvam key to unlock sentences, translation and voice in all 11 languages.' },
+  ],
+  words: [
+    { target: 'word-search', title: 'Search', text: 'Type a word to see whether the camera can recognise it. Tap any word to hear it.' },
+  ],
+  messenger: [
+    { target: 'my-id', title: 'Your ID', text: 'Friends reach you with this. There are no accounts or passwords.' },
+    { target: 'add-friend', title: 'Add a friend', text: 'Type a friend’s ID to add them, then chat or start a video call.' },
+  ],
+};
+
+/** Things Mudra mentions when it wanders over with a tip. */
+export const TIPS = [
+  { text: 'Several signs in a row can become one sentence. Try Phrases!', go: 'phrases' },
+  { text: 'Pick a seasonal theme: cherry blossom petals follow your finger.', go: 'settings' },
+  { text: 'Not sure the camera knows a word? Check the Word list.', go: 'words' },
+  { text: 'Create a meeting room and share its code to talk in a group.', go: 'meet' },
+  { text: 'Teach me a name sign in My signs and I’ll recognise it.', go: 'mysigns' },
+  { text: 'A Sarvam key unlocks voices and translation in 11 languages.', go: 'settings' },
+  { text: 'Speech to text can translate what they say into your language.', go: 'hearing' },
+  { text: 'Install Aangika from the browser menu to use it like an app, even offline.' },
+];
+
+/** Every topic's answer as plain facts, for grounding a Sarvam reply. */
+export function guideFacts() {
+  return TOPICS.map((t) => `- ${t.title}: ${t.answer}`).join('\n');
+}
+
 const SMALL_TALK = [
   { keys: ['thank', 'thanks', 'dhanyavad', 'shukriya'], answer: 'Any time! Tap me whenever you need a hand. 🙌' },
   { keys: ['hello', 'hi ', 'hey', 'namaste', 'good morning', 'good evening'], answer: 'Namaste! Ask me how anything works, or pick a question below.' },
@@ -135,7 +224,8 @@ const SMALL_TALK = [
 
 /** Screen-specific opener and the questions most worth suggesting there. */
 export const CONTEXT = {
-  dashboard: { tip: 'Start with Sign to speech, or ask me how anything works.', suggest: ['sign', 'phrases', 'themes', 'messages'] },
+  dashboard: { tip: 'Start with Sign to speech, or ask me how anything works. Want a quick tour?', suggest: ['tour', 'sign', 'phrases', 'meet'] },
+  meet: { tip: 'Create a room and share its code, or type a code to join one.', suggest: ['meet', 'privacy', 'accuracy'] },
   messenger: { tip: 'Pick a handle to start. It is your address, and there is no account to create.', suggest: ['messages', 'privacy', 'offline'] },
   hearing: { tip: 'Tap the big button and let them speak. Your typed replies are read aloud.', suggest: ['hearing', 'language', 'offline'] },
   phrases: { tip: 'Record a few signs in a row, then write what the whole thing means.', suggest: ['phrases', 'accuracy', 'words'] },

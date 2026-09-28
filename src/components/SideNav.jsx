@@ -1,5 +1,5 @@
 import {
-  Home, Hand, Mic, MessageCircle, Quote, BookOpen, Sparkles, FileVideo,
+  Home, Hand, Mic, MessageCircle, Quote, BookOpen, Sparkles, FileVideo, Users,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import BrandMark from './BrandMark.jsx';
@@ -24,7 +24,10 @@ const GROUPS = [
   },
   {
     label: 'Connect',
-    items: [{ id: 'messenger', label: 'Messages', Icon: MessageCircle }],
+    items: [
+      { id: 'meet', label: 'Meet', Icon: Users },
+      { id: 'messenger', label: 'Messages', Icon: MessageCircle },
+    ],
   },
   {
     label: 'Your language',
@@ -51,7 +54,7 @@ export default function SideNav({ view, onNavigate, unread = 0 }) {
         </span>
       </button>
 
-      <nav aria-label="Primary" className="mt-6 flex-1 space-y-5 overflow-y-auto no-scrollbar">
+      <nav aria-label="Primary" data-tour="nav" className="mt-6 flex-1 space-y-5 overflow-y-auto no-scrollbar">
         {GROUPS.map((g, gi) => (
           <div key={gi}>
             {g.label && <p className="eyebrow mb-1.5 px-3">{g.label}</p>}

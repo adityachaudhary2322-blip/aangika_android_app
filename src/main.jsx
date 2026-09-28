@@ -5,6 +5,8 @@ import { ThemeProvider } from './context/ThemeContext.jsx';
 import { CallProvider } from './context/CallContext.jsx';
 import './index.css';
 import { armAudioUnlock } from './services/ttsService.js';
+// Early, so the one-shot beforeinstallprompt event is never missed.
+import './services/pwa.js';
 
 // Mobile browsers refuse programmatic audio until the user has interacted with
 // the page. Arm one-shot listeners now so the first tap anywhere unlocks

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { LANGUAGES, getLanguage } from '../config/languages.js';
 import { PALETTES } from '../config/themes.js';
-import { describeMode, MODE_OFFLINE } from '../services/translationService.js';
+import { describeMode, MODE_OFFLINE, MODE_SARVAM } from '../services/translationService.js';
 import { getKeys } from '../services/translator.js';
 import { listPhrases, subscribe as subscribePhrases } from '../services/phrases.js';
 import { useCall } from '../context/CallContext.jsx';
@@ -16,16 +16,17 @@ import BrandMark from '../components/BrandMark.jsx';
 /** Secondary tools, below the two primary actions. */
 const TOOLS = [
   { id: 'phrases', label: 'Phrases', hint: 'Several signs, one sentence', Icon: Quote },
+  { id: 'meet', label: 'Meet', hint: 'Group call with captions', Icon: Users },
   { id: 'messenger', label: 'Messages', hint: 'Chat and video call', Icon: MessageCircle },
   { id: 'mysigns', label: 'My signs', hint: 'Teach your own', Icon: Sparkles },
   { id: 'words', label: 'Word list', hint: 'What it understands', Icon: BookOpen },
   { id: 'recorded', label: 'Recorded video', hint: 'File to subtitles', Icon: FileVideo },
   { id: 'offline', label: 'Offline engine', hint: 'Toggle pipeline', Icon: CloudOff },
-  { id: 'group', label: 'Group room', hint: 'Multi-party', Icon: Users },
+
 ];
 
 /** Tiles with no view behind them yet. Saying so beats a dead tap. */
-const UNBUILT = new Set(['group']);
+const UNBUILT = new Set();
 
 function greeting() {
   const h = new Date().getHours();
@@ -57,7 +58,8 @@ export default function Dashboard({
     hasKey: Boolean(getKeys().gemini),
   });
   const offlineSelected = mode === MODE_OFFLINE;
-  const firstName = profile?.name?.split(/\s+/)[0];
+  // A generated ID is not a name; only greet by name once one is set.
+  const firstName = profile && !profile.auto ? profile.name?.split(/\s+/)[0] : null;
 
   const handleTile = (id) => {
     if (id === 'offline') {
@@ -115,6 +117,7 @@ export default function Dashboard({
                 type="button"
                 onClick={() => setPickerOpen((v) => !v)}
                 aria-expanded={pickerOpen}
+                data-tour="lang"
                 className="pill border-subtle bg-card py-1.5 text-ink transition hover:border-strong"
               >
                 <Languages size={13} className="text-primary" />
@@ -124,6 +127,7 @@ export default function Dashboard({
               <button
                 type="button"
                 onClick={togglePipeline}
+                data-tour="engine"
                 className={
                   'pill py-1.5 transition ' +
                   (badge.tone === 'primary'
@@ -161,6 +165,7 @@ export default function Dashboard({
             <section className="mt-5 grid gap-3 sm:grid-cols-2">
               <HeroCard
                 onClick={() => onNavigate('sign')}
+                tour="hero-sign"
                 Icon={Hand}
                 eyebrow="Camera"
                 title="Sign to speech"
@@ -170,6 +175,7 @@ export default function Dashboard({
               />
               <HeroCard
                 onClick={() => onNavigate('hearing')}
+                tour="hero-hearing"
                 Icon={Mic}
                 eyebrow="Microphone"
                 title="Speech to text"
@@ -189,6 +195,7 @@ export default function Dashboard({
                   <button
                     key={id}
                     type="button"
+                    data-tour={`tool-${id}`}
                     onClick={() => handleTile(id)}
                     className={
                       'tile group relative ' +
@@ -202,7 +209,7 @@ export default function Dashboard({
                     <span className="mt-1 text-sm font-semibold leading-tight">{label}</span>
                     <span className="text-[11px] leading-snug text-ink-dim">
                       {id === 'offline'
-                        ? (offlineSelected ? 'On · local rules' : 'Off · using Gemini')
+                        ? (offlineSelected ? 'On · local rules' : `Off · using ${mode === MODE_SARVAM ? 'Sarvam' : 'Gemini'}`)
                         : hint}
                     </span>
                     {soon && (
@@ -258,7 +265,7 @@ export default function Dashboard({
               )}
             </section>
 
-            <section className="surface-card p-4">
+            <section className="surface-card p-4" data-tour="theme-card">
               <div className="flex items-center">
                 <p className="eyebrow">Theme</p>
                 <button type="button" onClick={() => onNavigate('settings')} className="ml-auto text-xs font-semibold text-primary">
@@ -290,11 +297,12 @@ export default function Dashboard({
   );
 }
 
-function HeroCard({ onClick, Icon, eyebrow, title, detail, fill, delay }) {
+function HeroCard({ onClick, tour, Icon, eyebrow, title, detail, fill, delay }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      data-tour={tour}
       style={{ animationDelay: delay }}
       className={
         'group relative flex min-h-[9.5rem] animate-fade-up flex-col justify-between overflow-hidden rounded-3xl '

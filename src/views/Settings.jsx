@@ -1,12 +1,17 @@
-import { useState } from 'react';
-import { KeyRound, ShieldAlert, Check, Sun, Moon, Wand2, Palette } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  KeyRound, ShieldAlert, Check, Sun, Moon, Wand2, Palette, Download, CloudOff, Loader2, Smartphone,
+} from 'lucide-react';
+import {
+  subscribe as subscribePwa, canInstall, promptInstall, isStandalone, isIOS, offlineStatus, prepareOffline,
+} from '../services/pwa.js';
 import { getKeys, setKey } from '../services/translator.js';
 import { getTurnCredentials, setTurnCredentials } from '../services/iceConfig.js';
 import {
   VISION_ENGINES, GRAMMAR_ENGINES, VISION_AANGIKA, VISION_SIGNBRIDGE,
-  GRAMMAR_QWEN_OFFLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS,
+  GRAMMAR_QWEN_OFFLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS, GRAMMAR_SARVAM_ONLINE,
 } from '../services/engineState.js';
-import { LANGUAGES } from '../config/languages.js';
+import { LANGUAGES, VOICES, getVoice, setVoice } from '../config/languages.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { PALETTES, CUSTOM } from '../config/themes.js';
@@ -45,6 +50,8 @@ export default function Settings({
       </header>
 
       <Appearance />
+
+      <AppAndOffline />
 
       <section className="mt-4 surface-card p-4">
         <p className="eyebrow">
@@ -89,7 +96,7 @@ export default function Settings({
         </section>
       )}
 
-      <section className="mt-4 surface-card p-4">
+      <section className="mt-4 surface-card p-4" data-tour="grammar">
         <p className="eyebrow">
           Grammar engine
         </p>
@@ -97,7 +104,7 @@ export default function Settings({
           How words become a sentence.
         </p>
         <div className="mt-3 space-y-2">
-          {[GRAMMAR_GEMINI_ONLINE, GRAMMAR_QWEN_OFFLINE, GRAMMAR_RAW_GLOSS].map((id) => (
+          {[GRAMMAR_SARVAM_ONLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_QWEN_OFFLINE, GRAMMAR_RAW_GLOSS].map((id) => (
             <EngineCard
               key={id}
               engine={GRAMMAR_ENGINES[id]}
@@ -108,7 +115,7 @@ export default function Settings({
         </div>
       </section>
 
-      <section className="mt-4 surface-card p-4">
+      <section className="mt-4 surface-card p-4" data-tour="keys">
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-dim">
           <KeyRound size={14} /> API keys
         </p>
@@ -127,9 +134,16 @@ export default function Settings({
           type="password"
           value={sarvam}
           onChange={(e) => setSarvam(e.target.value)}
-          placeholder="Speech in and out"
+          placeholder="Sentences, translation, speech in and out"
           className="field mt-1"
         />
+        <p className="mt-1.5 text-[10px] leading-relaxed text-ink-dim">
+          One Sarvam key covers the Sarvam grammar engine, translation into all
+          11 languages (Mayura), the voice (Bulbul) and speech-to-text (Saaras).
+        </p>
+
+        <p className="mt-4 text-xs text-ink-dim">Sarvam voice</p>
+        <VoicePick />
 
         <button
           type="button"
@@ -264,7 +278,7 @@ function Appearance() {
   } = useTheme();
 
   return (
-    <section className="surface-card p-4">
+    <section className="surface-card p-4" data-tour="appearance">
       <div className="flex items-center gap-2">
         <Palette size={15} className="text-primary" />
         <p className="eyebrow">Appearance</p>
@@ -402,5 +416,113 @@ function Switch({ label, detail, on, onChange }) {
         <span className={'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ' + (on ? 'left-[1.375rem]' : 'left-0.5')} />
       </span>
     </label>
+  );
+}
+
+function VoicePick() {
+  const [voice, pick] = useState(() => getVoice());
+  return (
+    <div className="mt-1.5 grid grid-cols-2 gap-1 rounded-2xl bg-card-high p-1">
+      {VOICES.map((v) => (
+        <button
+          key={v.id}
+          type="button"
+          onClick={() => pick(setVoice(v.id))}
+          aria-pressed={voice === v.id}
+          className={
+            'rounded-xl py-2 text-sm font-semibold transition '
+            + (voice === v.id ? 'bg-card text-ink shadow-card' : 'text-ink-dim hover:text-ink')
+          }
+        >
+          {v.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Install state and offline preparation for the recognition models. */
+function AppAndOffline() {
+  const [pwa, setPwa] = useState({});
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState('');
+  const [err, setErr] = useState(null);
+
+  useEffect(() => subscribePwa(setPwa), []);
+  useEffect(() => { offlineStatus().then(setStatus).catch(() => {}); }, []);
+
+  const prepare = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      setStatus(await prepareOffline(setProgress));
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+      setProgress('');
+    }
+  };
+
+  const installed = isStandalone() || pwa.installed;
+  const ready = status?.tagger && status?.landmarks;
+  const mb = status ? (status.bytes / 1e6).toFixed(0) : 0;
+
+  return (
+    <section className="mt-4 surface-card p-4" data-tour="offline">
+      <div className="flex items-center gap-2">
+        <Smartphone size={15} className="text-primary" />
+        <p className="eyebrow">App &amp; offline</p>
+      </div>
+
+      <div className="mt-3 flex items-center gap-3 rounded-2xl border border-subtle p-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">{installed ? 'Installed' : 'Install Aangika'}</p>
+          <p className="text-[11px] text-ink-dim">
+            {installed
+              ? 'Running as an app from your home screen.'
+              : isIOS()
+                ? 'In Safari: Share → Add to Home Screen.'
+                : 'Full screen, from your home screen, works offline.'}
+          </p>
+        </div>
+        {!installed && canInstall() && !isIOS() && (
+          <button type="button" onClick={promptInstall} className="btn-primary px-3 py-2 text-xs">
+            <Download size={14} /> Install
+          </button>
+        )}
+        {installed && <Check size={18} className="text-secondary" />}
+      </div>
+
+      <div className="mt-2 flex items-center gap-3 rounded-2xl border border-subtle p-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">Sign recognition offline</p>
+          <p className="text-[11px] text-ink-dim">
+            {busy
+              ? (progress || 'Downloading models…')
+              : ready
+                ? `Ready. ${mb} MB of models saved on this device.`
+                : status?.supported === false
+                  ? 'This browser cannot store files for offline use.'
+                  : 'Downloads the models once (about 50 MB) so the camera works without internet.'}
+          </p>
+          {err && <p className="mt-1 text-[11px] text-rose">{err}</p>}
+        </div>
+        {ready ? (
+          <CloudOff size={18} className="text-secondary" />
+        ) : (
+          <button type="button" onClick={prepare} disabled={busy || status?.supported === false} className="btn-quiet px-3 py-2 text-xs">
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Prepare
+          </button>
+        )}
+      </div>
+      <p className="mt-2 text-[11px] leading-relaxed text-ink-dim">
+        Offline, these keep working: sign recognition (once prepared), the
+        offline grammar, phrases, My signs, the word list and your saved
+        conversations. Speech-to-text, Sarvam and Gemini, voices and calls need
+        a connection.
+      </p>
+    </section>
   );
 }

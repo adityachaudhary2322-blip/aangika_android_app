@@ -84,7 +84,7 @@ export default function WordList({ onBack, onNavigate }) {
       </header>
 
       <div className="px-5 pb-3">
-        <div className="flex items-center gap-2 rounded-2xl border border-subtle bg-card px-4 py-2.5 shadow-card transition focus-within:border-primary">
+        <div data-tour="word-search" className="flex items-center gap-2 rounded-2xl border border-subtle bg-card px-4 py-2.5 shadow-card transition focus-within:border-primary">
           <Search size={15} className="text-ink-dim" />
           <input
             value={query}
