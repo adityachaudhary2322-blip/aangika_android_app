@@ -7,6 +7,7 @@ import VideoCall from './views/VideoCall.jsx';
 import Settings from './views/Settings.jsx';
 import RecordedVideoTranslator from './views/RecordedVideoTranslator.jsx';
 import MySigns from './views/MySigns.jsx';
+import WordList from './views/WordList.jsx';
 import {
   init as initCustomSigns, setReservedTokens, migrateFromVocab,
 } from './services/customSigns.js';
@@ -43,7 +44,15 @@ export default function App() {
   const { call, revision } = useCall();
   // Home first. Messaging needs a profile, but nothing else does, so the
   // profile form waits inside the Messages tab instead of gating the app.
-  const [view, setView] = useState('dashboard');
+  // `?view=` comes from the manifest's home-screen shortcuts.
+  const [view, setView] = useState(() => {
+    try {
+      const v = new URLSearchParams(window.location.search).get('view');
+      return ['sign', 'hearing', 'messenger'].includes(v) ? v : 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
+  });
   const [chatOpen, setChatOpen] = useState(false);
   const [language, setLanguage] = useState(() => {
     try {
@@ -175,6 +184,7 @@ export default function App() {
           {view === 'hearing' && <HearingMode {...shared} />}
           {view === 'recorded' && <RecordedVideoTranslator {...shared} />}
           {view === 'settings' && <Settings {...shared} onNavigate={go} />}
+          {view === 'words' && <WordList {...shared} onNavigate={go} />}
         </div>
         {showNav && <BottomNav view={view} onNavigate={go} unread={unread} />}
       </div>

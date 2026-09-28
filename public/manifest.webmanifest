@@ -1,0 +1,22 @@
+{
+  "name": "Aangika — ISL Connect",
+  "short_name": "Aangika",
+  "description": "Indian Sign Language to speech, speech to text, and signed video calls.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0C0B14",
+  "theme_color": "#7C3AED",
+  "categories": ["accessibility", "communication", "education"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "shortcuts": [
+    { "name": "Sign to speech", "url": "/?view=sign" },
+    { "name": "Speech to text", "url": "/?view=hearing" },
+    { "name": "Messages", "url": "/?view=messenger" }
+  ]
+}
