@@ -31,7 +31,7 @@ export const VISION_ENGINES = {
     detail:
       'A 5.3 M-parameter Conv1d + BiLSTM tagger over a 40-frame window. It ' +
       'reads movement, so it can recognise signs that differ only in motion. ' +
-      'Measured at 0.49 precision / 0.23 recall on 5,854 held-out clips.',
+      'Measured live (40-frame windows) on 996 never-seen clips: 0.44 precision / 0.22 recall.',
     tone: 'primary',
   },
   [VISION_SIGNBRIDGE]: {

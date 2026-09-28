@@ -127,7 +127,12 @@ def metrics(probs: np.ndarray, labels: list[list[int]], vocab: dict) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--source", choices=["h5", "tasks"], required=True)
+    ap.add_argument("--source", choices=["h5", "tasks", "clean"], required=True)
+    ap.add_argument("--clean", type=Path, default=None,
+                    help="clean-set .npz from extract_clean.py (source=clean)")
+    ap.add_argument("--tag", default=None, help="name for the output json")
+    ap.add_argument("--details", action="store_true",
+                    help="also write per-word AP (worst first) and top confusions")
     ap.add_argument("--regimes", default="notebook,live")
     ap.add_argument("--split", default="test")
     ap.add_argument("--limit", type=int, default=None, help="seeded subset of the split")
@@ -154,6 +159,16 @@ def main() -> None:
         names, texts, n_raw = D.h5_meta(args.h5)
         rows = [i for i, n in enumerate(names) if D.assign(D.group_of(n), splits) == args.split]
         items = [{"row": i, "text": texts[i], "n_raw": int(n_raw[i])} for i in rows]
+    elif args.source == "clean":
+        # Clips the old tagger never saw (extract_clean.py): every one is held out.
+        path = args.clean or sorted((D.TRAINING / "data" / "clean").glob("clean_*.npz"))[-1]
+        z = np.load(path, allow_pickle=True)
+        off, fps_arr = z["offsets"], z["fps"]
+        clean_frames = z["frames"]
+        items = [{"row": i, "text": str(z["texts"][i]), "uid": str(z["uids"][i]),
+                  "span": (int(off[i]), int(off[i + 1])), "fps": float(fps_arr[i])}
+                 for i in range(len(fps_arr))]
+        args.split = f"clean{len(items)}"
     else:
         idx = D.tasks_index(args.tasks_dir)
         items = [{"row": r, "text": r["labels"]} for r in idx
@@ -185,6 +200,9 @@ def main() -> None:
 
     if args.source == "h5":
         feats = D.h5_features(args.h5, np.array([it["row"] for it in items]))
+    elif args.source == "clean":
+        feats = ((None, (clean_frames[it["span"][0]:it["span"][1]].astype(np.float32),
+                         it["fps"])) for it in items)
     else:
         feats = ((None, D.tasks_features(args.tasks_dir, it["row"])) for it in items)
     for ci, (it, (_, payload)) in enumerate(zip(items, feats)):
@@ -227,7 +245,7 @@ def main() -> None:
             results["regimes"]["live"]["clips_without_window"] = short
 
     args.out.mkdir(parents=True, exist_ok=True)
-    tag = f"{args.source}_{args.split}" + (f"_n{args.limit}" if args.limit else "")
+    tag = args.tag or (f"{args.source}_{args.split}" + (f"_n{args.limit}" if args.limit else ""))
     path = args.out / f"{tag}.json"
     path.write_text(json.dumps(results, indent=1), encoding="utf-8")
     for name, m in results["regimes"].items():
@@ -241,6 +259,44 @@ def main() -> None:
         print(f"   app decode (thr {a['threshold']}, top_k {a['top_k']}): "
               f"P {a['precision']:.4f} R {a['recall']:.4f} words/clip {a['words_per_clip']:.2f}")
     print(f"\n[eval] wrote {path}")
+    if args.details and "live" in regimes:
+        with np.errstate(over="ignore"):
+            write_details(1 / (1 + np.exp(-live_best)), labels, vocab,
+                          args.out / f"{tag}_details.json")
+
+
+def write_details(probs, labels, vocab, path, top=40):
+    """Per-word AP (worst first, words with >= 3 positives) and the most
+    frequent confusions at the app threshold: a true word missed while another
+    word fired in the same clip."""
+    words = vocab["words"]
+    n, v = probs.shape
+    y = np.zeros((n, v), bool)
+    for i, ls in enumerate(labels):
+        y[i, ls] = True
+    per_word = []
+    for c in range(v):
+        npos = int(y[:, c].sum())
+        if npos >= 3:
+            per_word.append({"word": words[c], "positives": npos,
+                             "ap": average_precision(probs[:, c], y[:, c])})
+    per_word.sort(key=lambda r: r["ap"])
+    pred = probs >= vocab.get("threshold", 0.15)
+    conf = {}
+    for i in range(n):
+        missed = np.flatnonzero(y[i] & ~pred[i])
+        wrong = np.flatnonzero(pred[i] & ~y[i])
+        for a in missed:
+            for b in wrong:
+                conf[(a, b)] = conf.get((a, b), 0) + 1
+    confusions = sorted(conf.items(), key=lambda kv: -kv[1])[:top]
+    path.write_text(json.dumps({
+        "per_word_ap_worst_first": per_word,
+        "top_confusions": [{"true": words[a], "predicted": words[b], "clips": k}
+                           for (a, b), k in confusions],
+    }, indent=1), encoding="utf-8")
+    print(f"[eval] details -> {path} | worst: "
+          + ", ".join(f"{r['word']} {r['ap']:.2f}" for r in per_word[:8]))
 
 
 if __name__ == "__main__":

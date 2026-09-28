@@ -8,5 +8,6 @@ mediapipe==0.10.14
 # cv2 comes from mediapipe's own opencv-contrib-python dependency; adding
 # opencv-python(-headless) as well would install two conflicting cv2 packages.
 onnxruntime>=1.18
+onnx>=1.16,<1.18        # newer onnx needs protobuf>=5, which breaks mediapipe 0.10.14
 tqdm>=4.66
 pytest>=8

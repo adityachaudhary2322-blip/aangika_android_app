@@ -1565,7 +1565,7 @@
     ]
   },
   "graph": {
-    "file": "sanketvani_word_tagger.onnx",
+    "file": "sanketvani_word_tagger_v2.onnx",
     "inputs": {
       "landmarks": [
         "batch",
@@ -1737,5 +1737,23 @@
         "in_model": false
       }
     ]
+  },
+  "release": {
+    "version": 2,
+    "trained": "2026-09-28, warm start from v1, live 40-frame windows (training/train.py, run full1, epoch 6)",
+    "measured_on": "996 iSign clips never seen by v1 or v2 (training/extract_clean.py), live regime",
+    "live_metrics": {
+      "mAP": 0.2979,
+      "precision@0.15": 0.4423,
+      "recall@0.15": 0.2168,
+      "words_per_clip@0.15": 1.79
+    },
+    "v1_same_set": {
+      "mAP": 0.2803,
+      "precision@0.15": 0.3736,
+      "recall@0.15": 0.2225,
+      "words_per_clip@0.15": 2.18
+    },
+    "note": "metrics/operating_curve below are v1's original notebook-regime numbers; see docs/RESULTS_v2.md"
   }
 }

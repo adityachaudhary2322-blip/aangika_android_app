@@ -206,11 +206,13 @@ export default function Settings({
           What to expect
         </p>
         <p>
-          The recogniser scores 0.49 precision and 0.23 recall on 5,854 held-out
-          clips: roughly one correct word and one wrong word per phrase, out of
-          about four content words actually signed. It is real recognition —
-          53× a frequency baseline — but it is not a reliable translator. Trust
-          the word list; treat the sentence as a language model&apos;s guess.
+          Measured the way this app runs it (live 40-frame windows) on 996 news
+          clips the model never saw: 0.44 precision and 0.22 recall. That is
+          about four correct words in every nine shown, and roughly one in five
+          of the words actually signed. It is real recognition, but it is not a
+          reliable translator. Trust the word list; treat the sentence as a
+          language model&apos;s guess. Your own taught signs (My signs) are
+          matched separately and are usually far more reliable for you.
         </p>
       </section>
     </div>

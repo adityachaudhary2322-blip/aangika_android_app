@@ -29,7 +29,10 @@ export const RIGHT_HAND_START = 162;
 const L_SHOULDER = 11;
 const R_SHOULDER = 12;
 
-const MODEL_URL = '/models/sanketvani_word_tagger.onnx';
+// v2: retrained for the live 40-frame window (docs/RESULTS_v2.md). The file
+// name is versioned because /models/* is served immutable: an in-place
+// replacement would never reach browsers that cached v1.
+const MODEL_URL = '/models/sanketvani_word_tagger_v2.onnx';
 const VOCAB_URL = '/models/vocab.json';
 
 let session = null;
