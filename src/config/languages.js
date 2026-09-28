@@ -30,13 +30,34 @@ export function getLanguage(code) {
   return LANGUAGES.find((l) => l.code === code) || LANGUAGES[0];
 }
 
+/** Bulbul v3 speakers offered in Settings; both speak all 11 languages. */
+export const VOICES = [
+  { id: 'ritu', label: 'Female · Ritu' },
+  { id: 'shubh', label: 'Male · Shubh' },
+];
+const VOICE_KEY = 'isl.ttsVoice';
+
+export function getVoice() {
+  try {
+    const v = localStorage.getItem(VOICE_KEY);
+    return VOICES.some((x) => x.id === v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setVoice(id) {
+  try { localStorage.setItem(VOICE_KEY, id); } catch { /* private mode */ }
+  return id;
+}
+
 /** Payload for POST https://api.sarvam.ai/text-to-speech */
 export function sarvamTtsPayload(text, code) {
   const lang = getLanguage(code);
   return {
     text,
     target_language_code: lang.code,
-    speaker: lang.speaker,
+    speaker: getVoice() || lang.speaker,
     model: 'bulbul:v3',
     output_audio_codec: 'wav',
   };

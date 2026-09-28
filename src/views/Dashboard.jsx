@@ -202,7 +202,7 @@ export default function Dashboard({
                     <span className="mt-1 text-sm font-semibold leading-tight">{label}</span>
                     <span className="text-[11px] leading-snug text-ink-dim">
                       {id === 'offline'
-                        ? (offlineSelected ? 'On · local rules' : 'Off · using Gemini')
+                        ? (offlineSelected ? 'On · local rules' : `Off · using ${badge.short}`)
                         : hint}
                     </span>
                     {soon && (

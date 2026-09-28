@@ -3,7 +3,8 @@ import {
   ArrowLeft, Mic, Square, Loader2, Copy, Trash2, Volume2, X, Type, Download,
   Send, Check,
 } from 'lucide-react';
-import { transcribe } from '../services/translator.js';
+import { transcribe, sarvamTranslate } from '../services/translator.js';
+import { LANGUAGES, getLanguage } from '../config/languages.js';
 import { speak } from '../services/ttsService.js';
 
 const QUICK_REPLIES = [
@@ -32,7 +33,8 @@ function timeOf(ts) {
 /** Plain-text export, one line per turn. */
 function logAsText(log) {
   return log
-    .map((e) => `[${timeOf(e.at)}] ${e.who === 'me' ? 'Me' : 'Them'}: ${e.text}`)
+    .map((e) => `[${timeOf(e.at)}] ${e.who === 'me' ? 'Me' : 'Them'}: ${e.text}`
+      + (e.translated ? `\n    (${e.translated})` : ''))
     .join('\n');
 }
 
@@ -56,6 +58,15 @@ export default function HearingMode({ language, online, onBack }) {
   const [reply, setReply] = useState(null);
   const [error, setError] = useState(null);
   const [latency, setLatency] = useState(0);
+  // What the other person speaks ('unknown' = let Saaras detect it), and
+  // whether each line is also shown in the user's own language.
+  const [theirLang, setTheirLang] = useState(() => {
+    try { return localStorage.getItem('isl.hearing.lang') || 'unknown'; } catch { return 'unknown'; }
+  });
+  const [showMine, setShowMine] = useState(() => {
+    try { return localStorage.getItem('isl.hearing.translate') !== 'off'; } catch { return true; }
+  });
+  const mine = getLanguage(language);
 
   const recorderRef = useRef(null);
   const logRef = useRef(null);
@@ -71,8 +82,35 @@ export default function HearingMode({ language, online, onBack }) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [log]);
 
-  const append = (who, text) =>
-    setLog((l) => [...l, { id: `${Date.now()}-${l.length}`, who, text, at: Date.now() }]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('isl.hearing.lang', theirLang);
+      localStorage.setItem('isl.hearing.translate', showMine ? 'on' : 'off');
+    } catch { /* private mode */ }
+  }, [theirLang, showMine]);
+
+  const append = (who, text, extra = {}) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setLog((l) => [...l, { id, who, text, at: Date.now(), ...extra }]);
+    return id;
+  };
+
+  /**
+   * Put a heard line into the user's language with Mayura. Skipped when the
+   * speaker's language is known to be the user's own; with 'auto' Mayura
+   * detects the source and returns the text unchanged if it already matches.
+   */
+  const translateLine = async (id, text) => {
+    if (!showMine || theirLang === language) return;
+    try {
+      const out = await sarvamTranslate(text, language, {
+        source: theirLang === 'unknown' ? 'auto' : theirLang,
+      });
+      if (out && out.trim() !== text.trim()) {
+        setLog((l) => l.map((e) => (e.id === id ? { ...e, translated: out } : e)));
+      }
+    } catch { /* no key or offline: the original line stands */ }
+  };
 
   function sayReply(r) {
     setReply(r);
@@ -180,8 +218,8 @@ export default function HearingMode({ language, online, onBack }) {
 
     const started = performance.now();
     try {
-      const text = (await transcribe(blob, 'unknown') || '').trim();
-      if (text) append('them', text);
+      const text = (await transcribe(blob, theirLang) || '').trim();
+      if (text) translateLine(append('them', text), text);
       else setError('No speech detected. Try again a little closer.');
       setLatency(Math.round(performance.now() - started));
     } catch (err) {
@@ -218,6 +256,31 @@ export default function HearingMode({ language, online, onBack }) {
           {online ? 'Live' : 'Offline'}
         </span>
       </header>
+
+      {/* ── Languages: theirs in, mine out ─────────────────────────── */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+        <label className="pill border-subtle bg-card py-1.5 text-ink">
+          <span className="text-ink-dim">They speak</span>
+          <select
+            value={theirLang}
+            onChange={(e) => setTheirLang(e.target.value)}
+            className="bg-transparent font-semibold outline-none"
+          >
+            <option value="unknown">Auto-detect</option>
+            {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => setShowMine((v) => !v)}
+          aria-pressed={showMine}
+          className={'pill py-1.5 transition ' + (showMine
+            ? 'border-secondary/30 bg-secondary/10 text-secondary'
+            : 'border-subtle bg-card text-ink-dim')}
+        >
+          {showMine ? '✓ ' : ''}Also show in {mine.name}
+        </button>
+      </div>
 
       {/* ── Conversation log ───────────────────────────────────────── */}
       <section className="surface-card flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -260,6 +323,11 @@ export default function HearingMode({ language, online, onBack }) {
               >
                 {e.text}
               </p>
+              {e.translated && (
+                <p className={(largeFont ? 'text-xl' : 'text-base') + ' mt-0.5 font-medium text-secondary'}>
+                  {e.translated}
+                </p>
+              )}
             </div>
           ))}
           {(recording || busy) && (

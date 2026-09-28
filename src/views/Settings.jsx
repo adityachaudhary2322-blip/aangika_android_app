@@ -4,9 +4,9 @@ import { getKeys, setKey } from '../services/translator.js';
 import { getTurnCredentials, setTurnCredentials } from '../services/iceConfig.js';
 import {
   VISION_ENGINES, GRAMMAR_ENGINES, VISION_AANGIKA, VISION_SIGNBRIDGE,
-  GRAMMAR_QWEN_OFFLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS,
+  GRAMMAR_QWEN_OFFLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS, GRAMMAR_SARVAM_ONLINE,
 } from '../services/engineState.js';
-import { LANGUAGES } from '../config/languages.js';
+import { LANGUAGES, VOICES, getVoice, setVoice } from '../config/languages.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { PALETTES, CUSTOM } from '../config/themes.js';
@@ -97,7 +97,7 @@ export default function Settings({
           How words become a sentence.
         </p>
         <div className="mt-3 space-y-2">
-          {[GRAMMAR_GEMINI_ONLINE, GRAMMAR_QWEN_OFFLINE, GRAMMAR_RAW_GLOSS].map((id) => (
+          {[GRAMMAR_SARVAM_ONLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_QWEN_OFFLINE, GRAMMAR_RAW_GLOSS].map((id) => (
             <EngineCard
               key={id}
               engine={GRAMMAR_ENGINES[id]}
@@ -127,9 +127,16 @@ export default function Settings({
           type="password"
           value={sarvam}
           onChange={(e) => setSarvam(e.target.value)}
-          placeholder="Speech in and out"
+          placeholder="Sentences, translation, speech in and out"
           className="field mt-1"
         />
+        <p className="mt-1.5 text-[10px] leading-relaxed text-ink-dim">
+          One Sarvam key covers the Sarvam grammar engine, translation into all
+          11 languages (Mayura), the voice (Bulbul) and speech-to-text (Saaras).
+        </p>
+
+        <p className="mt-4 text-xs text-ink-dim">Sarvam voice</p>
+        <VoicePick />
 
         <button
           type="button"
@@ -402,5 +409,27 @@ function Switch({ label, detail, on, onChange }) {
         <span className={'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ' + (on ? 'left-[1.375rem]' : 'left-0.5')} />
       </span>
     </label>
+  );
+}
+
+function VoicePick() {
+  const [voice, pick] = useState(() => getVoice());
+  return (
+    <div className="mt-1.5 grid grid-cols-2 gap-1 rounded-2xl bg-card-high p-1">
+      {VOICES.map((v) => (
+        <button
+          key={v.id}
+          type="button"
+          onClick={() => pick(setVoice(v.id))}
+          aria-pressed={voice === v.id}
+          className={
+            'rounded-xl py-2 text-sm font-semibold transition '
+            + (voice === v.id ? 'bg-card text-ink shadow-card' : 'text-ink-dim hover:text-ink')
+          }
+        >
+          {v.label}
+        </button>
+      ))}
+    </div>
   );
 }

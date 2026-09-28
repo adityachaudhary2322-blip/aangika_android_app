@@ -16,10 +16,13 @@ export const VISION_SIGNBRIDGE = 'signbridge';
 
 export const GRAMMAR_QWEN_OFFLINE = 'qwen_offline';
 export const GRAMMAR_GEMINI_ONLINE = 'gemini_online';
+export const GRAMMAR_SARVAM_ONLINE = 'sarvam_online';
 export const GRAMMAR_RAW_GLOSS = 'raw_gloss';
 
 const VISION_VALUES = [VISION_AANGIKA, VISION_SIGNBRIDGE];
-const GRAMMAR_VALUES = [GRAMMAR_QWEN_OFFLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS];
+const GRAMMAR_VALUES = [
+  GRAMMAR_QWEN_OFFLINE, GRAMMAR_SARVAM_ONLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS,
+];
 
 /** Descriptions shown in the UI. Kept here so every surface agrees. */
 export const VISION_ENGINES = {
@@ -59,6 +62,18 @@ export const GRAMMAR_ENGINES = {
       'kinship possessives. No network, ~40 microseconds. English only, ' +
       'except for the greeting templates.',
     tone: 'amber',
+  },
+  [GRAMMAR_SARVAM_ONLINE]: {
+    id: GRAMMAR_SARVAM_ONLINE,
+    icon: '🇮🇳',
+    name: 'Sarvam',
+    tagline: 'Indian-language AI: sentence, translation and voice',
+    detail:
+      'Sends the recognised words to Sarvam\'s chat model (sarvam-30b) with ' +
+      'the ISL grammar priors; Mayura fills any language the model skips, and ' +
+      'Bulbul speaks all 11. Needs a Sarvam key; if the chat model is ' +
+      'unavailable the local rules make the sentence and Mayura translates it.',
+    tone: 'primary',
   },
   [GRAMMAR_GEMINI_ONLINE]: {
     id: GRAMMAR_GEMINI_ONLINE,
@@ -129,12 +144,14 @@ export function setGrammarEngine(value) {
 
 /** Bridge to translationService's online/offline mode. */
 export function grammarToPipelineMode(grammar) {
-  return grammar === GRAMMAR_GEMINI_ONLINE ? 'online' : 'offline';
+  if (grammar === GRAMMAR_GEMINI_ONLINE) return 'online';
+  if (grammar === GRAMMAR_SARVAM_ONLINE) return 'sarvam';
+  return 'offline';
 }
 
 export default {
   VISION_AANGIKA, VISION_SIGNBRIDGE,
-  GRAMMAR_QWEN_OFFLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS,
+  GRAMMAR_QWEN_OFFLINE, GRAMMAR_SARVAM_ONLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS,
   VISION_ENGINES, GRAMMAR_ENGINES,
   getVisionEngine, setVisionEngine, toggleVisionEngine,
   getGrammarEngine, setGrammarEngine, grammarToPipelineMode,

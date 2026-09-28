@@ -1,8 +1,8 @@
 /**
  * Tag list -> sentence -> speech, with an honest offline ladder.
  *
- *   1. Gemini      real translation into the target language (needs a key)
- *   2. rule-based  capitalised concatenation, English only, always available
+ *   1. Sarvam or Gemini   real sentence + translation (needs that key)
+ *   2. rule-based         capitalised concatenation, English only, always available
  *
  * There is no in-browser LLM here. The Python side measured Qwen2.5-0.5B at
  * ~2.1 GB resident, which is not something to load into a phone browser tab,
@@ -30,6 +30,11 @@ const GEMINI_MODELS = [
 ];
 
 const STT_MODELS = ['saaras:v3', 'saaras:v2.5', 'saarika:v2.5', 'saarika:v2'];
+
+// Sarvam's chat models as of 2026-09 (sarvam-m is retired and now rejected).
+// 30b first: it is the faster one, and a sign sentence is a short job.
+const SARVAM_CHAT_URL = 'https://api.sarvam.ai/v1/chat/completions';
+const SARVAM_CHAT_MODELS = ['sarvam-30b', 'sarvam-105b'];
 
 /** Keys live in localStorage, never in the bundle. */
 export function getKeys() {
@@ -151,6 +156,80 @@ export async function reconstruct(tags, languageCode, { glossary = [] } = {}) {
   return fallback(errors.join(' | '));
 }
 
+/** Drop a reasoning model's <think> block, if it put one in the content. */
+function stripThinking(text) {
+  return String(text || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+}
+
+/**
+ * One Sarvam chat completion. `messages` is OpenAI-shaped
+ * ([{role, content}]). Returns { text, model }; throws when every model fails.
+ */
+export async function sarvamChat(messages, { temperature = 0.2, maxTokens = 600 } = {}) {
+  const { sarvam } = getKeys();
+  if (!sarvam) throw new Error('No Sarvam key set.');
+  if (!isOnline()) throw new Error('Device is offline.');
+
+  const errors = [];
+  for (const model of SARVAM_CHAT_MODELS) {
+    try {
+      const response = await fetch(SARVAM_CHAT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'api-subscription-key': sarvam },
+        body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens }),
+      });
+      if (!response.ok) { errors.push(`${model}: HTTP ${response.status}`); continue; }
+      const body = await response.json();
+      const text = stripThinking(body?.choices?.[0]?.message?.content);
+      if (text) return { text, model };
+      errors.push(`${model}: empty reply`);
+    } catch (err) {
+      errors.push(`${model}: ${err.message}`);
+    }
+  }
+  throw new Error('Sarvam chat failed - ' + errors.join(' | '));
+}
+
+/**
+ * Sign tags -> sentence with Sarvam's chat model, using the same ISL grammar
+ * prompt and few-shot examples as the Gemini path. Same result shape as
+ * reconstruct(); NEVER throws (source 'fallback' on failure).
+ */
+export async function sarvamReconstruct(tags, languageCode, { glossary = [] } = {}) {
+  const started = performance.now();
+  const language = getLanguage(languageCode);
+  const fail = (error) => ({
+    english: ruleBasedJoin(tags), translated: '', source: 'fallback', model: null,
+    language, latencyMs: Math.round(performance.now() - started), error,
+  });
+  if (!tags || tags.length === 0) return fail('no tags supplied');
+
+  const { systemInstruction, contents } = buildGeminiRequest(tags, language, glossary);
+  const messages = [
+    { role: 'system', content: systemInstruction },
+    ...contents.map((c) => ({
+      role: c.role === 'model' ? 'assistant' : 'user',
+      content: c.parts.map((p) => p.text).join(''),
+    })),
+  ];
+  try {
+    const { text, model } = await sarvamChat(messages);
+    const parsed = extractJson(text);
+    const english = String(parsed.english || '').trim();
+    if (!english) return fail(`${model}: reply had no 'english' field`);
+    return {
+      english,
+      translated: String(parsed.translated || '').trim(),
+      source: 'sarvam',
+      model,
+      language,
+      latencyMs: Math.round(performance.now() - started),
+    };
+  } catch (err) {
+    return fail(err.message);
+  }
+}
+
 /** Synthesise with Sarvam; returns a Blob. Throws on failure. */
 export async function synthesize(text, languageCode) {
   const { sarvam } = getKeys();
@@ -219,12 +298,14 @@ const TRANSLATE_CHAR_LIMIT = 1000;
  * English -> target language with Sarvam /translate (dev key path; Phase 9
  * moves this behind the proxy). Throws on failure so callers can queue a retry.
  */
-export async function sarvamTranslate(text, targetCode, { mode = 'modern-colloquial' } = {}) {
+export async function sarvamTranslate(
+  text, targetCode, { mode = 'modern-colloquial', source = 'en-IN' } = {}
+) {
   const { sarvam } = getKeys();
   if (!sarvam) throw new Error('No Sarvam key set.');
   const input = String(text || '').trim();
   if (!input) return '';
-  if (targetCode === 'en-IN') return input;
+  if (targetCode === source) return input;
   if (input.length > TRANSLATE_CHAR_LIMIT) throw new Error('Text too long to translate.');
 
   const errors = [];
@@ -235,7 +316,8 @@ export async function sarvamTranslate(text, targetCode, { mode = 'modern-colloqu
         headers: { 'Content-Type': 'application/json', 'api-subscription-key': sarvam },
         body: JSON.stringify({
           input,
-          source_language_code: 'en-IN',
+          // 'auto' lets Mayura detect the language, for transcripts.
+          source_language_code: source,
           target_language_code: targetCode,
           model,
           ...(model === 'mayura:v1' ? { mode, numerals_format: 'international' } : {}),
@@ -284,5 +366,6 @@ export async function transcribe(blob, languageCode = 'unknown') {
 }
 
 export default {
-  reconstruct, synthesize, speak, transcribe, sarvamTranslate, getKeys, setKey, isOnline,
+  reconstruct, sarvamReconstruct, sarvamChat, synthesize, speak, transcribe,
+  sarvamTranslate, getKeys, setKey, isOnline,
 };
