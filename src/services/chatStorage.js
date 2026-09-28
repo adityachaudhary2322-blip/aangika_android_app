@@ -130,7 +130,33 @@ export function getProfile() {
     name: p.name || p.handle,
     handle: normaliseHandle(p.handle),
     role: p.role === ROLE_SPEAKER ? ROLE_SPEAKER : ROLE_SIGNER,
+    /** True until the user edits their profile: the ID was generated for them. */
+    auto: Boolean(p.auto),
   };
+}
+
+// No 0/o, 1/l/i: an ID read aloud or copied by hand must survive it.
+const ID_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
+
+/** A fresh personal ID, e.g. "ak7m2qp". */
+export function generateHandle(length = 7) {
+  const bytes = new Uint8Array(length);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(bytes);
+  else for (let i = 0; i < length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  return Array.from(bytes, (b) => ID_ALPHABET[b % ID_ALPHABET.length]).join('');
+}
+
+/**
+ * Every user has an ID from the first launch, without a sign-up form: one is
+ * generated and saved if none exists. The user can rename it any time.
+ */
+export function ensureProfile() {
+  const existing = getProfile();
+  if (existing) return existing;
+  const handle = generateHandle();
+  write(KEY_PROFILE, { name: '', handle, role: ROLE_SIGNER, auto: true });
+  notify();
+  return getProfile();
 }
 
 export function hasProfile() {

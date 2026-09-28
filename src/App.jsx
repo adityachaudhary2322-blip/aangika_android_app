@@ -9,6 +9,7 @@ import RecordedVideoTranslator from './views/RecordedVideoTranslator.jsx';
 import MySigns from './views/MySigns.jsx';
 import WordList from './views/WordList.jsx';
 import Phrases from './views/Phrases.jsx';
+import Meet from './views/Meet.jsx';
 import {
   init as initCustomSigns, setReservedTokens, prunePlaceholders,
 } from './services/customSigns.js';
@@ -48,15 +49,21 @@ export default function App() {
   const { call, revision } = useCall();
   // Home first. Messaging needs a profile, but nothing else does, so the
   // profile form waits inside the Messages tab instead of gating the app.
-  // `?view=` comes from the manifest's home-screen shortcuts.
+  // `?view=` comes from the manifest's home-screen shortcuts; `?room=` is a
+  // meeting invite link and opens Meet with the code filled in.
+  const [initialRoom] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('room') || ''; } catch { return ''; }
+  });
   const [view, setView] = useState(() => {
+    if (initialRoom) return 'meet';
     try {
       const v = new URLSearchParams(window.location.search).get('view');
-      return ['sign', 'hearing', 'messenger'].includes(v) ? v : 'dashboard';
+      return ['sign', 'hearing', 'messenger', 'meet'].includes(v) ? v : 'dashboard';
     } catch {
       return 'dashboard';
     }
   });
+  const [meetLive, setMeetLive] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [language, setLanguage] = useState(() => {
     try {
@@ -157,7 +164,7 @@ export default function App() {
   // The tab bar shows on the top-level screens only. Camera views need the
   // height, and an open chat needs the composer at the bottom edge.
   const showNav = view === 'dashboard' || view === 'settings'
-    || (view === 'messenger' && !chatOpen);
+    || (view === 'messenger' && !chatOpen) || (view === 'meet' && !meetLive);
 
   const shared = {
     language, setLanguage, online, mode, togglePipeline,
@@ -170,6 +177,7 @@ export default function App() {
   // the two-pane messenger take the room they can use.
   const width = {
     messenger: 'max-w-3xl lg:max-w-6xl',
+    meet: meetLive ? 'max-w-none' : 'max-w-md lg:max-w-4xl',
     sign: 'max-w-md lg:max-w-none',
     dashboard: 'max-w-md lg:max-w-5xl',
   }[view] || 'max-w-md lg:max-w-3xl';
@@ -196,6 +204,9 @@ export default function App() {
             {view === 'settings' && <Settings {...shared} onNavigate={go} />}
             {view === 'words' && <WordList {...shared} onNavigate={go} />}
             {view === 'phrases' && <Phrases {...shared} cameraError={cameraError} />}
+            {view === 'meet' && (
+              <Meet {...shared} initialCode={initialRoom} onLiveChange={setMeetLive} />
+            )}
           </div>
           {showNav && (
             <div className="lg:hidden">
@@ -211,7 +222,8 @@ export default function App() {
           view={view}
           onNavigate={go}
           raised={showNav}
-          hidden={view === 'sign' || view === 'mysigns' || (view === 'messenger' && chatOpen)}
+          hidden={view === 'sign' || view === 'mysigns' || (view === 'messenger' && chatOpen)
+            || (view === 'meet' && meetLive)}
         />
       )}
 

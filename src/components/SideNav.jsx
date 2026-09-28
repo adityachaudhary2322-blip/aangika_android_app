@@ -1,5 +1,5 @@
 import {
-  Home, Hand, Mic, MessageCircle, Quote, BookOpen, Sparkles, FileVideo,
+  Home, Hand, Mic, MessageCircle, Quote, BookOpen, Sparkles, FileVideo, Users,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import BrandMark from './BrandMark.jsx';
@@ -24,7 +24,10 @@ const GROUPS = [
   },
   {
     label: 'Connect',
-    items: [{ id: 'messenger', label: 'Messages', Icon: MessageCircle }],
+    items: [
+      { id: 'meet', label: 'Meet', Icon: Users },
+      { id: 'messenger', label: 'Messages', Icon: MessageCircle },
+    ],
   },
   {
     label: 'Your language',

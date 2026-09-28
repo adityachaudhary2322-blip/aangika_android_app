@@ -16,16 +16,17 @@ import BrandMark from '../components/BrandMark.jsx';
 /** Secondary tools, below the two primary actions. */
 const TOOLS = [
   { id: 'phrases', label: 'Phrases', hint: 'Several signs, one sentence', Icon: Quote },
+  { id: 'meet', label: 'Meet', hint: 'Group call with captions', Icon: Users },
   { id: 'messenger', label: 'Messages', hint: 'Chat and video call', Icon: MessageCircle },
   { id: 'mysigns', label: 'My signs', hint: 'Teach your own', Icon: Sparkles },
   { id: 'words', label: 'Word list', hint: 'What it understands', Icon: BookOpen },
   { id: 'recorded', label: 'Recorded video', hint: 'File to subtitles', Icon: FileVideo },
   { id: 'offline', label: 'Offline engine', hint: 'Toggle pipeline', Icon: CloudOff },
-  { id: 'group', label: 'Group room', hint: 'Multi-party', Icon: Users },
+
 ];
 
 /** Tiles with no view behind them yet. Saying so beats a dead tap. */
-const UNBUILT = new Set(['group']);
+const UNBUILT = new Set();
 
 function greeting() {
   const h = new Date().getHours();
