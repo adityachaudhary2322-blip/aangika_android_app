@@ -64,7 +64,7 @@ function apply(theme) {
   root.style.colorScheme = theme;
 
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', theme === DARK ? '#0B1326' : '#F4F7F5');
+  if (meta) meta.setAttribute('content', theme === DARK ? '#0C0B14' : '#F7F6FB');
 }
 
 export function ThemeProvider({ children }) {

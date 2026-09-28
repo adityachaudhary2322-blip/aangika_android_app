@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Dashboard from './views/Dashboard.jsx';
 import MessengerView from './views/MessengerView.jsx';
 import SignTranslator from './views/SignTranslator.jsx';
@@ -7,11 +7,14 @@ import VideoCall from './views/VideoCall.jsx';
 import Settings from './views/Settings.jsx';
 import RecordedVideoTranslator from './views/RecordedVideoTranslator.jsx';
 import MySigns from './views/MySigns.jsx';
+import WordList from './views/WordList.jsx';
 import {
   init as initCustomSigns, setReservedTokens, migrateFromVocab,
 } from './services/customSigns.js';
 import { fillPendingTranslations } from './services/customSignTranslations.js';
 import IncomingCall from './components/IncomingCall.jsx';
+import BottomNav from './components/BottomNav.jsx';
+import * as chatStore from './services/chatStorage.js';
 import { useCall } from './context/CallContext.jsx';
 import cameraManager from './services/cameraManager.js';
 import { DEFAULT_LANGUAGE_CODE } from './config/languages.js';
@@ -38,8 +41,19 @@ import {
  * from.
  */
 export default function App() {
-  const { call } = useCall();
-  const [view, setView] = useState('messenger');
+  const { call, revision } = useCall();
+  // Home first. Messaging needs a profile, but nothing else does, so the
+  // profile form waits inside the Messages tab instead of gating the app.
+  // `?view=` comes from the manifest's home-screen shortcuts.
+  const [view, setView] = useState(() => {
+    try {
+      const v = new URLSearchParams(window.location.search).get('view');
+      return ['sign', 'hearing', 'messenger'].includes(v) ? v : 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
+  });
+  const [chatOpen, setChatOpen] = useState(false);
   const [language, setLanguage] = useState(() => {
     try {
       return localStorage.getItem('isl.language') || DEFAULT_LANGUAGE_CODE;
@@ -130,6 +144,16 @@ export default function App() {
     });
   }, []);
 
+  const unread = useMemo(
+    () => chatStore.getContacts().reduce((n, c) => n + (c.unread || 0), 0),
+    [revision]
+  );
+
+  // The tab bar shows on the top-level screens only. Camera views need the
+  // height, and an open chat needs the composer at the bottom edge.
+  const showNav = view === 'dashboard' || view === 'settings'
+    || (view === 'messenger' && !chatOpen);
+
   const shared = {
     language, setLanguage, online, mode, togglePipeline,
     visionEngine, chooseVision, grammarEngine, chooseGrammar,
@@ -142,21 +166,27 @@ export default function App() {
           and clamping it to a phone width would waste a desktop screen. */}
       <div
         className={
-          'mx-auto flex h-full flex-col bg-surface '
+          'mx-auto flex h-full flex-col '
           + (view === 'messenger' ? 'max-w-3xl' : 'max-w-md')
         }
       >
-        {view === 'messenger' && <MessengerView onNavigate={go} />}
-        {view === 'dashboard' && <Dashboard {...shared} onNavigate={go} />}
-        {view === 'sign' && (
-          <SignTranslator {...shared} cameraError={cameraError} onNavigate={go} />
-        )}
-        {view === 'mysigns' && (
-          <MySigns {...shared} cameraError={cameraError} onBack={() => go(returnTo)} />
-        )}
-        {view === 'hearing' && <HearingMode {...shared} />}
-        {view === 'recorded' && <RecordedVideoTranslator {...shared} />}
-        {view === 'settings' && <Settings {...shared} onNavigate={go} />}
+        <div key={view} className="flex min-h-0 flex-1 animate-fade-up flex-col">
+          {view === 'messenger' && (
+            <MessengerView onNavigate={go} onChatOpenChange={setChatOpen} />
+          )}
+          {view === 'dashboard' && <Dashboard {...shared} onNavigate={go} />}
+          {view === 'sign' && (
+            <SignTranslator {...shared} cameraError={cameraError} onNavigate={go} />
+          )}
+          {view === 'mysigns' && (
+            <MySigns {...shared} cameraError={cameraError} onBack={() => go(returnTo)} />
+          )}
+          {view === 'hearing' && <HearingMode {...shared} />}
+          {view === 'recorded' && <RecordedVideoTranslator {...shared} />}
+          {view === 'settings' && <Settings {...shared} onNavigate={go} />}
+          {view === 'words' && <WordList {...shared} onNavigate={go} />}
+        </div>
+        {showNav && <BottomNav view={view} onNavigate={go} unread={unread} />}
       </div>
 
       {/* Above the router, in ringing order: an unanswered call first, then the
