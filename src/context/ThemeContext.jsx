@@ -1,6 +1,10 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
+import {
+  DEFAULT_PALETTE, CUSTOM, DEFAULT_CUSTOM_ACCENT, getPalette, customAccentVars,
+  CUSTOM_VAR_NAMES,
+} from '../config/themes.js';
 
 /**
  * Theme ownership.
@@ -28,6 +32,23 @@ import {
  */
 
 const STORAGE_KEY = 'app_theme';
+const PALETTE_KEY = 'app_palette';
+const ACCENT_KEY = 'app_accent';
+const AMBIENT_KEY = 'app_ambient';
+const MASCOT_KEY = 'app_mascot';
+
+function readPref(key, fallback) {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v;
+  } catch {
+    return fallback;
+  }
+}
+
+function writePref(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* private mode */ }
+}
 const LIGHT = 'light';
 const DARK = 'dark';
 
@@ -67,6 +88,23 @@ function apply(theme) {
   if (meta) meta.setAttribute('content', theme === DARK ? '#0C0B14' : '#F7F6FB');
 }
 
+/**
+ * Palette and custom accent. The palette is an attribute the stylesheet keys
+ * off; a custom accent overrides three variables inline, recomputed per mode
+ * because the readable shade differs on a light and a dark page.
+ */
+function applyPalette(palette, accent, theme) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (palette === DEFAULT_PALETTE || palette === CUSTOM) root.removeAttribute('data-palette');
+  else root.setAttribute('data-palette', palette);
+  for (const name of CUSTOM_VAR_NAMES) root.style.removeProperty(name);
+  if (palette === CUSTOM) {
+    const vars = customAccentVars(accent, theme === DARK) || {};
+    for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
+  }
+}
+
 export function ThemeProvider({ children }) {
   // Stored choice wins; failing that, whatever the boot script already painted;
   // failing that, the OS.
@@ -74,10 +112,42 @@ export function ThemeProvider({ children }) {
     () => readStored() || readApplied() || (prefersDark() ? DARK : LIGHT)
   );
   const [explicit, setExplicit] = useState(() => readStored() !== null);
+  const [palette, setPaletteState] = useState(() => {
+    const p = readPref(PALETTE_KEY, DEFAULT_PALETTE);
+    return p === CUSTOM || getPalette(p) ? p : DEFAULT_PALETTE;
+  });
+  const [customAccent, setCustomAccentState] = useState(
+    () => readPref(ACCENT_KEY, DEFAULT_CUSTOM_ACCENT)
+  );
+  const [ambientOn, setAmbientOn] = useState(() => readPref(AMBIENT_KEY, 'on') !== 'off');
+  const [mascotOn, setMascotOn] = useState(() => readPref(MASCOT_KEY, 'on') !== 'off');
 
   useEffect(() => {
     apply(theme);
   }, [theme]);
+
+  useEffect(() => {
+    applyPalette(palette, customAccent, theme);
+  }, [palette, customAccent, theme]);
+
+  const setPalette = useCallback((id) => {
+    setPaletteState(id);
+    writePref(PALETTE_KEY, id);
+  }, []);
+  const setCustomAccent = useCallback((hex) => {
+    setCustomAccentState(hex);
+    setPaletteState(CUSTOM);
+    writePref(ACCENT_KEY, hex);
+    writePref(PALETTE_KEY, CUSTOM);
+  }, []);
+  const setAmbient = useCallback((on) => {
+    setAmbientOn(on);
+    writePref(AMBIENT_KEY, on ? 'on' : 'off');
+  }, []);
+  const setMascot = useCallback((on) => {
+    setMascotOn(on);
+    writePref(MASCOT_KEY, on ? 'on' : 'off');
+  }, []);
 
   // Track the OS only while the user has expressed no preference of their own.
   useEffect(() => {
@@ -117,7 +187,20 @@ export function ThemeProvider({ children }) {
     isExplicit: explicit,
     setTheme: choose,
     toggleTheme,
-  }), [theme, explicit, choose, toggleTheme]);
+    palette,
+    setPalette,
+    customAccent,
+    setCustomAccent,
+    /** The animated layer to draw, or null. */
+    ambient: ambientOn ? (getPalette(palette)?.ambient || null) : null,
+    ambientOn,
+    setAmbient,
+    mascotOn,
+    setMascot,
+  }), [
+    theme, explicit, choose, toggleTheme, palette, setPalette, customAccent,
+    setCustomAccent, ambientOn, setAmbient, mascotOn, setMascot,
+  ]);
 
   return (
     <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

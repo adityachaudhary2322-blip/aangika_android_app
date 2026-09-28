@@ -318,8 +318,28 @@ export async function migrateFromVocab(vocab) {
   return { migrated, skipped };
 }
 
+/**
+ * My signs holds only what the user taught. Earlier builds seeded it with
+ * untrained placeholders from vocab.json (NAMASTE, HELLO, MY, ADITYA); those
+ * belong with the normal words, so remove any the user never recorded. A
+ * placeholder the user DID record samples for is theirs now and stays.
+ */
+export async function prunePlaceholders() {
+  await init();
+  const removed = [];
+  for (const r of [...cache.values()]) {
+    if (r.migratedFrom === 'vocab.json' && !r.samples?.length) {
+      cache.delete(r.id);
+      await deleteRecord(r.id);
+      removed.push(r.token);
+    }
+  }
+  if (removed.length) emit();
+  return removed;
+}
+
 export default {
-  init, listSigns, getSign, findByToken, saveSign, deleteSign, exportJSON,
+  init, listSigns, prunePlaceholders, getSign, findByToken, saveSign, deleteSign, exportJSON,
   importJSON, migrateFromVocab, subscribe, getVersion, textFor, tokenFromText,
   validate, setReservedTokens, isPersistent, OUTPUT_TYPES, WORD_CATEGORIES,
 };

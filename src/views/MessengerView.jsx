@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, Video, Send, UserPlus, Search, Check, CheckCheck, Clock,
-  X, Loader2, AlertTriangle, MessageSquare, AtSign, ShieldCheck,
+  X, Loader2, AlertTriangle, MessageSquare, AtSign, ShieldCheck, Hand, AudioLines,
 } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import { useCall } from '../context/CallContext.jsx';
@@ -43,7 +43,7 @@ function RoleTag({ role, className = '' }) {
         + ' ' + className
       }
     >
-      {signer ? '🤟' : '🗣️'} {signer ? 'Signer' : 'Speaker'}
+      {signer ? <Hand size={11} /> : <AudioLines size={11} />} {signer ? 'Signer' : 'Speaker'}
     </span>
   );
 }
@@ -106,15 +106,15 @@ function ProfileSetup({ onDone }) {
   return (
     <div className="flex h-full flex-col overflow-y-auto px-5 no-scrollbar">
       <header className="pb-2 pt-4">
-        <h1 className="text-2xl font-extrabold tracking-tight">Messages</h1>
+        <h1 className="display text-3xl">Messages</h1>
       </header>
 
       <form onSubmit={submit} className="my-auto flex flex-col gap-4 py-4">
         <div className="text-center">
-          <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-primary to-secondary text-3xl shadow-glow">
-            <span aria-hidden="true">💬</span>
+          <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-fill-a to-fill-b text-white shadow-glow">
+            <MessageSquare size={28} strokeWidth={1.8} />
           </span>
-          <h2 className="mt-4 text-xl font-extrabold tracking-tight">
+          <h2 className="display mt-4 text-2xl">
             Chat and call in sign
           </h2>
           <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-ink-dim">
@@ -169,7 +169,7 @@ function ProfileSetup({ onDone }) {
               <RolePick
                 active={role === store.ROLE_SIGNER}
                 onClick={() => setRole(store.ROLE_SIGNER)}
-                emoji="🤟"
+                Icon={Hand}
                 title="Signer"
                 detail="Deaf / hard of hearing"
                 tone="primary"
@@ -177,7 +177,7 @@ function ProfileSetup({ onDone }) {
               <RolePick
                 active={role === store.ROLE_SPEAKER}
                 onClick={() => setRole(store.ROLE_SPEAKER)}
-                emoji="🗣️"
+                Icon={AudioLines}
                 title="Speaker"
                 detail="Hearing"
                 tone="secondary"
@@ -203,7 +203,7 @@ function ProfileSetup({ onDone }) {
   );
 }
 
-function RolePick({ active, onClick, emoji, title, detail, tone }) {
+function RolePick({ active, onClick, Icon, title, detail, tone }) {
   const ring = tone === 'primary'
     ? 'border-primary bg-primary/10 text-primary'
     : 'border-secondary bg-secondary/10 text-secondary';
@@ -217,7 +217,7 @@ function RolePick({ active, onClick, emoji, title, detail, tone }) {
         + (active ? ring : 'border-transparent bg-card-high text-ink-dim hover:border-subtle')
       }
     >
-      <span className="text-lg">{emoji}</span>
+      <Icon size={18} />
       <span className="mt-0.5 block text-sm font-semibold">{title}</span>
       <span className="block text-[10px] opacity-80">{detail}</span>
     </button>
@@ -251,7 +251,7 @@ function AddFriend({ onClose, onAdded }) {
       >
         <span aria-hidden="true" className="mx-auto mb-3 block h-1 w-10 rounded-full bg-card-highest sm:hidden" />
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-extrabold tracking-tight">Add a friend</h2>
+          <h2 className="display text-xl">Add a friend</h2>
           <button
             type="button"
             onClick={onClose}
@@ -293,12 +293,12 @@ function AddFriend({ onClose, onAdded }) {
           <RolePick
             active={role === store.ROLE_SIGNER}
             onClick={() => setRole(store.ROLE_SIGNER)}
-            emoji="🤟" title="Signer" detail="Deaf / HoH" tone="primary"
+            Icon={Hand} title="Signer" detail="Deaf / HoH" tone="primary"
           />
           <RolePick
             active={role === store.ROLE_SPEAKER}
             onClick={() => setRole(store.ROLE_SPEAKER)}
-            emoji="🗣️" title="Speaker" detail="Hearing" tone="secondary"
+            Icon={AudioLines} title="Speaker" detail="Hearing" tone="secondary"
           />
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-ink-dim">
@@ -396,7 +396,7 @@ export default function MessengerView({ onChatOpenChange }) {
     <div className="relative flex h-full flex-col overflow-hidden">
       {/* ── App bar ──────────────────────────────────────────────── */}
       <header className={'items-center gap-2 px-5 pb-2 pt-4 ' + (active ? 'hidden sm:flex' : 'flex')}>
-        <h1 className="text-2xl font-extrabold tracking-tight">Messages</h1>
+        <h1 className="display text-3xl">Messages</h1>
         <span className={'pill border-subtle bg-card ' + regTone}>
           {registration === 'connecting'
             ? <Loader2 size={11} className="animate-spin" />
@@ -499,8 +499,8 @@ export default function MessengerView({ onChatOpenChange }) {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
                     <span className="truncate text-sm font-semibold">{c.name}</span>
-                    <span className="shrink-0 text-xs">
-                      {c.role === store.ROLE_SPEAKER ? '🗣️' : '🤟'}
+                    <span className="shrink-0 text-ink-dim">
+                      {c.role === store.ROLE_SPEAKER ? <AudioLines size={12} /> : <Hand size={12} />}
                     </span>
                     <span className="ml-auto shrink-0 text-[10px] text-ink-dim">
                       {timeString(c.lastAt)}
@@ -586,7 +586,7 @@ export default function MessengerView({ onChatOpenChange }) {
                   title={registration === 'online'
                     ? `Call ${contact.name}`
                     : 'Not registered yet'}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[rgb(124_58_237)] to-[rgb(79_70_229)] text-white shadow-glow transition active:scale-90 disabled:opacity-40"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-fill-a to-fill-b text-white shadow-glow transition active:scale-90 disabled:opacity-40"
                 >
                   <Video size={18} />
                 </button>
@@ -622,7 +622,7 @@ export default function MessengerView({ onChatOpenChange }) {
                   type="submit"
                   disabled={!draft.trim()}
                   aria-label="Send"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[rgb(124_58_237)] to-[rgb(79_70_229)] text-white shadow-glow transition active:scale-90 disabled:opacity-40"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-fill-a to-fill-b text-white shadow-glow transition active:scale-90 disabled:opacity-40"
                 >
                   <Send size={17} />
                 </button>
@@ -655,7 +655,7 @@ function Bubble({ message }) {
         className={
           'max-w-[78%] rounded-3xl px-3.5 py-2 text-sm shadow-card '
           + (out
-            ? 'rounded-br-md bg-gradient-to-br from-[rgb(124_58_237)] to-[rgb(79_70_229)] text-white'
+            ? 'rounded-br-md bg-gradient-to-br from-fill-a to-fill-b text-white'
             : 'rounded-bl-md border border-subtle bg-card text-ink')
         }
       >

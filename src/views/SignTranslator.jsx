@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, Volume2, Copy, Eraser, FlipHorizontal, Waypoints, Loader2, Play, Hand,
+  BookmarkPlus, Languages as LanguagesIcon, X, Quote,
 } from 'lucide-react';
 import CameraStage from '../components/CameraStage.jsx';
 import LandmarkCanvas from '../components/LandmarkCanvas.jsx';
@@ -9,6 +10,8 @@ import EngineToggle from '../components/EngineToggle.jsx';
 import EngineBadge from '../components/EngineBadge.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
+import useTokenStream from '../hooks/useTokenStream.js';
+import { matchPhrase, phraseText, setDraft } from '../services/phrases.js';
 import cameraManager from '../services/cameraManager.js';
 import landmarker from '../services/landmarker.js';
 import { getKeys } from '../services/translator.js';
@@ -44,6 +47,34 @@ export default function SignTranslator({
     language,
     mode,
   });
+
+  // ── Continuous signing ────────────────────────────────────────────────
+  // Every recognised sign joins a running sentence. A saved phrase that the
+  // sentence completes is spoken as the user's own meaning.
+  const { stream, reset: resetStream, removeAt } = useTokenStream(words, { enabled: started });
+  const [phraseHit, setPhraseHit] = useState(null);
+  const firedRef = useRef(0);
+  useEffect(() => {
+    const last = stream[stream.length - 1];
+    if (!last || last.at === firedRef.current) return;
+    const hit = matchPhrase(stream);
+    if (!hit) return;
+    firedRef.current = last.at;
+    phraseText(hit, language).then((text) => {
+      setPhraseHit({ phrase: hit, text });
+      speak(text, language);
+    });
+  }, [stream, language]);
+
+  const sentenceTokens = stream.map((e) => e.token);
+  const translateSentence = () => {
+    setManualTags(null);
+    build(sentenceTokens);
+  };
+  const saveAsPhrase = () => {
+    setDraft(sentenceTokens);
+    onNavigate?.('phrases');
+  };
 
   /**
    * The one gesture that unlocks audio for the session.
@@ -130,9 +161,9 @@ export default function SignTranslator({
   };
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative flex h-full flex-col lg:flex-row lg:gap-4 lg:p-4">
       {/* ── Camera ─────────────────────────────────────────────────── */}
-      <div className="relative flex-1 overflow-hidden">
+      <div className="relative flex-1 overflow-hidden lg:rounded-3xl lg:border lg:border-subtle lg:shadow-card">
         <CameraStage className="absolute inset-0" />
         {showMesh && <LandmarkCanvas frameRef={frameRef} mirrored={mirrored} />}
 
@@ -215,9 +246,9 @@ export default function SignTranslator({
             <button
               type="button"
               onClick={startTranslating}
-              className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary shadow-glow active:scale-95"
+              className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-fill-a to-fill-b shadow-glow active:scale-95"
             >
-              <Play size={38} className="ml-1 text-surface" />
+              <Play size={38} className="ml-1 text-white" />
             </button>
             <p className="text-sm font-semibold">Start translating</p>
             <p className="max-w-xs text-[11px] leading-relaxed text-ink-dim">
@@ -280,11 +311,9 @@ export default function SignTranslator({
       </div>
 
       {/* ── Glass interpretation card ──────────────────────────────── */}
-      <section className="glass rounded-t-3xl p-4">
+      <section className="glass max-h-[55%] overflow-y-auto rounded-t-3xl p-4 no-scrollbar lg:max-h-none lg:w-[400px] lg:shrink-0 lg:rounded-3xl lg:p-5">
         <div className="flex items-center">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
-            Live Interpretation
-          </span>
+          <span className="eyebrow">Live interpretation</span>
           <span className="ml-auto text-xs font-semibold text-primary">
             {confidence.toFixed(1)}% confidence
           </span>
@@ -296,6 +325,64 @@ export default function SignTranslator({
             style={{ width: `${Math.min(confidence, 100)}%` }}
           />
         </div>
+
+        {/* Continuous signing: the sentence being built, sign by sign. */}
+        {started && (
+          <div className="mt-3 rounded-2xl border border-subtle bg-card/70 p-3">
+            <div className="flex items-center gap-2">
+              <span className="eyebrow">Sentence so far</span>
+              {stream.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { resetStream(); setPhraseHit(null); }}
+                  className="ml-auto text-[11px] font-semibold text-ink-dim hover:text-ink"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {stream.length === 0 && (
+                <span className="text-xs text-ink-dim">Sign several words in a row.</span>
+              )}
+              {stream.map((e, i) => (
+                <button
+                  key={`${e.token}-${e.at}`}
+                  type="button"
+                  onClick={() => removeAt(i)}
+                  title="Remove this sign"
+                  className="pill animate-fade-up border-subtle bg-card-high text-ink"
+                >
+                  {e.token.replace(/_+/g, ' ').toLowerCase()} <X size={10} className="text-ink-dim" />
+                </button>
+              ))}
+            </div>
+            {stream.length > 1 && (
+              <div className="mt-3 flex gap-2">
+                <button type="button" onClick={translateSentence} disabled={busy} className="btn-quiet flex-1 py-2 text-xs">
+                  <LanguagesIcon size={14} /> Translate sentence
+                </button>
+                {onNavigate && (
+                  <button type="button" onClick={saveAsPhrase} className="btn-quiet flex-1 py-2 text-xs">
+                    <BookmarkPlus size={14} /> Save as phrase
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {phraseHit && (
+          <div className="mt-3 animate-fade-up rounded-2xl border border-primary/40 bg-primary/10 px-3 py-2">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+              <Quote size={11} /> Your phrase
+            </p>
+            <p className="mt-0.5 text-lg font-bold leading-snug">{phraseHit.text}</p>
+            <p className="text-[11px] text-ink-dim">
+              {phraseHit.phrase.tokens.join(' · ')}
+            </p>
+          </div>
+        )}
 
         {/* Auto-speech: what the app said aloud, without being asked. */}
         {spoken && (
@@ -364,7 +451,9 @@ export default function SignTranslator({
           </button>
           <button
             type="button"
-            onClick={() => { clear(); setResult(null); setManualTags(null); }}
+            onClick={() => {
+              clear(); setResult(null); setManualTags(null); resetStream(); setPhraseHit(null);
+            }}
             className="flex h-9 w-9 items-center justify-center rounded-lg bg-card-high"
           >
             <Eraser size={15} />
@@ -374,11 +463,11 @@ export default function SignTranslator({
             type="button"
             onClick={play}
             disabled={!result || speaking}
-            className="ml-auto flex h-13 w-13 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary p-4 disabled:opacity-40"
+            className="ml-auto flex h-13 w-13 items-center justify-center rounded-full bg-gradient-to-br from-fill-a to-fill-b p-4 disabled:opacity-40"
           >
             {speaking
-              ? <Loader2 size={20} className="animate-spin text-surface" />
-              : <Volume2 size={20} className="text-surface" />}
+              ? <Loader2 size={20} className="animate-spin text-white" />
+              : <Volume2 size={20} className="text-white" />}
           </button>
         </div>
 

@@ -34,6 +34,11 @@ export default {
         primary: themed('--accent-brand'),
         secondary: themed('--accent-cyan'),
         amber: themed('--accent-amber'),
+        // Deep gradient stops that carry white text in every palette.
+        'fill-a': themed('--fill-a'),
+        'fill-b': themed('--fill-b'),
+        'fill-c': themed('--fill-c'),
+        'fill-d': themed('--fill-d'),
         rose: themed('--accent-rose'),
 
         // Type.
@@ -50,11 +55,12 @@ export default {
         strong: themed('--border-strong'),
       },
       boxShadow: {
-        glow: '0 0 24px -4px rgb(var(--accent-brand) / 0.45)',
-        'glow-cyan': '0 0 24px -4px rgb(var(--accent-cyan) / 0.45)',
+        glow: '0 10px 30px -12px rgb(var(--fill-a) / 0.55)',
+        'glow-cyan': '0 10px 30px -12px rgb(var(--fill-c) / 0.55)',
         card: 'var(--shadow-card)',
       },
       fontFamily: {
+        display: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
         sans: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },

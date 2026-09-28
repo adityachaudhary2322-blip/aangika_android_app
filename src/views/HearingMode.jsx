@@ -194,11 +194,11 @@ export default function HearingMode({ language, online, onBack }) {
   return (
     <div className="relative flex h-full flex-col px-5">
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <header className="flex items-center gap-2 pb-3 pt-4">
-        <button type="button" onClick={onBack} aria-label="Back" className="flex h-9 w-9 items-center justify-center rounded-full border border-subtle bg-card">
+      <header className="flex items-center gap-2 pb-3 pt-4 lg:pt-6">
+        <button type="button" onClick={onBack} aria-label="Back" className="btn-icon lg:hidden">
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-lg font-extrabold tracking-tight">Speech to text</h1>
+        <h1 className="display text-2xl">Speech to text</h1>
         <button
           type="button"
           onClick={() => setLargeFont((v) => !v)}
@@ -314,7 +314,7 @@ export default function HearingMode({ language, online, onBack }) {
             type="submit"
             disabled={!draft.trim()}
             aria-label="Speak reply"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[rgb(124_58_237)] to-[rgb(79_70_229)] text-white shadow-glow transition active:scale-90 disabled:opacity-40"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-fill-a to-fill-b text-white shadow-glow transition active:scale-90 disabled:opacity-40"
           >
             <Send size={17} />
           </button>
@@ -345,7 +345,7 @@ export default function HearingMode({ language, online, onBack }) {
                 'relative flex h-20 w-20 items-center justify-center rounded-full text-white transition ' +
                 (recording
                   ? 'scale-105 bg-rose shadow-[0_0_30px_-4px_rgba(244,63,94,0.7)]'
-                  : 'bg-gradient-to-br from-[rgb(13_148_136)] to-[rgb(14_116_144)] shadow-glow-cyan')
+                  : 'bg-gradient-to-br from-fill-c to-fill-d shadow-glow-cyan')
               }
               style={recording ? { transform: `scale(${1.05 + level * 0.15})` } : undefined}
             >
