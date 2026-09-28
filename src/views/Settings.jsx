@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, KeyRound, ShieldAlert, Check } from 'lucide-react';
+import { KeyRound, ShieldAlert, Check } from 'lucide-react';
 import { getKeys, setKey } from '../services/translator.js';
 import { getTurnCredentials, setTurnCredentials } from '../services/iceConfig.js';
 import {
@@ -34,12 +34,9 @@ export default function Settings({
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto px-4 no-scrollbar">
-      <header className="flex items-center gap-2 py-3">
-        <button type="button" onClick={onBack} className="flex h-9 w-9 items-center justify-center rounded-full bg-card-high">
-          <ArrowLeft size={18} />
-        </button>
-        <h1 className="text-lg font-bold">Settings</h1>
+    <div className="flex h-full flex-col overflow-y-auto px-5 no-scrollbar">
+      <header className="flex items-center gap-2 pb-3 pt-4">
+        <h1 className="text-2xl font-extrabold tracking-tight">Settings</h1>
         <div className="ml-auto">
           <ThemeToggle />
         </div>

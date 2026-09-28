@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, Video, Send, UserPlus, Search, Check, CheckCheck, Clock,
-  Settings as SettingsIcon, X, Loader2, AlertTriangle, MessageSquare,
+  X, Loader2, AlertTriangle, MessageSquare, AtSign, ShieldCheck,
 } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import { useCall } from '../context/CallContext.jsx';
@@ -78,10 +78,12 @@ function Avatar({ name, role, online, size = 'md' }) {
   );
 }
 
-// ── Profile gate ─────────────────────────────────────────────────────────────
+// ── Profile setup ────────────────────────────────────────────────────────────
 
 /**
- * First run. Nothing works without a handle, because the handle IS the peer id.
+ * Shown inside the Messages tab until a profile exists. The rest of the app
+ * works without one; only chat and calls need a handle, because the handle IS
+ * the peer id.
  */
 function ProfileSetup({ onDone }) {
   const [name, setName] = useState('');
@@ -102,86 +104,102 @@ function ProfileSetup({ onDone }) {
   }
 
   return (
-    <form onSubmit={submit} className="flex h-full flex-col justify-center gap-4 px-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Set up your profile</h1>
-        <p className="mt-1 text-xs text-ink-dim">
-          Your handle is your address. Friends call you by typing it — there are
-          no room codes to share.
-        </p>
-      </div>
+    <div className="flex h-full flex-col overflow-y-auto px-5 no-scrollbar">
+      <header className="pb-2 pt-4">
+        <h1 className="text-2xl font-extrabold tracking-tight">Messages</h1>
+      </header>
 
-      <div className="surface-card p-4">
-        <label className="block text-xs font-semibold uppercase tracking-wider text-ink-dim">
-          Display name
-        </label>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Asha Kumar"
-          className="mt-2 w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm outline-none focus:border-secondary"
-        />
-
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wider text-ink-dim">
-          Handle
-        </label>
-        <input
-          value={handle}
-          onChange={(e) => { setHandle(e.target.value); setError(null); }}
-          placeholder="asha"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          className="mt-2 w-full rounded-lg border border-subtle bg-surface px-3 py-2 font-mono text-sm outline-none focus:border-secondary"
-        />
-        <p className="mt-1.5 text-[11px] text-ink-dim">
-          Lowercase letters, digits and underscores.
-          {preview && (
-            <>
-              {' '}You will be reachable as{' '}
-              <code className="rounded bg-card-high px-1 py-0.5 font-mono text-primary">
-                {store.peerIdFor(preview)}
-              </code>
-            </>
-          )}
-        </p>
-
-        <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-ink-dim">
-          I am a
-        </p>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <RolePick
-            active={role === store.ROLE_SIGNER}
-            onClick={() => setRole(store.ROLE_SIGNER)}
-            emoji="🤟"
-            title="Signer"
-            detail="Deaf / hard of hearing"
-            tone="primary"
-          />
-          <RolePick
-            active={role === store.ROLE_SPEAKER}
-            onClick={() => setRole(store.ROLE_SPEAKER)}
-            emoji="🗣️"
-            title="Speaker"
-            detail="Hearing"
-            tone="secondary"
-          />
+      <form onSubmit={submit} className="my-auto flex flex-col gap-4 py-4">
+        <div className="text-center">
+          <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-primary to-secondary text-3xl shadow-glow">
+            <span aria-hidden="true">💬</span>
+          </span>
+          <h2 className="mt-4 text-xl font-extrabold tracking-tight">
+            Chat and call in sign
+          </h2>
+          <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-ink-dim">
+            Pick a handle so friends can reach you. It is your address:
+            no room codes, no accounts, nothing stored on a server.
+          </p>
         </div>
-      </div>
 
-      {error && (
-        <p className="flex items-center gap-2 rounded-xl border border-rose/40 bg-rose/10 px-3 py-2 text-xs text-rose">
-          <AlertTriangle size={14} /> {error}
+        <div className="surface-card space-y-4 p-4">
+          <div>
+            <label htmlFor="profile-name" className="eyebrow">Display name</label>
+            <input
+              id="profile-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Asha Kumar"
+              className="field mt-2"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="profile-handle" className="eyebrow">Handle</label>
+            <div className="relative mt-2">
+              <AtSign size={15} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-dim" />
+              <input
+                id="profile-handle"
+                value={handle}
+                onChange={(e) => { setHandle(e.target.value); setError(null); }}
+                placeholder="asha"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                className="field pl-10 font-mono"
+              />
+            </div>
+            <p className="mt-1.5 text-[11px] text-ink-dim">
+              Lowercase letters, digits and underscores.
+              {preview && (
+                <>
+                  {' '}You will be reachable as{' '}
+                  <code className="rounded-md bg-card-high px-1 py-0.5 font-mono text-primary">
+                    {store.peerIdFor(preview)}
+                  </code>
+                </>
+              )}
+            </p>
+          </div>
+
+          <div>
+            <p className="eyebrow">I am a</p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <RolePick
+                active={role === store.ROLE_SIGNER}
+                onClick={() => setRole(store.ROLE_SIGNER)}
+                emoji="🤟"
+                title="Signer"
+                detail="Deaf / hard of hearing"
+                tone="primary"
+              />
+              <RolePick
+                active={role === store.ROLE_SPEAKER}
+                onClick={() => setRole(store.ROLE_SPEAKER)}
+                emoji="🗣️"
+                title="Speaker"
+                detail="Hearing"
+                tone="secondary"
+              />
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <p className="flex items-center gap-2 rounded-2xl border border-rose/40 bg-rose/10 px-4 py-2.5 text-xs text-rose">
+            <AlertTriangle size={14} /> {error}
+          </p>
+        )}
+
+        <button type="submit" className="btn-primary w-full py-3.5">
+          Start messaging
+        </button>
+        <p className="flex items-center justify-center gap-1.5 text-[11px] text-ink-dim">
+          <ShieldCheck size={12} /> Peer-to-peer. Your chats stay on this device.
         </p>
-      )}
-
-      <button
-        type="submit"
-        className="rounded-xl bg-primary py-3 font-semibold text-white"
-      >
-        Start messaging
-      </button>
-    </form>
+      </form>
+    </div>
   );
 }
 
@@ -195,8 +213,8 @@ function RolePick({ active, onClick, emoji, title, detail, tone }) {
       onClick={onClick}
       aria-pressed={active}
       className={
-        'rounded-xl border p-3 text-left '
-        + (active ? ring : 'border-subtle bg-card-high text-ink-dim')
+        'rounded-2xl border-2 p-3 text-left transition '
+        + (active ? ring : 'border-transparent bg-card-high text-ink-dim hover:border-subtle')
       }
     >
       <span className="text-lg">{emoji}</span>
@@ -226,13 +244,14 @@ function AddFriend({ onClose, onAdded }) {
   }
 
   return (
-    <div className="absolute inset-0 z-40 flex items-end bg-black/50 sm:items-center sm:justify-center">
+    <div className="absolute inset-0 z-40 flex items-end bg-black/40 backdrop-blur-sm sm:items-center sm:justify-center">
       <form
         onSubmit={submit}
-        className="w-full rounded-t-3xl bg-card p-4 sm:max-w-sm sm:rounded-3xl"
+        className="w-full animate-fade-up rounded-t-[2rem] border border-subtle bg-card p-5 shadow-card sm:max-w-sm sm:rounded-[2rem]"
       >
+        <span aria-hidden="true" className="mx-auto mb-3 block h-1 w-10 rounded-full bg-card-highest sm:hidden" />
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-bold">Add a friend</h2>
+          <h2 className="text-lg font-extrabold tracking-tight">Add a friend</h2>
           <button
             type="button"
             onClick={onClose}
@@ -243,7 +262,7 @@ function AddFriend({ onClose, onAdded }) {
           </button>
         </div>
 
-        <label className="mt-3 block text-xs font-semibold uppercase tracking-wider text-ink-dim">
+        <label className="eyebrow mt-4 block">
           Their handle
         </label>
         <input
@@ -254,20 +273,20 @@ function AddFriend({ onClose, onAdded }) {
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          className="mt-2 w-full rounded-lg border border-subtle bg-surface px-3 py-2 font-mono text-sm outline-none focus:border-secondary"
+          className="field mt-2 font-mono"
         />
 
-        <label className="mt-3 block text-xs font-semibold uppercase tracking-wider text-ink-dim">
+        <label className="eyebrow mt-4 block">
           Name (optional)
         </label>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Ravi"
-          className="mt-2 w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm outline-none focus:border-secondary"
+          className="field mt-2"
         />
 
-        <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-ink-dim">
+        <p className="eyebrow mt-4">
           They are a
         </p>
         <div className="mt-2 grid grid-cols-2 gap-2">
@@ -293,10 +312,7 @@ function AddFriend({ onClose, onAdded }) {
           </p>
         )}
 
-        <button
-          type="submit"
-          className="mt-4 w-full rounded-xl bg-primary py-3 font-semibold text-white"
-        >
+        <button type="submit" className="btn-primary mt-5 w-full py-3.5">
           Add contact
         </button>
       </form>
@@ -306,7 +322,7 @@ function AddFriend({ onClose, onAdded }) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-export default function MessengerView({ onNavigate }) {
+export default function MessengerView({ onChatOpenChange }) {
   const {
     profile, registration, regError, placeCall, sendChat, isOnline,
     revision, openChannel, call, diagnostic, setDiagnostic,
@@ -346,6 +362,11 @@ export default function MessengerView({ onNavigate }) {
     openChannel(active);
   }, [active, openChannel]);
 
+  useEffect(() => {
+    onChatOpenChange?.(Boolean(active));
+    return () => onChatOpenChange?.(false);
+  }, [active, onChatOpenChange]);
+
   // Pin to the newest message. Chat that does not auto-scroll reads as broken.
   useEffect(() => {
     const el = scrollRef.current;
@@ -365,7 +386,7 @@ export default function MessengerView({ onNavigate }) {
   }
 
   const regTone = {
-    online: 'text-primary',
+    online: 'text-secondary',
     connecting: 'text-amber',
     error: 'text-rose',
     idle: 'text-ink-dim',
@@ -374,27 +395,22 @@ export default function MessengerView({ onNavigate }) {
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
       {/* ── App bar ──────────────────────────────────────────────── */}
-      <header className="flex items-center gap-2 px-4 py-3">
-        <h1 className="text-lg font-bold">Aangika</h1>
-        <span className={'pill border-subtle ' + regTone}>
-          {registration === 'connecting' && <Loader2 size={11} className="animate-spin" />}
-          {registration === 'online' ? 'ONLINE' : registration.toUpperCase()}
+      <header className={'items-center gap-2 px-5 pb-2 pt-4 ' + (active ? 'hidden sm:flex' : 'flex')}>
+        <h1 className="text-2xl font-extrabold tracking-tight">Messages</h1>
+        <span className={'pill border-subtle bg-card ' + regTone}>
+          {registration === 'connecting'
+            ? <Loader2 size={11} className="animate-spin" />
+            : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+          {registration === 'online' ? 'Online'
+            : registration.charAt(0).toUpperCase() + registration.slice(1)}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onNavigate('dashboard')}
-            aria-label="Tools"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-card-high"
-          >
-            <SettingsIcon size={16} />
-          </button>
           <ThemeToggle />
         </div>
       </header>
 
       {regError && (
-        <p className="mx-4 mb-2 flex items-start gap-2 rounded-xl border border-rose/40 bg-rose/10 px-3 py-2 text-xs text-rose">
+        <p className="mx-4 mb-2 flex items-start gap-2 rounded-2xl border border-rose/40 bg-rose/10 px-3 py-2 text-xs text-rose">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <span>{regError.message}</span>
         </p>
@@ -406,7 +422,7 @@ export default function MessengerView({ onNavigate }) {
       {diagnostic && call.status === 'idle' && (
         <div
           className={
-            'mx-4 mb-2 flex items-start gap-2 rounded-xl border px-3 py-2 text-xs '
+            'mx-4 mb-2 flex items-start gap-2 rounded-2xl border px-3 py-2 text-xs '
             + (diagnostic.tone === 'error'
               ? 'border-rose/40 bg-rose/10 text-rose'
               : 'border-amber/40 bg-amber/10 text-amber')
@@ -434,8 +450,8 @@ export default function MessengerView({ onNavigate }) {
           }
         >
           <div className="px-4 pb-2">
-            <div className="flex items-center gap-2 rounded-xl border border-subtle bg-card-high px-3 py-2">
-              <Search size={14} className="text-ink-dim" />
+            <div className="flex items-center gap-2 rounded-2xl border border-subtle bg-card px-4 py-2.5 shadow-card transition focus-within:border-primary">
+              <Search size={15} className="text-ink-dim" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -445,7 +461,7 @@ export default function MessengerView({ onNavigate }) {
             </div>
             <p className="mt-2 text-[11px] text-ink-dim">
               You are{' '}
-              <code className="rounded bg-card-high px-1 py-0.5 font-mono text-primary">
+              <code className="rounded-md bg-primary/10 px-1.5 py-0.5 font-mono font-semibold text-primary">
                 @{profile.handle}
               </code>
               {' · '}share that, not a code.
@@ -454,11 +470,19 @@ export default function MessengerView({ onNavigate }) {
 
           <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-2">
             {filtered.length === 0 && (
-              <p className="px-2 py-8 text-center text-xs text-ink-dim">
-                {contacts.length === 0
-                  ? 'No contacts yet. Add a friend by their handle.'
-                  : 'Nobody matches that search.'}
-              </p>
+              <div className="flex flex-col items-center px-4 py-10 text-center">
+                <span className="icon-well h-14 w-14 rounded-3xl bg-primary/10 text-primary">
+                  <UserPlus size={22} />
+                </span>
+                <p className="mt-3 text-sm font-semibold">
+                  {contacts.length === 0 ? 'No contacts yet' : 'No matches'}
+                </p>
+                <p className="mt-1 text-xs text-ink-dim">
+                  {contacts.length === 0
+                    ? 'Add a friend by their handle to start chatting.'
+                    : 'Nobody matches that search.'}
+                </p>
+              </div>
             )}
 
             {filtered.map((c) => (
@@ -467,7 +491,7 @@ export default function MessengerView({ onNavigate }) {
                 type="button"
                 onClick={() => setActive(c.handle)}
                 className={
-                  'flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left '
+                  'flex w-full items-center gap-3 rounded-2xl px-2.5 py-2.5 text-left transition hover:bg-card-high/70 '
                   + (c.handle === active ? 'bg-card-high' : '')
                 }
               >
@@ -501,7 +525,7 @@ export default function MessengerView({ onNavigate }) {
             <button
               type="button"
               onClick={() => setAdding(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-white"
+              className="btn-primary w-full"
             >
               <UserPlus size={16} /> Add friend
             </button>
@@ -527,7 +551,7 @@ export default function MessengerView({ onNavigate }) {
           ) : (
             <>
               {/* Chat header, with the call button */}
-              <header className="flex items-center gap-2 border-b border-subtle px-3 py-2.5">
+              <header className="glass flex items-center gap-2 border-x-0 border-t-0 px-3 py-2.5">
                 <button
                   type="button"
                   onClick={() => setActive(null)}
@@ -562,7 +586,7 @@ export default function MessengerView({ onNavigate }) {
                   title={registration === 'online'
                     ? `Call ${contact.name}`
                     : 'Not registered yet'}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-glow transition active:scale-90 disabled:opacity-40"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[rgb(124_58_237)] to-[rgb(79_70_229)] text-white shadow-glow transition active:scale-90 disabled:opacity-40"
                 >
                   <Video size={18} />
                 </button>
@@ -575,7 +599,7 @@ export default function MessengerView({ onNavigate }) {
               >
                 {thread.length === 0 && (
                   <p className="py-8 text-center text-xs text-ink-dim">
-                    No messages yet. Say hello, or tap the green button to call.
+                    No messages yet. Say hello, or tap the camera button to call.
                   </p>
                 )}
                 {thread.map((m) => (
@@ -586,19 +610,19 @@ export default function MessengerView({ onNavigate }) {
               {/* Composer */}
               <form
                 onSubmit={submitDraft}
-                className="flex items-center gap-2 border-t border-subtle px-3 py-2.5"
+                className="flex items-center gap-2 px-3 pb-3 pt-2"
               >
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder={`Message ${contact.name}`}
-                  className="min-w-0 flex-1 rounded-full border border-subtle bg-card-high px-4 py-2.5 text-sm outline-none focus:border-secondary"
+                  className="min-w-0 flex-1 rounded-full border border-subtle bg-card px-4 py-3 text-sm shadow-card outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15"
                 />
                 <button
                   type="submit"
                   disabled={!draft.trim()}
                   aria-label="Send"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-white transition active:scale-90 disabled:opacity-40"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[rgb(124_58_237)] to-[rgb(79_70_229)] text-white shadow-glow transition active:scale-90 disabled:opacity-40"
                 >
                   <Send size={17} />
                 </button>
@@ -629,14 +653,14 @@ function Bubble({ message }) {
     <div className={'flex ' + (out ? 'justify-end' : 'justify-start')}>
       <div
         className={
-          'max-w-[78%] rounded-2xl px-3 py-2 text-sm '
+          'max-w-[78%] rounded-3xl px-3.5 py-2 text-sm shadow-card '
           + (out
-            ? 'rounded-br-sm bg-primary/15 text-ink'
-            : 'rounded-bl-sm bg-card-high text-ink')
+            ? 'rounded-br-md bg-gradient-to-br from-[rgb(124_58_237)] to-[rgb(79_70_229)] text-white'
+            : 'rounded-bl-md border border-subtle bg-card text-ink')
         }
       >
         <p className="whitespace-pre-wrap break-words leading-snug">{message.text}</p>
-        <p className="mt-0.5 flex items-center justify-end gap-1 text-[9px] text-ink-dim">
+        <p className={'mt-0.5 flex items-center justify-end gap-1 text-[9px] ' + (out ? 'text-white/75' : 'text-ink-dim')}>
           {timeString(message.at)}
           {out && message.status === store.PENDING && (
             <Clock size={10} aria-label="Queued — they are offline" />
@@ -645,7 +669,7 @@ function Bubble({ message }) {
             <CheckCheck size={11} aria-label="Delivered" />
           )}
           {out && message.status === store.FAILED && (
-            <Check size={11} className="text-rose" aria-label="Failed" />
+            <Check size={11} className={out ? 'text-rose-200' : 'text-rose'} aria-label="Failed" />
           )}
         </p>
       </div>

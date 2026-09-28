@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /**
- * Dual theme: Bright Pastel Light and Modern Deep Dark.
+ * Dual theme: Lavender Mist (light) and Midnight Ink (dark).
  *
  * Values are space-separated RGB channels, not hex or rgb() strings, so that
  * `rgb(var(--x) / <alpha-value>)` in tailwind.config.js keeps working and
@@ -11,61 +11,63 @@
  * the app at once, silently.
  *
  * LIGHT IS NOT "DARK WITH THE NUMBERS INVERTED". The accents move down the
- * ramp (emerald-700 rather than the dark theme's mint) because a colour chosen
+ * ramp (violet-600 rather than the dark theme's lighter violet) because a colour chosen
  * to glow on navy has roughly 1.5:1 contrast on white and is unreadable as
  * text. Every accent below was picked to clear 4.5:1 against its own theme's
  * page background AND to carry white/near-black text when used as a fill.
  */
 
 @layer base {
-  /* ── Bright Pastel Light ─────────────────────────────────────────────── */
+  /* ── Light: lavender mist ────────────────────────────────────────────── */
   :root {
     color-scheme: light;
 
-    --bg-main: 244 247 245; /* off-white, faint green cast */
+    --bg-main: 247 246 251; /* near-white, faint violet cast */
     --bg-surface: 255 255 255;
-    --bg-surface-high: 236 245 240;
-    --bg-surface-highest: 222 235 228;
-    --bg-deep: 231 240 235;
+    --bg-surface-high: 241 239 249;
+    --bg-surface-highest: 229 226 243;
+    --bg-deep: 236 234 246;
 
-    --text-primary: 15 23 42; /* slate-900  — 16.7:1 on --bg-main */
-    --text-muted: 71 85 105; /* slate-600  —  7.4:1 on --bg-main */
+    --text-primary: 24 22 43; /* 16:1 on --bg-main */
+    --text-muted: 92 88 118; /*  6.3:1 on --bg-main */
 
-    --accent-brand: 4 120 87; /* emerald-700 — 4.9:1, carries white text */
-    --accent-cyan: 14 116 144; /* cyan-700    — 4.9:1 */
-    --accent-amber: 180 83 9; /* amber-700   — 5.2:1 */
-    --accent-rose: 190 18 60; /* rose-700    — 6.4:1 */
+    --accent-brand: 124 58 237; /* violet-600 — 5.7:1, carries white text */
+    --accent-cyan: 15 118 110; /* teal-700   — 5.4:1 */
+    --accent-amber: 180 83 9; /* amber-700  — 5.2:1 */
+    --accent-rose: 190 18 60; /* rose-700   — 6.4:1 */
 
-    --border-subtle: 209 250 229; /* emerald-100 */
-    --border-strong: 167 243 208; /* emerald-200 */
+    --border-subtle: 233 230 245;
+    --border-strong: 214 209 237;
 
-    --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.06),
-      0 1px 3px 0 rgb(15 23 42 / 0.1);
+    --shadow-card: 0 1px 2px 0 rgb(24 22 43 / 0.04),
+      0 8px 24px -12px rgb(76 29 149 / 0.18);
   }
 
-  /* ── Modern Deep Dark ────────────────────────────────────────────────── */
+  /* ── Dark: midnight ink ──────────────────────────────────────────────── */
   /* Same specificity as :root, so this must stay BELOW it to win. */
   .dark {
     color-scheme: dark;
 
-    --bg-main: 11 19 38;
-    --bg-surface: 23 31 51;
-    --bg-surface-high: 34 42 61;
-    --bg-surface-highest: 45 52 73;
-    --bg-deep: 6 14 32;
+    --bg-main: 12 11 20;
+    --bg-surface: 22 20 35;
+    --bg-surface-high: 32 30 49;
+    --bg-surface-highest: 44 41 65;
+    --bg-deep: 7 6 14;
 
-    --text-primary: 226 232 240; /* slate-200 */
-    --text-muted: 148 163 184; /* slate-400 */
+    --text-primary: 236 234 246;
+    --text-muted: 160 156 186;
 
-    --accent-brand: 78 222 163;
-    --accent-cyan: 76 215 246;
-    --accent-amber: 245 158 11;
-    --accent-rose: 244 63 94;
+    /* Mid-ramp rather than pastel so white type on a filled button still
+       reads, while the colour clears 4.5:1 as text on the page. */
+    --accent-brand: 150 118 250;
+    --accent-cyan: 45 212 191;
+    --accent-amber: 251 191 36;
+    --accent-rose: 251 113 133;
 
-    /* white/10 and white/16 flattened against --bg-main. A translucent
-       hairline over live video reads as smear; a solid one does not. */
-    --border-subtle: 35 43 61;
-    --border-strong: 52 61 82;
+    /* Solid, not white-at-alpha: a translucent hairline over live video
+       reads as smear; a solid one does not. */
+    --border-subtle: 36 34 54;
+    --border-strong: 54 51 78;
 
     --shadow-card: 0 20px 25px -5px rgb(0 0 0 / 0.5),
       0 8px 10px -6px rgb(0 0 0 / 0.4);
@@ -80,9 +82,15 @@
   body {
     @apply bg-surface text-ink antialiased;
     margin: 0;
-    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-      'Noto Sans', 'Noto Sans Devanagari', 'Noto Sans Tamil',
-      'Noto Sans Bengali', sans-serif;
+    font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system,
+      'Segoe UI', Roboto, 'Noto Sans', 'Noto Sans Devanagari',
+      'Noto Sans Tamil', 'Noto Sans Bengali', sans-serif;
+    /* A soft wash of the brand colour behind everything, so empty space
+       reads as designed rather than blank. */
+    background-image:
+      radial-gradient(60rem 30rem at 110% -10%, rgb(var(--accent-brand) / 0.10), transparent 60%),
+      radial-gradient(40rem 24rem at -20% 110%, rgb(var(--accent-cyan) / 0.08), transparent 60%);
+    background-attachment: fixed;
     /* The app is a full-screen device UI; page-level scroll fights the layout. */
     overscroll-behavior: none;
     /* Only the palette animates, never layout, so the flip does not reflow. */
@@ -105,22 +113,43 @@
    * invisible and only the depth of the fill separates the layers.
    */
   .surface-card {
-    @apply rounded-2xl border border-emerald-100/80 bg-white/90 text-slate-900
-           shadow-sm dark:border-white/10 dark:bg-slate-900/85 dark:text-white
-           dark:shadow-2xl;
+    @apply rounded-3xl border border-subtle bg-card/90 text-ink shadow-card
+           backdrop-blur-sm;
   }
 
   .glass {
-    @apply border border-emerald-100/80 bg-white/80 backdrop-blur-md
-           dark:border-white/10 dark:bg-slate-900/80;
+    @apply border border-subtle bg-card/75 backdrop-blur-xl;
   }
 
   .tile {
-    @apply flex flex-col items-start gap-2 rounded-2xl border
-           border-emerald-100/80 bg-white/90 p-4 text-left text-slate-900
-           shadow-sm transition active:scale-[0.97]
-           dark:border-white/10 dark:bg-slate-900/85 dark:text-white
-           dark:shadow-2xl;
+    @apply flex flex-col items-start gap-2 rounded-3xl border border-subtle
+           bg-card/90 p-4 text-left text-ink shadow-card transition
+           duration-200 hover:-translate-y-0.5 hover:border-strong
+           active:scale-[0.97];
+  }
+
+  /** Rounded icon well used on tiles and list rows. */
+  .icon-well {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl;
+  }
+
+  /** Small uppercase section label. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim;
+  }
+
+  /** Text field shared by the forms. */
+  .field {
+    @apply w-full rounded-2xl border border-subtle bg-surface px-4 py-3 text-sm
+           outline-none transition placeholder:text-ink-dim/60
+           focus:border-primary focus:ring-4 focus:ring-primary/15;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl
+           bg-gradient-to-br from-[rgb(124_58_237)] to-[rgb(79_70_229)] px-4 py-3 text-sm
+           font-semibold text-white shadow-glow transition active:scale-[0.98]
+           disabled:opacity-40;
   }
 
   .pill {
@@ -179,6 +208,27 @@
   100% {
     transform: scale(1.6);
     opacity: 0;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up {
+    animation: none;
   }
 }
 

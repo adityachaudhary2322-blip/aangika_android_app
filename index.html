@@ -3,8 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0B1326" />
-    <title>ISL Connect</title>
+    <meta name="theme-color" content="#0C0B14" />
+    <title>Aangika — ISL Connect</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    />
     <script>
       /*
        * Paint the theme BEFORE React exists.
@@ -25,7 +31,7 @@
           document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
           document
             .querySelector('meta[name="theme-color"]')
-            .setAttribute('content', dark ? '#0B1326' : '#F4F7F5');
+            .setAttribute('content', dark ? '#0C0B14' : '#F7F6FB');
         } catch (e) {
           document.documentElement.classList.add('dark');
         }
