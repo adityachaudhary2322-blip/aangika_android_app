@@ -167,7 +167,7 @@ class RateLimiter:
 
 
 # --------------------------------------------------------------------- API
-def call_gemini(key, model, sys_prompt, sentences, limiter, retries=6):
+def call_gemini(key, model, sys_prompt, sentences, limiter, retries=10):
     body = {
         "system_instruction": {"parts": [{"text": sys_prompt}]},
         "contents": [{"role": "user", "parts": [{"text": "\n".join(
@@ -201,11 +201,11 @@ def call_gemini(key, model, sys_prompt, sentences, limiter, retries=6):
         except (urllib.error.URLError, TimeoutError, KeyError, ValueError,
                 json.JSONDecodeError) as e:
             last = f"{type(e).__name__}: {e}"
-        time.sleep(min(60, 2 ** attempt + random.random()))
+        time.sleep(min(60, 3 * 2 ** attempt + random.random()))
     raise RuntimeError(f"gave up after {retries} attempts: {last}")
 
 
-def gloss_many(sentences, model, rpm, workers, progress=True):
+def gloss_many(sentences, model, rpm, workers, progress=True, batch=BATCH):
     """Gloss every sentence not already cached. -> (cache dict, usage totals)."""
     cache = load_cache()
     todo = [s for s in sentences if cache_key(model, s) not in cache]
@@ -214,7 +214,7 @@ def gloss_many(sentences, model, rpm, workers, progress=True):
         return cache, usage
     key, sp = api_key(), system_prompt()
     limiter = RateLimiter(rpm)
-    batches = [todo[i:i + BATCH] for i in range(0, len(todo), BATCH)]
+    batches = [todo[i:i + batch] for i in range(0, len(todo), batch)]
     t0, done = time.time(), 0
 
     def work(batch):
@@ -266,7 +266,8 @@ def cmd_sample(args):
     sents = unique_sentences()
     rng = random.Random(args.seed)
     pick = rng.sample(sents, args.n)
-    cache, usage = gloss_many(pick, args.model, args.rpm, args.workers, progress=False)
+    cache, usage = gloss_many(pick, args.model, args.rpm, args.workers, progress=False,
+                              batch=args.batch)
     labeller = D.Labeller(D.load_vocab()["words"])
     words = labeller.words
     for s in pick:
@@ -283,7 +284,7 @@ def cmd_run(args):
     if not args.yes:
         sys.exit("refusing to run on everything without --yes (see `estimate` first)")
     sents = unique_sentences()
-    cache, usage = gloss_many(sents, args.model, args.rpm, args.workers)
+    cache, usage = gloss_many(sents, args.model, args.rpm, args.workers, batch=args.batch)
     print(f"[run] cached {sum(1 for s in sents if cache_key(args.model, s) in cache)}"
           f"/{len(sents)} | this run {usage}")
 
@@ -294,6 +295,8 @@ def main():
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--rpm", type=float, default=60, help="max requests per minute")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--batch", type=int, default=BATCH,
+                    help="sentences per request (smaller rides out overload better)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     e = sub.add_parser("estimate")
     e.add_argument("--price-in", type=float, default=None)
