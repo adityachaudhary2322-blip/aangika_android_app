@@ -1,5 +1,10 @@
-import { useState } from 'react';
-import { KeyRound, ShieldAlert, Check, Sun, Moon, Wand2, Palette } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  KeyRound, ShieldAlert, Check, Sun, Moon, Wand2, Palette, Download, CloudOff, Loader2, Smartphone,
+} from 'lucide-react';
+import {
+  subscribe as subscribePwa, canInstall, promptInstall, isStandalone, isIOS, offlineStatus, prepareOffline,
+} from '../services/pwa.js';
 import { getKeys, setKey } from '../services/translator.js';
 import { getTurnCredentials, setTurnCredentials } from '../services/iceConfig.js';
 import {
@@ -45,6 +50,8 @@ export default function Settings({
       </header>
 
       <Appearance />
+
+      <AppAndOffline />
 
       <section className="mt-4 surface-card p-4">
         <p className="eyebrow">
@@ -431,5 +438,91 @@ function VoicePick() {
         </button>
       ))}
     </div>
+  );
+}
+
+/** Install state and offline preparation for the recognition models. */
+function AppAndOffline() {
+  const [pwa, setPwa] = useState({});
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState('');
+  const [err, setErr] = useState(null);
+
+  useEffect(() => subscribePwa(setPwa), []);
+  useEffect(() => { offlineStatus().then(setStatus).catch(() => {}); }, []);
+
+  const prepare = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      setStatus(await prepareOffline(setProgress));
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+      setProgress('');
+    }
+  };
+
+  const installed = isStandalone() || pwa.installed;
+  const ready = status?.tagger && status?.landmarks;
+  const mb = status ? (status.bytes / 1e6).toFixed(0) : 0;
+
+  return (
+    <section className="mt-4 surface-card p-4" data-tour="offline">
+      <div className="flex items-center gap-2">
+        <Smartphone size={15} className="text-primary" />
+        <p className="eyebrow">App &amp; offline</p>
+      </div>
+
+      <div className="mt-3 flex items-center gap-3 rounded-2xl border border-subtle p-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">{installed ? 'Installed' : 'Install Aangika'}</p>
+          <p className="text-[11px] text-ink-dim">
+            {installed
+              ? 'Running as an app from your home screen.'
+              : isIOS()
+                ? 'In Safari: Share → Add to Home Screen.'
+                : 'Full screen, from your home screen, works offline.'}
+          </p>
+        </div>
+        {!installed && canInstall() && !isIOS() && (
+          <button type="button" onClick={promptInstall} className="btn-primary px-3 py-2 text-xs">
+            <Download size={14} /> Install
+          </button>
+        )}
+        {installed && <Check size={18} className="text-secondary" />}
+      </div>
+
+      <div className="mt-2 flex items-center gap-3 rounded-2xl border border-subtle p-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">Sign recognition offline</p>
+          <p className="text-[11px] text-ink-dim">
+            {busy
+              ? (progress || 'Downloading models…')
+              : ready
+                ? `Ready. ${mb} MB of models saved on this device.`
+                : status?.supported === false
+                  ? 'This browser cannot store files for offline use.'
+                  : 'Downloads the models once (about 50 MB) so the camera works without internet.'}
+          </p>
+          {err && <p className="mt-1 text-[11px] text-rose">{err}</p>}
+        </div>
+        {ready ? (
+          <CloudOff size={18} className="text-secondary" />
+        ) : (
+          <button type="button" onClick={prepare} disabled={busy || status?.supported === false} className="btn-quiet px-3 py-2 text-xs">
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Prepare
+          </button>
+        )}
+      </div>
+      <p className="mt-2 text-[11px] leading-relaxed text-ink-dim">
+        Offline, these keep working: sign recognition (once prepared), the
+        offline grammar, phrases, My signs, the word list and your saved
+        conversations. Speech-to-text, Sarvam and Gemini, voices and calls need
+        a connection.
+      </p>
+    </section>
   );
 }

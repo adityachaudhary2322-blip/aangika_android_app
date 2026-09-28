@@ -19,6 +19,7 @@ import BottomNav from './components/BottomNav.jsx';
 import SideNav from './components/SideNav.jsx';
 import Ambient from './components/Ambient.jsx';
 import Mascot from './components/Mascot.jsx';
+import PwaPrompts from './components/PwaPrompts.jsx';
 import * as chatStore from './services/chatStorage.js';
 import { useCall } from './context/CallContext.jsx';
 import cameraManager from './services/cameraManager.js';
@@ -215,6 +216,10 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {!inCall && !(view === 'meet' && meetLive) && view !== 'sign' && (
+        <PwaPrompts online={online} raised={showNav} />
+      )}
 
       {/* The guide stays out of the way of the camera and of a call. */}
       {!inCall && (

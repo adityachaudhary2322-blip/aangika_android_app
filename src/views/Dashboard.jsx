@@ -58,7 +58,8 @@ export default function Dashboard({
     hasKey: Boolean(getKeys().gemini),
   });
   const offlineSelected = mode === MODE_OFFLINE;
-  const firstName = profile?.name?.split(/\s+/)[0];
+  // A generated ID is not a name; only greet by name once one is set.
+  const firstName = profile && !profile.auto ? profile.name?.split(/\s+/)[0] : null;
 
   const handleTile = (id) => {
     if (id === 'offline') {
