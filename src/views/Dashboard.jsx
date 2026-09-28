@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Wifi, WifiOff, Hand, Mic, MessageCircle, CloudOff, Users,
-  Languages, FileVideo, Sparkles, BookOpen, ArrowRight, ChevronDown, Check, Info,
+  Languages, FileVideo, Sparkles, BookOpen, Quote, ArrowRight, ChevronDown, Check, Info,
 } from 'lucide-react';
 import { LANGUAGES, getLanguage } from '../config/languages.js';
 import { describeMode, MODE_OFFLINE } from '../services/translationService.js';
@@ -14,6 +14,7 @@ const TOOLS = [
   { id: 'messenger', label: 'Messages', hint: 'Chat & video call', Icon: MessageCircle, tone: 'amber' },
   { id: 'recorded', label: 'Recorded video', hint: 'File to subtitles', Icon: FileVideo, tone: 'rose' },
   { id: 'mysigns', label: 'My signs', hint: 'Teach your own', Icon: Sparkles, tone: 'primary' },
+  { id: 'phrases', label: 'Phrases', hint: 'Signs → one sentence', Icon: Quote, tone: 'amber' },
   { id: 'words', label: 'Word list', hint: 'What it understands', Icon: BookOpen, tone: 'secondary' },
   { id: 'offline', label: 'Offline engine', hint: 'Toggle pipeline', Icon: CloudOff, tone: 'secondary' },
   { id: 'group', label: 'Group room', hint: 'Multi-party', Icon: Users, tone: 'secondary' },

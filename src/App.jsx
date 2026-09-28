@@ -8,8 +8,9 @@ import Settings from './views/Settings.jsx';
 import RecordedVideoTranslator from './views/RecordedVideoTranslator.jsx';
 import MySigns from './views/MySigns.jsx';
 import WordList from './views/WordList.jsx';
+import Phrases from './views/Phrases.jsx';
 import {
-  init as initCustomSigns, setReservedTokens, migrateFromVocab,
+  init as initCustomSigns, setReservedTokens, prunePlaceholders,
 } from './services/customSigns.js';
 import { fillPendingTranslations } from './services/customSignTranslations.js';
 import IncomingCall from './components/IncomingCall.jsx';
@@ -92,8 +93,9 @@ export default function App() {
   }, [language]);
 
   // "My signs": load the library, reserve the model's words so a taught sign
-  // can never shadow one, migrate vocab.json's custom_signs once, and finish
-  // any sentence translations that were saved while offline.
+  // can never shadow one, drop old untrained vocab.json placeholders (My signs
+  // is only what the user taught), and finish any sentence translations that
+  // were saved while offline.
   useEffect(() => {
     (async () => {
       try {
@@ -101,7 +103,7 @@ export default function App() {
         const vocab = await fetch('/models/vocab.json').then((r) => (r.ok ? r.json() : null));
         if (vocab) {
           setReservedTokens(vocab.words || []);
-          await migrateFromVocab(vocab);
+          await prunePlaceholders();
         }
       } catch (err) {
         console.warn('[custom signs] bootstrap', err);
@@ -185,6 +187,7 @@ export default function App() {
           {view === 'recorded' && <RecordedVideoTranslator {...shared} />}
           {view === 'settings' && <Settings {...shared} onNavigate={go} />}
           {view === 'words' && <WordList {...shared} onNavigate={go} />}
+          {view === 'phrases' && <Phrases {...shared} cameraError={cameraError} />}
         </div>
         {showNav && <BottomNav view={view} onNavigate={go} unread={unread} />}
       </div>
