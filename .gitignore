@@ -70,3 +70,7 @@ __pycache__/
 test-results/
 playwright-report/
 training/.venv-tf/
+
+# PlatformIO build output
+firmware/**/.pio/
+firmware/**/.vscode/
