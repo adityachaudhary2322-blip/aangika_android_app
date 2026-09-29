@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Dashboard from './views/Dashboard.jsx';
 import MessengerView from './views/MessengerView.jsx';
 import SignTranslator from './views/SignTranslator.jsx';
+import AslTranslator from './views/AslTranslator.jsx';
 import HearingMode from './views/HearingMode.jsx';
 import VideoCall from './views/VideoCall.jsx';
 import Settings from './views/Settings.jsx';
@@ -67,7 +68,7 @@ export default function App() {
     if (initialRoom) return 'meet';
     try {
       const v = new URLSearchParams(window.location.search).get('view');
-      return ['sign', 'hearing', 'messenger', 'meet'].includes(v) ? v : 'dashboard';
+      return ['sign', 'asl', 'hearing', 'messenger', 'meet'].includes(v) ? v : 'dashboard';
     } catch {
       return 'dashboard';
     }
@@ -153,7 +154,7 @@ export default function App() {
   // counts wherever the user happens to be standing when it starts.
   const inCall = call.status === 'live' || call.status === 'dialling'
     || call.status === 'preparing';
-  const needsCamera = view === 'sign' || view === 'mysigns' || view === 'demo' || inCall;
+  const needsCamera = view === 'sign' || view === 'asl' || view === 'mysigns' || view === 'demo' || inCall;
   useEffect(() => {
     if (!needsCamera) return;
     cameraManager.start().catch((err) => setCameraError(err.message));
@@ -206,6 +207,7 @@ export default function App() {
     messenger: 'max-w-3xl lg:max-w-6xl',
     meet: meetLive ? 'max-w-none' : 'max-w-md lg:max-w-4xl',
     sign: 'max-w-md lg:max-w-none',
+    asl: 'max-w-md lg:max-w-none',
     dashboard: 'max-w-md lg:max-w-5xl',
   }[view] || 'max-w-md lg:max-w-3xl';
 
@@ -222,6 +224,9 @@ export default function App() {
             {view === 'dashboard' && <Dashboard {...shared} onNavigate={go} />}
             {view === 'sign' && (
               <SignTranslator {...shared} cameraError={cameraError} onNavigate={go} />
+            )}
+            {view === 'asl' && (
+              <AslTranslator {...shared} cameraError={cameraError} onNavigate={go} />
             )}
             {view === 'mysigns' && (
               <MySigns {...shared} cameraError={cameraError} onBack={() => go(returnTo)} />
@@ -247,7 +252,7 @@ export default function App() {
         </div>
       </div>
 
-      {!inCall && !(view === 'meet' && meetLive) && view !== 'sign' && (
+      {!inCall && !(view === 'meet' && meetLive) && view !== 'sign' && view !== 'asl' && (
         <PwaPrompts online={online} raised={showNav} />
       )}
 
@@ -257,7 +262,7 @@ export default function App() {
           view={view}
           onNavigate={go}
           raised={showNav}
-          hidden={view === 'sign' || view === 'mysigns' || (view === 'messenger' && chatOpen)
+          hidden={view === 'sign' || view === 'asl' || view === 'mysigns' || (view === 'messenger' && chatOpen)
             || (view === 'meet' && meetLive)}
         />
       )}

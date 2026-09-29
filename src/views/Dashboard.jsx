@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Wifi, WifiOff, Hand, Mic, MessageCircle, CloudOff, Users, Languages,
-  FileVideo, Sparkles, BookOpen, Quote, ArrowUpRight, ChevronDown, Check,
+  FileVideo, Sparkles, BookOpen, Quote, ArrowUpRight, ChevronDown, Check, Globe2,
 } from 'lucide-react';
 import { LANGUAGES, getLanguage } from '../config/languages.js';
 import { PALETTES } from '../config/themes.js';
@@ -213,6 +213,31 @@ export default function Dashboard({
                 delay="120ms"
               />
             </section>
+
+            {/* ── International: ASL ───────────────────────────────── */}
+            <h2 className="eyebrow mt-8 flex items-center gap-1.5">
+              <Globe2 size={12} className="text-secondary" /> For international users
+            </h2>
+            <button
+              type="button"
+              onClick={() => onNavigate('asl')}
+              data-tour="asl"
+              className="surface-card group mt-3 flex w-full items-center gap-4 p-4 text-left transition hover:border-strong"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-secondary/15 text-secondary">
+                <Globe2 size={24} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="display whitespace-nowrap text-lg">ASL Translator</span>
+                  <span className="rounded-full border border-secondary/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-secondary">American Sign Language</span>
+                </span>
+                <span className="mt-0.5 block text-[12px] leading-snug text-ink-dim">
+                  250 everyday ASL signs to speech, live or recorded. Works offline after one download.
+                </span>
+              </span>
+              <ArrowUpRight size={18} className="shrink-0 text-ink-dim transition group-hover:text-ink" />
+            </button>
 
             {/* ── Tools ────────────────────────────────────────────── */}
             <h2 className="eyebrow mt-8">Everything else</h2>

@@ -30,7 +30,7 @@ export default defineConfig(async () => {
       injectRegister: null,          // registered from src/services/pwa.js
       manifest: false,               // public/manifest.webmanifest is the manifest
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}', 'models/vocab.json'],
+        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}', 'brand/*.jpg', 'models/vocab.json'],
         globIgnores: ['**/*.wasm', '**/*.onnx'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',

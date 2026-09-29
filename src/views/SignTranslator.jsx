@@ -3,12 +3,12 @@ import {
 } from 'react';
 import {
   ArrowLeft, Volume2, Copy, Eraser, FlipHorizontal, Waypoints, Loader2, Play, Hand,
-  BookmarkPlus, Languages as LanguagesIcon, X, Quote, Circle, Square, RotateCcw, Check,
+  BookmarkPlus, Languages as LanguagesIcon, X, Quote, Circle, Square, RotateCcw, Check, Globe2,
 } from 'lucide-react';
 import CameraStage from '../components/CameraStage.jsx';
 import LandmarkCanvas from '../components/LandmarkCanvas.jsx';
 import LanguageSelect from '../components/LanguageSelect.jsx';
-import EngineToggle from '../components/EngineToggle.jsx';
+import ModelPicker from '../components/ModelPicker.jsx';
 import EngineBadge from '../components/EngineBadge.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
 import useTokenStream, { tokenLabel } from '../hooks/useTokenStream.js';
@@ -16,7 +16,18 @@ import useSentenceBoundary from '../hooks/useSentenceBoundary.js';
 import useGloveWords from '../hooks/useGloveWords.js';
 import { fuseWords } from '../services/glove/recognizer.js';
 import { listSigns } from '../services/customSigns.js';
-import { VISION_SIGNBRIDGE } from '../services/engineState.js';
+import { VISION_SIGNBRIDGE, modelIdFor } from '../services/engineState.js';
+import { getModel } from '../config/models.js';
+
+/**
+ * Typed examples per sign language: they run the real grammar on signs the
+ * model knows, without the camera (labelled "typed", never passed off as
+ * recognition).
+ */
+const TYPED_EXAMPLES = {
+  ISL: [['NAMASTE'], ['NAME', 'ADITYA'], ['I', 'WANT', 'WATER']],
+  ASL: [['HELLO'], ['THANK_YOU'], ['MOM', 'WHERE'], ['HUNGRY']],
+};
 
 const AUTO_SENTENCE_KEY = 'isl.autoSentence';
 const readAuto = () => {
@@ -49,8 +60,11 @@ const clock = (ms) => {
 
 export default function SignTranslator({
   language, setLanguage, online, onBack, cameraError, mode, togglePipeline,
-  visionEngine, chooseVision, onNavigate,
+  visionEngine, chooseVision, onNavigate, variant = 'isl',
 }) {
+  // The ASL screen is the same translator, introduced for international users.
+  const intl = variant === 'asl';
+  const signLang = getModel(modelIdFor(visionEngine))?.language || 'ISL';
   const [mirrored, setMirrored] = useState(() => cameraManager.isFrontCamera());
   const [started, setStarted] = useState(false);
   const [flipping, setFlipping] = useState(false);
@@ -300,8 +314,9 @@ export default function SignTranslator({
         <CameraStage className="absolute inset-0" />
         {showMesh && <LandmarkCanvas frameRef={frameRef} mirrored={mirrored} />}
 
-        {/* Top chrome */}
-        <div className="absolute inset-x-0 top-0 flex items-center gap-2 p-3">
+        {/* Top chrome: above the start screen, so Back and the model can be
+            chosen before starting. */}
+        <div className="absolute inset-x-0 top-0 z-30 flex items-center gap-2 p-3">
           <button
             type="button"
             onClick={onBack}
@@ -328,8 +343,9 @@ export default function SignTranslator({
             type="button"
             onClick={togglePipeline}
             title="Switch translation engine"
+            // Phones: the same switch is on Home; the camera bar needs the room.
             className={
-              'pill chrome-plate ' +
+              'pill chrome-plate hidden sm:inline-flex ' +
               (badge.tone === 'primary'
                 ? 'border-primary/50 text-primary'
                 : 'border-amber/50 text-amber')
@@ -337,8 +353,8 @@ export default function SignTranslator({
           >
             {badge.icon} {badge.short}
           </button>
-          <div className="ml-auto flex items-center gap-2">
-            <EngineToggle value={visionEngine} onChange={chooseVision} compact />
+          <div className="ml-auto flex items-center gap-1.5">
+            <ModelPicker value={visionEngine} onChange={chooseVision} />
             <LanguageSelect
               value={language}
               onChange={setLanguage}
@@ -382,6 +398,18 @@ export default function SignTranslator({
         {/* Start gate: one tap unlocks audio AND starts the camera. */}
         {!started && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 overflow-y-auto bg-surface/90 px-6 py-16 text-center">
+            {intl && (
+              <div className="max-w-sm">
+                <p className="eyebrow flex items-center justify-center gap-1.5 text-secondary">
+                  <Globe2 size={12} /> For international users
+                </p>
+                <h2 className="display mt-1 text-2xl">ASL Translator</h2>
+                <p className="mt-1 text-[11px] leading-relaxed text-ink-dim">
+                  American Sign Language · 250 everyday signs, recognised one at a time ·
+                  works offline after a one-time download. Accuracy in this app is not measured yet.
+                </p>
+              </div>
+            )}
             <Choice
               label="Who is signing?"
               value={signer}
@@ -475,6 +503,11 @@ export default function SignTranslator({
 
       {/* ── Glass interpretation card ──────────────────────────────── */}
       <section className="glass max-h-[55%] overflow-y-auto rounded-t-3xl p-4 no-scrollbar lg:max-h-none lg:w-[400px] lg:shrink-0 lg:rounded-3xl lg:p-5">
+        {(intl || signLang === 'ASL') && (
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-secondary">
+            <Globe2 size={12} /> ASL · American Sign Language{intl ? ' · for international users' : ''}
+          </p>
+        )}
         <div className="flex items-center gap-2">
           <div role="tablist" aria-label="Translation mode" className="flex rounded-full border border-subtle bg-card p-0.5">
             {[['live', 'Live'], ['record', 'Record']].map(([id, label]) => (
@@ -537,15 +570,18 @@ export default function SignTranslator({
               >
                 Auto sentence {autoSentence ? 'on' : 'off'}
               </button>
-              <button
-                type="button"
-                onClick={toggleSpell}
-                aria-pressed={Boolean(spellFrom)}
-                title="Fingerspell with the letters you taught in My signs"
-                className={'pill text-[10px] ' + (spellFrom ? 'border-amber/60 text-amber' : 'border-subtle text-ink-dim')}
-              >
-                Spell {spellFrom ? 'on' : 'off'}
-              </button>
+              {/* Spelling uses the ISL handshape engine, so it is offered for ISL. */}
+              {(signLang !== 'ASL' || spellFrom) && (
+                <button
+                  type="button"
+                  onClick={toggleSpell}
+                  aria-pressed={Boolean(spellFrom)}
+                  title="Fingerspell with the letters you taught in My signs"
+                  className={'pill text-[10px] ' + (spellFrom ? 'border-amber/60 text-amber' : 'border-subtle text-ink-dim')}
+                >
+                  Spell {spellFrom ? 'on' : 'off'}
+                </button>
+              )}
               {stream.length > 0 && (
                 <button
                   type="button"
@@ -639,14 +675,14 @@ export default function SignTranslator({
           >
             Try (typed)
           </span>
-          {[['NAMASTE'], ['NAME', 'ADITYA'], ['I', 'WANT', 'WATER']].map((tags) => (
+          {(TYPED_EXAMPLES[signLang] || TYPED_EXAMPLES.ISL).map((tags) => (
             <button
               key={tags.join('-')}
               type="button"
               onClick={() => runDemo(tags)}
               className="pill shrink-0 border-subtle bg-card-high text-[10px] text-ink-dim"
             >
-              {tags.join(' ')}
+              {tags.map((t) => tokenLabel(t).toUpperCase()).join(' ')}
             </button>
           ))}
           {manualTags && (

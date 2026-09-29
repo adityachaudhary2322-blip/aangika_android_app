@@ -1,6 +1,6 @@
 import {
   Home, Hand, Mic, MessageCircle, Quote, BookOpen, Sparkles, FileVideo, Users,
-  Settings as SettingsIcon,
+  Settings as SettingsIcon, Globe2,
 } from 'lucide-react';
 import BrandMark from './BrandMark.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
@@ -21,6 +21,10 @@ const GROUPS = [
       { id: 'hearing', label: 'Speech to text', Icon: Mic },
       { id: 'recorded', label: 'Recorded video', Icon: FileVideo },
     ],
+  },
+  {
+    label: 'International',
+    items: [{ id: 'asl', label: 'ASL Translator', Icon: Globe2 }],
   },
   {
     label: 'Connect',
@@ -50,7 +54,7 @@ export default function SideNav({ view, onNavigate, unread = 0 }) {
         <BrandMark size={34} />
         <span className="text-left leading-tight">
           <span className="display block text-lg">Aangika</span>
-          <span className="block text-[11px] text-ink-dim">Indian Sign Language</span>
+          <span className="block text-[11px] text-ink-dim">ISL + ASL · by team HealX</span>
         </span>
       </button>
 
