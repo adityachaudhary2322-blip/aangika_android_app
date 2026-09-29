@@ -51,6 +51,8 @@ export default function useSignPipeline({
   /** The phrase most recently spoken aloud, for the UI to display. */
   const [spoken, setSpoken] = useState(null);
 
+  const [handsUp, setHandsUp] = useState(false);
+  const handsUpRef = useRef(false);
   const frameRef = useRef(null);      // latest raw frame, for the canvas
   const bufferRef = useRef([]);       // rolling window of normalised frames
   // Mutex: true while an inference is in flight. A frame that arrives during
@@ -216,6 +218,11 @@ export default function useSignPipeline({
       const hasHand = result.hands && result.hands.length > 0;
       seenRef.current += 1;
       if (hasHand) handFramesRef.current += 1;
+      // Hands up / down, pushed to state only when it flips (sentence boundary).
+      if (hasHand !== handsUpRef.current) {
+        handsUpRef.current = hasHand;
+        setHandsUp(hasHand);
+      }
 
       // FPS over a one-second window; a per-frame estimate jitters unreadably.
       const fps = fpsRef.current;
@@ -336,6 +343,6 @@ export default function useSignPipeline({
 
   return {
     status, progress, words, closest, stats, error, frameRef, clear,
-    visionEngine, spoken,
+    visionEngine, spoken, handsUp,
   };
 }

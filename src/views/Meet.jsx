@@ -9,7 +9,7 @@ import useMeeting, {
   newRoomCode, normaliseCode, formatCode, inviteLink, MAX_PEOPLE,
 } from '../hooks/useMeeting.js';
 import useSignPipeline from '../hooks/useSignPipeline.js';
-import useTokenStream from '../hooks/useTokenStream.js';
+import useTokenStream, { tokenLabel } from '../hooks/useTokenStream.js';
 import cameraManager from '../services/cameraManager.js';
 import { speak, unlockAudio } from '../services/ttsService.js';
 import { ROLE_SPEAKER } from '../services/chatStorage.js';
@@ -183,7 +183,7 @@ function Room({ meeting, me, language, visionEngine }) {
   const { stream: signStream } = useTokenStream(words, { enabled: signing });
   useEffect(() => {
     if (!signStream.length) return;
-    const text = signStream.slice(-6).map((e) => e.token.replace(/_+/g, ' ').toLowerCase()).join(' ');
+    const text = signStream.slice(-6).map((e) => tokenLabel(e.token)).join(' ');
     sendCaption(text, 'sign');
   }, [signStream, sendCaption]);
 

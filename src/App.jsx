@@ -7,6 +7,7 @@ import VideoCall from './views/VideoCall.jsx';
 import Settings from './views/Settings.jsx';
 import RecordedVideoTranslator from './views/RecordedVideoTranslator.jsx';
 import MySigns from './views/MySigns.jsx';
+import DemoMode from './views/DemoMode.jsx';
 import WordList from './views/WordList.jsx';
 import Phrases from './views/Phrases.jsx';
 import Meet from './views/Meet.jsx';
@@ -141,7 +142,7 @@ export default function App() {
   // counts wherever the user happens to be standing when it starts.
   const inCall = call.status === 'live' || call.status === 'dialling'
     || call.status === 'preparing';
-  const needsCamera = view === 'sign' || view === 'mysigns' || inCall;
+  const needsCamera = view === 'sign' || view === 'mysigns' || view === 'demo' || inCall;
   useEffect(() => {
     if (!needsCamera) return;
     cameraManager.start().catch((err) => setCameraError(err.message));
@@ -205,6 +206,9 @@ export default function App() {
             {view === 'settings' && <Settings {...shared} onNavigate={go} />}
             {view === 'words' && <WordList {...shared} onNavigate={go} />}
             {view === 'phrases' && <Phrases {...shared} cameraError={cameraError} />}
+        {view === 'demo' && (
+          <DemoMode {...shared} cameraError={cameraError} onBack={() => go('settings')} />
+        )}
             {view === 'meet' && (
               <Meet {...shared} initialCode={initialRoom} onLiveChange={setMeetLive} />
             )}

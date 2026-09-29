@@ -58,6 +58,20 @@ export default function Settings({
 
       {onNavigate && (
         <section className="mt-4 surface-card p-4">
+          <p className="eyebrow">Demo</p>
+          <p className="mt-1 text-[11px] text-ink-dim">
+            Live confidence per word, practice attempts that measure which signs
+            the current model recognises reliably for you, and example sentences
+            built only from those signs.
+          </p>
+          <button type="button" onClick={() => onNavigate('demo')} className="btn-quiet mt-3 w-full">
+            Open demo mode
+          </button>
+        </section>
+      )}
+
+      {onNavigate && (
+        <section className="mt-4 surface-card p-4">
           <p className="eyebrow">
             My signs
           </p>

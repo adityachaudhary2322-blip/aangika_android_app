@@ -25,6 +25,38 @@ import {
 } from './translator.js';
 import { getLanguage } from '../config/languages.js';
 import { findByToken, textFor } from './customSigns.js';
+import { expandAsl } from './aslGrammar.js';
+import { getSignLanguage } from './engineState.js';
+
+/** A fingerspelled word in the token stream: FS-ADITYA (ASL gloss convention). */
+export const isFingerspelled = (t) => /^FS[-_]/i.test(String(t || ''));
+const spelledText = (t) => {
+  const w = String(t).slice(3).toLowerCase();
+  return w.charAt(0).toUpperCase() + w.slice(1);
+};
+
+/**
+ * Taught signs first, then fingerspelled words, which behave like taught
+ * NAME signs: proper nouns, kept exactly, never translated.
+ */
+function lookupSign(token) {
+  const own = findByToken(token);
+  if (own) return own;
+  if (isFingerspelled(token)) {
+    return { id: `fs:${token}`, token, output: { type: 'name', text_en: spelledText(token), texts: {} } };
+  }
+  return null;
+}
+
+/** Offline grammar for the sign language being read. */
+function rules(tags, languageCode, signLanguage) {
+  if (signLanguage === 'ASL') {
+    const { english, rule } = expandAsl(tags);
+    return { english, translated: '', rule: `asl-rules:${rule}` };
+  }
+  const r = expand(tags, languageCode, { lookup: lookupSign });
+  return { ...r, rule: `isl-rules:${r.rule}` };
+}
 
 /**
  * The user's own signs among the tags, as a glossary for online prompts.
@@ -34,7 +66,7 @@ export function glossaryFor(tags) {
   const out = [];
   const seen = new Set();
   for (const t of tags || []) {
-    const s = findByToken(t);
+    const s = lookupSign(t);
     if (!s || seen.has(s.id)) continue;
     const type = s.output?.type;
     if (type !== 'word' && type !== 'name') continue;
@@ -162,9 +194,11 @@ export function describeMode(mode = getMode(), { online = true, hasKey } = {}) {
  *
  * @param {string[]} tags
  * @param {string} languageCode
- * @param {{ mode?: string }} options
+ * @param {{ mode?: string, signLanguage?: 'ISL' | 'ASL' }} options
  */
-export async function translate(tags, languageCode, { mode = getMode() } = {}) {
+export async function translate(tags, languageCode, {
+  mode = getMode(), signLanguage = getSignLanguage(),
+} = {}) {
   const started = performance.now();
   const language = getLanguage(languageCode);
 
@@ -200,7 +234,7 @@ export async function translate(tags, languageCode, { mode = getMode() } = {}) {
 
   // ── Offline: no fetch, no await on anything remote ──────────────────────
   if (mode === MODE_OFFLINE) {
-    const { english, rule, translated } = expand(tags, language.code);
+    const { english, rule, translated } = rules(tags, language.code, signLanguage);
     // The rules produce non-English text only for fixed templates (built-in
     // gestures, greetings, introductions). Everything else stays English --
     // inventing a Hindi string we cannot produce would be worse than admitting
@@ -210,10 +244,11 @@ export async function translate(tags, languageCode, { mode = getMode() } = {}) {
       english,
       translated: target,
       source: 'offline',
-      engine: `isl-rules:${rule}`,
+      engine: rule,
       language,
       latencyMs: Math.round((performance.now() - started) * 100) / 100,
       mode,
+      signLanguage,
       note: language.code === 'en-IN' || target
         ? null
         : `${language.name} translation needs the online engine.`,
@@ -223,7 +258,7 @@ export async function translate(tags, languageCode, { mode = getMode() } = {}) {
   // ── Sarvam: chat model, then rules + Mayura, then rules alone ──────────
   if (mode === MODE_SARVAM) {
     const glossary = glossaryFor(tags);
-    const r = await sarvamReconstruct(tags, languageCode, { glossary });
+    const r = await sarvamReconstruct(tags, languageCode, { glossary, signLanguage });
     if (r.source === 'sarvam') {
       let translated = r.translated;
       // The chat model occasionally skips the translation; Mayura fills it.
@@ -239,9 +274,9 @@ export async function translate(tags, languageCode, { mode = getMode() } = {}) {
     }
     // Chat unavailable: the local grammar still makes the sentence, and
     // Mayura can still put it into the user's language.
-    const { english, rule, translated: ruleText } = expand(tags, language.code);
+    const { english, rule, translated: ruleText } = rules(tags, language.code, signLanguage);
     let translated = language.code === 'en-IN' ? '' : (ruleText || '');
-    let engine = `isl-rules:${rule}`;
+    let engine = rule;
     if (!translated && language.code !== 'en-IN') {
       try {
         translated = await sarvamTranslate(english, language.code);
@@ -256,7 +291,9 @@ export async function translate(tags, languageCode, { mode = getMode() } = {}) {
   }
 
   // ── Online: Gemini, with the offline engine as the safety net ───────────
-  const result = await geminiReconstruct(tags, languageCode, { glossary: glossaryFor(tags) });
+  const result = await geminiReconstruct(tags, languageCode, {
+    glossary: glossaryFor(tags), signLanguage,
+  });
 
   if (result.source === 'gemini') {
     return {
@@ -273,12 +310,12 @@ export async function translate(tags, languageCode, { mode = getMode() } = {}) {
   // Gemini was unreachable. Fall through to the rules engine rather than the
   // bare word-join that translator.js would otherwise return -- the rules give
   // a real sentence for free.
-  const { english, rule, translated } = expand(tags, language.code);
+  const { english, rule, translated } = rules(tags, language.code, signLanguage);
   return {
     english,
     translated: language.code === 'en-IN' ? '' : (translated || ''),
     source: 'offline',
-    engine: `isl-rules:${rule}`,
+    engine: rule,
     language,
     latencyMs: Math.round(performance.now() - started),
     mode,

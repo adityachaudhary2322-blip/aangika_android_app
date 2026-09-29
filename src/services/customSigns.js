@@ -172,7 +172,11 @@ export function validate(record, { ignoreId = null } = {}) {
   const errors = [];
   const token = String(record.token || '').toUpperCase();
   if (!/^[A-Z0-9_]{1,32}$/.test(token)) errors.push('Token must be 1-32 letters, digits or _.');
-  if (reserved.has(token)) errors.push(`${token} is already a built-in sign or model word.`);
+  // Single letters A-Z are fingerspelling handshapes, a namespace of their own:
+  // the model word "i" must not stop anyone teaching the letter I.
+  if (reserved.has(token) && !/^[A-Z]$/.test(token)) {
+    errors.push(`${token} is already a built-in sign or model word.`);
+  }
   const clash = findByToken(token);
   if (clash && clash.id !== ignoreId) errors.push(`You already have a sign called ${token}.`);
   if (!['handshape', 'movement'].includes(record.kind)) errors.push('Unknown sign kind.');

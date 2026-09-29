@@ -26,7 +26,9 @@ export function createAslIslrEngine(model) {
   const threshold = model.decodeParams?.threshold ?? 0.5;
 
   const display = (label) => vocab?.display?.[label] || label;
-  const token = (label) => String(display(label)).toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+  // "thank you" -> THANK_YOU, "he/she/it" -> HE_SHE_IT, "hurt (owie)" -> HURT_OWIE
+  const token = (label) => String(display(label)).toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
   async function run(frames) {
     const T = frames.length;

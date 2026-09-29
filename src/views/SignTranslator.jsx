@@ -10,7 +10,15 @@ import EngineToggle from '../components/EngineToggle.jsx';
 import EngineBadge from '../components/EngineBadge.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
-import useTokenStream from '../hooks/useTokenStream.js';
+import useTokenStream, { tokenLabel } from '../hooks/useTokenStream.js';
+import useSentenceBoundary from '../hooks/useSentenceBoundary.js';
+import { listSigns } from '../services/customSigns.js';
+import { VISION_SIGNBRIDGE } from '../services/engineState.js';
+
+const AUTO_SENTENCE_KEY = 'isl.autoSentence';
+const readAuto = () => {
+  try { return localStorage.getItem(AUTO_SENTENCE_KEY) !== 'off'; } catch { return true; }
+};
 import { matchPhrase, phraseText, setDraft } from '../services/phrases.js';
 import cameraManager from '../services/cameraManager.js';
 import landmarker from '../services/landmarker.js';
@@ -37,13 +45,32 @@ export default function SignTranslator({
   const [note, setNote] = useState(null);
   const [manualTags, setManualTags] = useState(null);
 
+  // Sentence mode: signs collect into a sentence that is sent and spoken when
+  // the signer pauses (~1.2 s) or lowers their hands. When it is on, single
+  // signs are not also spoken one by one.
+  const [autoSentence, setAutoSentence] = useState(readAuto);
+  const toggleAutoSentence = () => setAutoSentence((v) => {
+    try { localStorage.setItem(AUTO_SENTENCE_KEY, v ? 'off' : 'on'); } catch { /* private mode */ }
+    return !v;
+  });
+
+  // Fingerspelling: letters come from taught letter handshapes (My signs),
+  // which the SignBridge engine matches. Spell mode switches to it and back.
+  const [spellFrom, setSpellFrom] = useState(null);     // engine to return to
+  const taughtLetters = listSigns().filter((s) => /^[A-Z]$/.test(s.token) && s.samples?.length).length;
+  const toggleSpell = () => {
+    if (spellFrom) { chooseVision(spellFrom); setSpellFrom(null); return; }
+    setSpellFrom(visionEngine);
+    chooseVision(VISION_SIGNBRIDGE);
+  };
+
   const {
-    status, progress, words, closest, stats, error, frameRef, clear, spoken,
+    status, progress, words, closest, stats, error, frameRef, clear, spoken, handsUp,
   } = useSignPipeline({
     enabled: started,
     mirrored,
     visionEngine,
-    autoSpeak: true,     // speak the moment a sign is held; no button press
+    autoSpeak: !autoSentence,   // per-sign speech only when sentences are off
     language,
     mode,
   });
@@ -71,6 +98,18 @@ export default function SignTranslator({
     setManualTags(null);
     build(sentenceTokens);
   };
+
+  // Automatic sentence boundary: pause or hands down -> sentence -> speech.
+  useSentenceBoundary(stream, {
+    enabled: started && autoSentence,
+    handsUp,
+    onSentence: async (tags) => {
+      setManualTags(null);
+      const r = await build(tags);
+      const text = r?.translated || r?.english;
+      if (text && text !== 'UNCLEAR') speak(text, language);
+    },
+  });
   const saveAsPhrase = () => {
     setDraft(sentenceTokens);
     onNavigate?.('phrases');
@@ -133,6 +172,7 @@ export default function SignTranslator({
     const r = await translate(tags, language, { mode });
     setResult(r);
     setBusy(false);
+    return r;
   };
 
   // NAMASTE and ADITYA are not among the model's 1500 output channels, so the
@@ -330,8 +370,26 @@ export default function SignTranslator({
         {/* Continuous signing: the sentence being built, sign by sign. */}
         {started && (
           <div className="mt-3 rounded-2xl border border-subtle bg-card/70 p-3">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="eyebrow">Sentence so far</span>
+              <button
+                type="button"
+                onClick={toggleAutoSentence}
+                aria-pressed={autoSentence}
+                title="Send and speak the sentence when you pause or lower your hands"
+                className={'pill text-[10px] ' + (autoSentence ? 'border-primary/50 text-primary' : 'border-subtle text-ink-dim')}
+              >
+                Auto sentence {autoSentence ? 'on' : 'off'}
+              </button>
+              <button
+                type="button"
+                onClick={toggleSpell}
+                aria-pressed={Boolean(spellFrom)}
+                title="Fingerspell with the letters you taught in My signs"
+                className={'pill text-[10px] ' + (spellFrom ? 'border-amber/60 text-amber' : 'border-subtle text-ink-dim')}
+              >
+                Spell {spellFrom ? 'on' : 'off'}
+              </button>
               {stream.length > 0 && (
                 <button
                   type="button"
@@ -342,6 +400,11 @@ export default function SignTranslator({
                 </button>
               )}
             </div>
+            {spellFrom && taughtLetters === 0 && (
+              <p className="mt-1 text-[11px] text-amber">
+                No letters taught yet. In My signs, teach A-Z as one-letter Word signs; spelled letters then join into a name.
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-1.5">
               {stream.length === 0 && (
                 <span className="text-xs text-ink-dim">Sign several words in a row.</span>
@@ -354,7 +417,8 @@ export default function SignTranslator({
                   title="Remove this sign"
                   className="pill animate-fade-up border-subtle bg-card-high text-ink"
                 >
-                  {e.token.replace(/_+/g, ' ').toLowerCase()} <X size={10} className="text-ink-dim" />
+                  {e.spelled && <span className="text-[9px] text-amber">spelled</span>}
+                  {tokenLabel(e.token)} <X size={10} className="text-ink-dim" />
                 </button>
               ))}
             </div>

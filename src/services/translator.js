@@ -11,6 +11,10 @@
  */
 
 import { buildGeminiRequest, ruleBasedJoin } from './qwenRules.js';
+import { buildAslRequest } from './aslRules.js';
+
+/** The prompt builder for the sign language being read (ISL or ASL). */
+const requestFor = (signLanguage) => (signLanguage === 'ASL' ? buildAslRequest : buildGeminiRequest);
 import { getLanguage, sarvamTtsPayload } from '../config/languages.js';
 
 const GEMINI_ENDPOINT =
@@ -81,7 +85,7 @@ function extractJson(raw) {
  * Reconstruct a sentence from sign tags. NEVER throws: any failure degrades to
  * the rule-based join, and the result says which path produced it.
  */
-export async function reconstruct(tags, languageCode, { glossary = [] } = {}) {
+export async function reconstruct(tags, languageCode, { glossary = [], signLanguage = 'ISL' } = {}) {
   const started = performance.now();
   const language = getLanguage(languageCode);
   const fallback = (error) => ({
@@ -100,7 +104,7 @@ export async function reconstruct(tags, languageCode, { glossary = [] } = {}) {
   if (!gemini) return fallback('No Gemini key set - open Settings to add one.');
   if (!isOnline()) return fallback('Device is offline.');
 
-  const { systemInstruction, contents } = buildGeminiRequest(tags, language, glossary);
+  const { systemInstruction, contents } = requestFor(signLanguage)(tags, language, glossary);
   const errors = [];
 
   for (const model of GEMINI_MODELS) {
@@ -195,7 +199,7 @@ export async function sarvamChat(messages, { temperature = 0.2, maxTokens = 600 
  * prompt and few-shot examples as the Gemini path. Same result shape as
  * reconstruct(); NEVER throws (source 'fallback' on failure).
  */
-export async function sarvamReconstruct(tags, languageCode, { glossary = [] } = {}) {
+export async function sarvamReconstruct(tags, languageCode, { glossary = [], signLanguage = 'ISL' } = {}) {
   const started = performance.now();
   const language = getLanguage(languageCode);
   const fail = (error) => ({
@@ -204,7 +208,7 @@ export async function sarvamReconstruct(tags, languageCode, { glossary = [] } = 
   });
   if (!tags || tags.length === 0) return fail('no tags supplied');
 
-  const { systemInstruction, contents } = buildGeminiRequest(tags, language, glossary);
+  const { systemInstruction, contents } = requestFor(signLanguage)(tags, language, glossary);
   const messages = [
     { role: 'system', content: systemInstruction },
     ...contents.map((c) => ({
