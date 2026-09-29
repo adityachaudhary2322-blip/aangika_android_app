@@ -26,7 +26,7 @@ const ROUTES = {
   '/text-to-speech': { maxBytes: 16 * 1024, json: true },
   '/speech-to-text': { maxBytes: 6 * 1024 * 1024, json: false },   // multipart audio
 };
-const CHAT_MODELS = new Set(['sarvam-30b', 'sarvam-105b']);
+const CHAT_MODELS = new Set(['sarvam-105b', 'sarvam-105b-conversations']);
 const MAX_CHAT_TOKENS = 800;
 
 const DEFAULT_ORIGINS = [
@@ -113,6 +113,8 @@ export async function handle(request, env, fetchImpl = fetch) {
       if (!CHAT_MODELS.has(data.model)) return reply(400, 'Model not allowed.', headers);
       data.max_tokens = Math.min(Number(data.max_tokens) || MAX_CHAT_TOKENS, MAX_CHAT_TOKENS);
       data.stream = false;
+      // Reasoning off unless asked: it costs ~70x the tokens for a sign sentence.
+      if (!('reasoning_effort' in data)) data.reasoning_effort = null;
     }
     forwardBody = JSON.stringify(data);
   }
