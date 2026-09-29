@@ -7,7 +7,18 @@ import { unpackSample } from '../services/handshapeFeatures.js';
  * exactly what the matcher compares against.
  */
 export default function HandSkeleton({ sample, size = 44, className = '' }) {
-  if (!sample) {
+  // Glove signs store flex/orientation, not camera landmarks.
+  if (sample && (sample.f || sample.seq)) {
+    return (
+      <div
+        style={{ width: size, height: size }}
+        className={'flex items-center justify-center rounded-lg bg-card-high text-[10px] font-semibold text-amber ' + className}
+      >
+        glove
+      </div>
+    );
+  }
+  if (!sample || (!sample.left && !sample.right)) {
     return (
       <div
         style={{ width: size, height: size }}

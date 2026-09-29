@@ -12,6 +12,7 @@ import {
   GRAMMAR_QWEN_OFFLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS, GRAMMAR_SARVAM_ONLINE,
 } from '../services/engineState.js';
 import RecognitionSettings from '../components/RecognitionSettings.jsx';
+import GloveSettings from '../components/GloveSettings.jsx';
 import { LANGUAGES, VOICES, getVoice, setVoice } from '../config/languages.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
@@ -55,6 +56,8 @@ export default function Settings({
       <AppAndOffline />
 
       <RecognitionSettings visionEngine={visionEngine} chooseVision={chooseVision} />
+
+      <GloveSettings />
 
       {onNavigate && (
         <section className="mt-4 surface-card p-4">

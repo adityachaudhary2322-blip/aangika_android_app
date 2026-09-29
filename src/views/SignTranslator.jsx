@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect, useMemo, useRef, useState,
+} from 'react';
 import {
   ArrowLeft, Volume2, Copy, Eraser, FlipHorizontal, Waypoints, Loader2, Play, Hand,
   BookmarkPlus, Languages as LanguagesIcon, X, Quote,
@@ -12,6 +14,8 @@ import ThemeToggle from '../components/ThemeToggle.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
 import useTokenStream, { tokenLabel } from '../hooks/useTokenStream.js';
 import useSentenceBoundary from '../hooks/useSentenceBoundary.js';
+import useGloveWords from '../hooks/useGloveWords.js';
+import { fuseWords } from '../services/glove/recognizer.js';
 import { listSigns } from '../services/customSigns.js';
 import { VISION_SIGNBRIDGE } from '../services/engineState.js';
 
@@ -65,7 +69,8 @@ export default function SignTranslator({
   };
 
   const {
-    status, progress, words, closest, stats, error, frameRef, clear, spoken, handsUp,
+    status, progress, words: cameraWords, closest, stats, error, frameRef, clear, spoken,
+    handsUp: cameraHandsUp,
   } = useSignPipeline({
     enabled: started,
     mirrored,
@@ -74,6 +79,18 @@ export default function SignTranslator({
     language,
     mode,
   });
+
+  // ── Glove (optional): fused with the camera per token ──────────────────
+  // Same token from both sources: combined confidence. When the camera loses
+  // the hand, the glove's signs still reach the sentence.
+  const { words: gloveWords, connected: gloveOn } = useGloveWords({ enabled: started });
+  const words = useMemo(
+    () => (gloveOn ? fuseWords(cameraWords, gloveWords) : cameraWords),
+    [gloveOn, cameraWords, gloveWords],
+  );
+  // "Hands down" ends a sentence early, but a glove cannot tell a lowered hand
+  // from the gap between two signs, so with a glove on only the pause counts.
+  const handsUp = cameraHandsUp || gloveOn;
 
   // ── Continuous signing ────────────────────────────────────────────────
   // Every recognised sign joins a running sentence. A saved phrase that the

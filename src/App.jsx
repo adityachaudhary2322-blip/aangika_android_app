@@ -8,6 +8,10 @@ import Settings from './views/Settings.jsx';
 import RecordedVideoTranslator from './views/RecordedVideoTranslator.jsx';
 import MySigns from './views/MySigns.jsx';
 import DemoMode from './views/DemoMode.jsx';
+import { installGloveSim } from './services/glove/sim.js';
+
+// Simulated glove for tests / development (only with ?glove=sim in the URL).
+installGloveSim();
 import WordList from './views/WordList.jsx';
 import Phrases from './views/Phrases.jsx';
 import Meet from './views/Meet.jsx';

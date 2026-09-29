@@ -31,6 +31,11 @@ const DB_VERSION = 1;
 export const EXPORT_FORMAT = 'aangika-custom-signs/1';
 
 export const OUTPUT_TYPES = ['word', 'name', 'sentence'];
+/** Camera handshapes/movements, and glove static/motion signs. */
+export const SIGN_KINDS = ['handshape', 'movement', 'glove', 'glove-motion'];
+
+/** Is `token` a built-in gesture or model word? (glove signs may reuse them) */
+export const isReservedToken = (token) => reserved.has(String(token || '').toUpperCase());
 export const WORD_CATEGORIES = [
   'pronoun', 'person', 'action', 'thing', 'place', 'time', 'describing',
   'question', 'negation', 'other',
@@ -174,15 +179,19 @@ export function validate(record, { ignoreId = null } = {}) {
   if (!/^[A-Z0-9_]{1,32}$/.test(token)) errors.push('Token must be 1-32 letters, digits or _.');
   // Single letters A-Z are fingerspelling handshapes, a namespace of their own:
   // the model word "i" must not stop anyone teaching the letter I.
-  if (reserved.has(token) && !/^[A-Z]$/.test(token)) {
+  if (reserved.has(token) && !/^[A-Z]$/.test(token) && !String(record.kind).startsWith('glove')) {
     errors.push(`${token} is already a built-in sign or model word.`);
   }
   const clash = findByToken(token);
   if (clash && clash.id !== ignoreId) errors.push(`You already have a sign called ${token}.`);
-  if (!['handshape', 'movement'].includes(record.kind)) errors.push('Unknown sign kind.');
-  if (!['one', 'two'].includes(record.hands)) errors.push('Choose one or two hands.');
+  if (!SIGN_KINDS.includes(record.kind)) errors.push('Unknown sign kind.');
+  const glove = String(record.kind).startsWith('glove');
+  if (!glove && !['one', 'two'].includes(record.hands)) errors.push('Choose one or two hands.');
   const o = record.output || {};
-  if (!OUTPUT_TYPES.includes(o.type)) errors.push('Choose word, name or sentence.');
+  // A glove sign may produce an existing vocabulary word (type 'gloss'): it
+  // is another way to sign DOCTOR, so the grammar must still see DOCTOR.
+  const allowed = glove ? [...OUTPUT_TYPES, 'gloss'] : OUTPUT_TYPES;
+  if (!allowed.includes(o.type)) errors.push('Choose word, name or sentence.');
   if (!String(o.text_en || '').trim()) errors.push('Enter the text this sign means.');
   if (o.type === 'word' && o.category && !WORD_CATEGORIES.includes(o.category)) {
     errors.push('Unknown word category.');
@@ -264,7 +273,10 @@ export async function importJSON(json, { mode = 'merge' } = {}) {
   for (const raw of data.signs) {
     const r = { ...raw, id: undefined };
     let token = String(r.token || '').toUpperCase();
-    if (findByToken(token) || reserved.has(token)) {
+    // Glove signs and single letters may reuse a model word; only a clash
+    // with another of the user's own signs needs a new name.
+    const mayReuse = String(r.kind).startsWith('glove') || /^[A-Z]$/.test(token);
+    if (findByToken(token) || (!mayReuse && reserved.has(token))) {
       let n = 2;
       while (findByToken(`${token}_${n}`) || reserved.has(`${token}_${n}`)) n += 1;
       report.renamed.push([token, `${token}_${n}`]);
