@@ -249,7 +249,7 @@ export default function useSignPipeline({
       // ── Frame engines: classify this frame alone, then stop ──────────
       if (engine.mode === 'frame') {
         // SignBridge: built-in rules and the user's own signs together.
-        const hit = engine.classify({ hands: result.hands, pose: result.pose, mirrored });
+        const hit = engine.classify({ hands: result.hands, pose: result.pose, mirrored, t: ts });
         // classifyFrame returns `token`, not `label`. Reading the
         // wrong field made every frame look like a miss, which then called
         // setWords([]) with a fresh array 30x/second -- a full re-render per

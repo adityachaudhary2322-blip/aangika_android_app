@@ -392,7 +392,7 @@ function Chat({ messages, selfId, onSend, onClose }) {
   useEffect(() => { const el = ref.current; if (el) el.scrollTop = el.scrollHeight; }, [messages]);
 
   return (
-    <aside className="fixed inset-x-0 bottom-0 z-40 flex h-[60vh] flex-col rounded-t-[2rem] border border-subtle bg-card shadow-card lg:static lg:h-auto lg:w-80 lg:rounded-3xl">
+    <aside className="float-pane fixed inset-x-0 bottom-0 z-40 flex h-[60vh] flex-col rounded-t-[2rem] border border-subtle bg-card shadow-card lg:static lg:h-auto lg:w-80 lg:rounded-3xl">
       <header className="flex items-center border-b border-subtle px-4 py-3">
         <span className="display text-lg">Chat</span>
         <button type="button" onClick={onClose} aria-label="Close chat" className="btn-icon ml-auto h-8 w-8">

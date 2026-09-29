@@ -9,6 +9,7 @@
  */
 
 import { MODELS, getModel, defaultModel, SIGN_LANGUAGES } from '../config/models.js';
+import { isHosted } from './sarvamClient.js';
 
 const VISION_KEY = 'vision_engine';
 const GRAMMAR_KEY = 'grammar_engine';
@@ -87,8 +88,11 @@ export const GRAMMAR_ENGINES = {
     detail:
       'Sends the recognised words to Sarvam\'s chat model (sarvam-30b) with ' +
       'the ISL grammar priors; Mayura fills any language the model skips, and ' +
-      'Bulbul speaks all 11. Needs a Sarvam key; if the chat model is ' +
-      'unavailable the local rules make the sentence and Mayura translates it.',
+      'Bulbul speaks all 11. ' +
+      (isHosted()
+        ? 'Included: no key needed (your own key in Settings is used instead, if you add one). '
+        : 'Needs a Sarvam key. ') +
+      'If the chat model is unavailable the local rules make the sentence and Mayura translates it.',
     tone: 'primary',
   },
   [GRAMMAR_GEMINI_ONLINE]: {
@@ -169,8 +173,9 @@ export function setSignLanguage(language) {
   return { language: lang, vision };
 }
 
+/** Default: Sarvam when this build includes the hosted service (no key needed). */
 export function getGrammarEngine() {
-  return read(GRAMMAR_KEY, GRAMMAR_VALUES, GRAMMAR_QWEN_OFFLINE);
+  return read(GRAMMAR_KEY, GRAMMAR_VALUES, isHosted() ? GRAMMAR_SARVAM_ONLINE : GRAMMAR_QWEN_OFFLINE);
 }
 
 export function setGrammarEngine(value) {

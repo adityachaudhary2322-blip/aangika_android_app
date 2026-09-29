@@ -20,8 +20,9 @@
  */
 
 import { getLanguage, sarvamTtsPayload } from '../config/languages.js';
+import { hasSarvam, sarvamFetch } from './sarvamClient.js';
 
-const SARVAM_TTS_URL = 'https://api.sarvam.ai/text-to-speech';
+const SARVAM_TTS_PATH = '/text-to-speech';
 
 const state = {
   unlocked: false,
@@ -158,24 +159,13 @@ export async function availableLanguages(codes) {
 
 // ── Sarvam ───────────────────────────────────────────────────────────────────
 
-function getSarvamKey() {
-  try {
-    return localStorage.getItem('isl.sarvamKey') || '';
-  } catch {
-    return '';
-  }
-}
-
+// Own key or the hosted proxy (sarvamClient.js).
 export async function synthesizeSarvam(text, code) {
-  const key = getSarvamKey();
-  if (!key) throw new Error('No Sarvam key set.');
+  if (!hasSarvam()) throw new Error('No Sarvam key set.');
 
-  const response = await fetch(SARVAM_TTS_URL, {
+  const response = await sarvamFetch(SARVAM_TTS_PATH, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'api-subscription-key': key,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(sarvamTtsPayload(text, code)),
   });
   if (!response.ok) throw new Error('Sarvam TTS: HTTP ' + response.status);

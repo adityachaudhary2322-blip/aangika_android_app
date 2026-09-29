@@ -23,6 +23,7 @@ import { expand } from './islGrammar.js';
 import {
   reconstruct as geminiReconstruct, sarvamReconstruct, sarvamTranslate, getKeys,
 } from './translator.js';
+import { hasSarvam, isHosted } from './sarvamClient.js';
 import { getLanguage } from '../config/languages.js';
 import { findByToken, textFor } from './customSigns.js';
 import { expandAsl } from './aslGrammar.js';
@@ -88,13 +89,18 @@ const STORAGE_KEY = 'isl.pipelineMode';
 /** The last online engine chosen, so the offline toggle can restore it. */
 const LAST_ONLINE_KEY = 'isl.pipelineOnline';
 
-/** Persisted so the choice survives a reload. */
+/**
+ * Persisted so the choice survives a reload. With nothing chosen yet, a build
+ * that includes the hosted Sarvam service starts on Sarvam: it works without
+ * the user entering any key.
+ */
+const DEFAULT_MODE = () => (isHosted() ? MODE_SARVAM : MODE_ONLINE);
 export function getMode() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return MODES.includes(saved) ? saved : MODE_ONLINE;
+    return MODES.includes(saved) ? saved : DEFAULT_MODE();
   } catch {
-    return MODE_ONLINE;
+    return DEFAULT_MODE();
   }
 }
 
@@ -120,7 +126,7 @@ export function toggleMode() {
   try { last = localStorage.getItem(LAST_ONLINE_KEY); } catch { /* private mode */ }
   if (last === MODE_SARVAM || last === MODE_ONLINE) return setMode(last);
   const keys = getKeys();
-  return setMode(keys.sarvam || !keys.gemini ? MODE_SARVAM : MODE_ONLINE);
+  return setMode(hasSarvam() || !keys.gemini ? MODE_SARVAM : MODE_ONLINE);
 }
 
 /**
@@ -134,7 +140,7 @@ export function describeMode(mode = getMode(), { online = true, hasKey } = {}) {
   // Each online engine needs its own key; callers may only know Gemini's.
   const keys = getKeys();
   const keyed = mode === MODE_SARVAM
-    ? Boolean(keys.sarvam)
+    ? hasSarvam()
     : (hasKey ?? Boolean(keys.gemini));
   const degraded = mode !== MODE_OFFLINE && (!online || !keyed);
   const engineName = mode === MODE_SARVAM ? 'Sarvam' : 'Gemini';

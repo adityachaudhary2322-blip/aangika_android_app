@@ -6,6 +6,7 @@ import {
   subscribe as subscribePwa, canInstall, promptInstall, isStandalone, isIOS, offlineStatus, prepareOffline,
 } from '../services/pwa.js';
 import { getKeys, setKey } from '../services/translator.js';
+import { isHosted } from '../services/sarvamClient.js';
 import { getTurnCredentials, setTurnCredentials } from '../services/iceConfig.js';
 import {
   GRAMMAR_ENGINES,
@@ -131,12 +132,20 @@ export default function Settings({
           className="field mt-1"
         />
 
-        <label className="mt-3 block text-xs text-ink-dim">Sarvam API key</label>
+        <label className="mt-3 block text-xs text-ink-dim">
+          Sarvam API key{isHosted() ? ' (optional)' : ''}
+        </label>
+        {isHosted() && (
+          <p className="mt-1 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-[11px] text-primary">
+            Sarvam is included: sentences, translation, voice and speech-to-text work without a key.
+            {sarvam ? ' Using your own key instead.' : ''}
+          </p>
+        )}
         <input
           type="password"
           value={sarvam}
           onChange={(e) => setSarvam(e.target.value)}
-          placeholder="Sentences, translation, speech in and out"
+          placeholder={isHosted() ? 'Only if you want to use your own key' : 'Sentences, translation, speech in and out'}
           className="field mt-1"
         />
         <p className="mt-1.5 text-[10px] leading-relaxed text-ink-dim">
@@ -186,10 +195,11 @@ export default function Settings({
         <p className="mt-3 flex gap-2 text-[11px] leading-relaxed text-amber">
           <ShieldAlert size={26} className="shrink-0" />
           <span>
-            Keys are stored in this browser&apos;s localStorage and sent directly
-            from the page to Gemini and Sarvam. Anyone with access to this device
-            or its devtools can read them. That is acceptable for your own
-            testing; for anything shared, put a backend in front of these calls.
+            Keys you type here are stored in this browser&apos;s localStorage and
+            sent directly from the page to Gemini and Sarvam; anyone with access
+            to this device or its devtools can read them. The included Sarvam
+            service is different: its key stays on the server and never reaches
+            this device.
           </span>
         </p>
       </section>
@@ -285,7 +295,7 @@ const CUSTOM_PRESETS = ['#E11D48', '#0EA5E9', '#16A34A', '#F59E0B', '#8B5CF6', '
 function Appearance() {
   const {
     isDark, setTheme, palette, setPalette, customAccent, setCustomAccent,
-    ambientOn, setAmbient, mascotOn, setMascot,
+    ambientOn, setAmbient, mascotOn, setMascot, uiStyle, setUiStyle,
   } = useTheme();
 
   return (
@@ -295,8 +305,30 @@ function Appearance() {
         <p className="eyebrow">Appearance</p>
       </div>
 
+      {/* Style */}
+      <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-card-high p-1" role="group" aria-label="Style">
+        {[
+          { id: 'glass', label: 'Glass', detail: 'frosted, lit backdrop' },
+          { id: 'classic', label: 'Classic', detail: 'solid cards' },
+        ].map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setUiStyle(s.id)}
+            aria-pressed={uiStyle === s.id}
+            className={
+              'flex flex-col items-center rounded-xl py-1.5 text-sm font-semibold transition '
+              + (uiStyle === s.id ? 'bg-card text-ink shadow-card' : 'text-ink-dim hover:text-ink')
+            }
+          >
+            {s.label}
+            <span className="text-[10px] font-normal text-ink-dim">{s.detail}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Mode */}
-      <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-card-high p-1">
+      <div className="mt-2 grid grid-cols-2 gap-1 rounded-2xl bg-card-high p-1">
         {[
           { dark: false, label: 'Light', Icon: Sun },
           { dark: true, label: 'Dark', Icon: Moon },

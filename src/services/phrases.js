@@ -16,7 +16,7 @@
  * Phrases are small, so they live in localStorage and survive a reload.
  */
 
-import { sarvamTranslate, getKeys, isOnline } from './translator.js';
+import { sarvamTranslate, hasSarvam, isOnline } from './translator.js';
 
 const KEY = 'isl.phrases';
 const listeners = new Set();
@@ -115,7 +115,7 @@ export async function phraseText(phrase, code) {
   if (code === 'en-IN') return phrase.text_en;
   const cached = phrase.texts?.[code];
   if (cached) return cached;
-  if (!isOnline() || !getKeys().sarvam) return phrase.text_en;
+  if (!isOnline() || !hasSarvam()) return phrase.text_en;
   try {
     const out = await sarvamTranslate(phrase.text_en, code);
     const live = cache.find((p) => p.id === phrase.id);

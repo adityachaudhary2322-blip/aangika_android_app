@@ -390,9 +390,10 @@ function HeroCard({ onClick, tour, Icon, eyebrow, title, detail, fill, delay }) 
       data-tour={tour}
       style={{ animationDelay: delay }}
       className={
-        'group relative flex min-h-[9.5rem] animate-fade-up flex-col justify-between overflow-hidden rounded-3xl '
+        'hero-glass group relative flex min-h-[9.5rem] animate-fade-up flex-col justify-between overflow-hidden rounded-[1.75rem] '
         + 'bg-gradient-to-br p-5 text-left text-white shadow-card transition duration-300 '
         + 'hover:-translate-y-0.5 active:scale-[0.98] ' + fill
+        + (fill.includes('fill-c') ? ' hero-alt' : '')
       }
     >
       {/* A large, faint glyph rather than decoration for its own sake. */}

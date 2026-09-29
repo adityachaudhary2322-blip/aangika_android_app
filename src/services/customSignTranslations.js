@@ -9,7 +9,7 @@
  */
 
 import { LANGUAGES } from '../config/languages.js';
-import { sarvamTranslate, getKeys, isOnline } from './translator.js';
+import { sarvamTranslate, hasSarvam, isOnline } from './translator.js';
 import { listSigns, saveSign, getSign } from './customSigns.js';
 
 const langCodes = () => LANGUAGES.map((l) => l.code).filter((c) => c !== 'en-IN');
@@ -34,7 +34,7 @@ export async function fillSentenceLanguages(signOrId) {
     }
     return { filled: [], pending: [] };
   }
-  if (!isOnline() || !getKeys().sarvam) {
+  if (!isOnline() || !hasSarvam()) {
     await saveSign({ id: sign.id, output: { ...sign.output, pendingLangs: missing } });
     return {
       filled: [], pending: missing,
@@ -64,7 +64,7 @@ export async function fillSentenceLanguages(signOrId) {
 
 /** Finish every sentence sign that was saved offline. Safe to call repeatedly. */
 export async function fillPendingTranslations() {
-  if (!isOnline() || !getKeys().sarvam) return { signs: 0 };
+  if (!isOnline() || !hasSarvam()) return { signs: 0 };
   let signs = 0;
   for (const s of listSigns()) {
     if (s.output?.type === 'sentence' && missingLanguages(s).length) {

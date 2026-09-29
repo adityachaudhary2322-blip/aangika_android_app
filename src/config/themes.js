@@ -6,6 +6,9 @@
  * `ambient` names the animated layer drawn behind the app, if any.
  */
 export const PALETTES = [
+  // Made for the glass style: deep, softly lit backdrops (teal mist, warm copper).
+  { id: 'lagoon', name: 'Lagoon', swatch: ['#2F9E7A', '#2B6F8F'] },
+  { id: 'copper', name: 'Copper', swatch: ['#C8672A', '#7A3413'] },
   { id: 'iris', name: 'Iris', swatch: ['#7C3AED', '#0D9488'] },
   { id: 'ocean', name: 'Ocean', swatch: ['#2563EB', '#0891B2'] },
   { id: 'forest', name: 'Forest', swatch: ['#059669', '#B45309'] },
@@ -16,7 +19,14 @@ export const PALETTES = [
   { id: 'fireflies', name: 'Fireflies', swatch: ['#15803D', '#A16207'], ambient: 'fireflies' },
 ];
 
+/** The palette with no data-palette attribute (the stylesheet's :root values). */
 export const DEFAULT_PALETTE = 'iris';
+/** What a new user starts on (index.html's boot script agrees). */
+export const INITIAL_PALETTE = 'lagoon';
+
+/** Visual style: 'glass' (frosted surfaces over a lit backdrop) or 'classic'. */
+export const UI_STYLES = ['glass', 'classic'];
+export const DEFAULT_UI_STYLE = 'glass';
 export const CUSTOM = 'custom';
 export const DEFAULT_CUSTOM_ACCENT = '#E11D48';
 

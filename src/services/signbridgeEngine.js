@@ -91,6 +91,19 @@ export function extractHandFeature(landmarks, out) {
 const d2 = (a, b) => Math.hypot((a?.x ?? 0) - (b?.x ?? 0), (a?.y ?? 0) - (b?.y ?? 0));
 const radius = (lm, i) => d2(lm[i], lm[WRIST]);
 
+const MIDDLE_MCP = 9;
+/**
+ * Palm length (wrist to middle knuckle) the distance thresholds were tuned
+ * at: about a hand at arm's length in a 4:3 webcam frame. Shape distances are
+ * measured in these units, so a pinch is a pinch whether the hand is near
+ * the camera or far from it (and for small and large hands alike).
+ */
+export const REFERENCE_PALM = 0.11;
+const palmScale = (lm) => {
+  const palm = d2(lm[WRIST], lm[MIDDLE_MCP]);
+  return palm > 1e-4 ? REFERENCE_PALM / palm : 1;
+};
+
 /** Largest pairwise distance among the five fingertips. */
 function tipSpread(lm) {
   let max = 0;
@@ -139,6 +152,7 @@ export function handFlags(lm, pose = null) {
   const disagreement = yOpen.reduce((n, v, i) => n + (v === rOpen[i] ? 0 : 1), 0);
 
   const wrist = lm[WRIST];
+  const k = palmScale(lm);
   const shoulderY = pose?.[11]?.y ?? 0.42;
   const noseX = pose?.[0]?.x ?? 0.5;
   const noseY = pose?.[0]?.y ?? 0.25;
@@ -160,14 +174,15 @@ export function handFlags(lm, pose = null) {
     isWristNearMouth: Math.hypot(wrist.x - noseX, wrist.y - noseY) < 0.30,
     isChestLevel: wrist.y > 0.45 && wrist.y < 0.70,
 
-    // shape scalars
+    // shape scalars, in reference-palm units (see REFERENCE_PALM)
     indexTip: lm[INDEX_TIP],
-    indexMiddleGap: d2(lm[INDEX_TIP], lm[MIDDLE_TIP]),
-    pinch: d2(lm[THUMB_TIP], lm[INDEX_TIP]),
-    pinchMiddle: d2(lm[THUMB_TIP], lm[MIDDLE_TIP]),
-    tipCluster: tipSpread(lm),
-    thumbPinkyGap: d2(lm[THUMB_TIP], lm[PINKY_TIP]),
+    indexMiddleGap: d2(lm[INDEX_TIP], lm[MIDDLE_TIP]) * k,
+    pinch: d2(lm[THUMB_TIP], lm[INDEX_TIP]) * k,
+    pinchMiddle: d2(lm[THUMB_TIP], lm[MIDDLE_TIP]) * k,
+    tipCluster: tipSpread(lm) * k,
+    thumbPinkyGap: d2(lm[THUMB_TIP], lm[PINKY_TIP]) * k,
     wrist,
+    k,
   };
 }
 
@@ -182,6 +197,9 @@ export function handFlags(lm, pose = null) {
  */
 function rules(f, second, handCount) {
   const both = handCount >= 2;
+  // Distances BETWEEN the hands, in reference-palm units (both hands' mean).
+  const kk = second ? (f.k + second.k) / 2 : f.k;
+  const apart = (a, b) => d2(a, b) * kk;
   const R = [];
   const add = (token, conds, opts = {}) => R.push({ token, conds, ...opts });
 
@@ -263,7 +281,7 @@ function rules(f, second, handCount) {
     ['two hands', both],
     ['one hand flat', f.allOpen || (second && second.allOpen)],
     ['other hand a fist', f.allClosed || (second && second.allClosed)],
-    ['hands together', Boolean(second) && d2(f.wrist, second.wrist) < 0.22],
+    ['hands together', Boolean(second) && apart(f.wrist, second.wrist) < 0.22],
   ]);
 
   // 12. WASHROOM: the W shape.
@@ -291,7 +309,7 @@ function rules(f, second, handCount) {
   // 15. DONT_UNDERSTAND: two hands crossed at the chest.
   add('DONT_UNDERSTAND', [
     ['two hands', both],
-    ['wrists crossed', Boolean(second) && crossed(f, second)],
+    ['wrists crossed', Boolean(second) && crossed(f, second, kk)],
     ['at chest height', f.isChestLevel],
   ]);
 
@@ -300,7 +318,7 @@ function rules(f, second, handCount) {
     ['two hands', both],
     ['index and middle extended', f.indexOpen && f.middleOpen],
     ['touching the other wrist',
-      Boolean(second) && d2(f.indexTip, second.wrist) < 0.12],
+      Boolean(second) && apart(f.indexTip, second.wrist) < 0.12],
   ]);
 
   // 17. POLICE: two fingers at the opposite shoulder (a badge).
@@ -326,18 +344,18 @@ function rules(f, second, handCount) {
     ['same shape on both hands',
       Boolean(second) && second.indexOpen && second.middleOpen],
     ['hands close together',
-      Boolean(second) && d2(f.wrist, second.wrist) < 0.3],
+      Boolean(second) && apart(f.wrist, second.wrist) < 0.3],
   ], { motion: 'the tapping motion cannot be seen in one frame' });
 
   return R;
 }
 
 /** Wrists on opposite sides of each other: an X in front of the body. */
-function crossed(a, b) {
+function crossed(a, b, k = 1) {
   // Genuinely overlapping: close horizontally AND at a similar height. The
   // looser version matched any two hands held up at the same time.
-  return Math.abs(a.wrist.x - b.wrist.x) < 0.16 &&
-    Math.abs(a.wrist.y - b.wrist.y) < 0.12;
+  return Math.abs(a.wrist.x - b.wrist.x) * k < 0.16 &&
+    Math.abs(a.wrist.y - b.wrist.y) * k < 0.12;
 }
 
 // ── Classification ───────────────────────────────────────────────────────────
