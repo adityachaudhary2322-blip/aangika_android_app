@@ -1,5 +1,8 @@
+import { handleDictionary } from './dictionary.js';
+
 /**
- * Aangika's Sarvam proxy (Cloudflare Worker).
+ * Aangika's API (Cloudflare Worker): the Sarvam proxy below, and the
+ * community sign dictionary (dictionary.js).
  *
  * The app sends Sarvam requests here WITHOUT a key; this adds the project's
  * key (a Worker secret, never in the website or the APK) and forwards them to
@@ -13,7 +16,7 @@
  * - Body size caps; chat replies capped at MAX_CHAT_TOKENS and only the
  *   app's chat models; nothing is logged or stored.
  *
- * Deploy: see proxy/sarvam/README.md.
+ * Deploy: see server/README.md.
  */
 
 const UPSTREAM = 'https://api.sarvam.ai';
@@ -45,8 +48,9 @@ function allowedOrigins(env) {
 function cors(origin) {
   return {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'content-type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'content-type, if-none-match',
+    'Access-Control-Expose-Headers': 'ETag',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };
@@ -80,6 +84,11 @@ export async function handle(request, env, fetchImpl = fetch) {
   }
   if (url.pathname === '/health') return new Response('ok', { headers });
   if (!okOrigin) return reply(403, 'Origin not allowed.');
+
+  // Community sign dictionary (dictionary.js): its own limits and code check.
+  if (url.pathname === '/dictionary' || url.pathname.startsWith('/dictionary/')) {
+    return handleDictionary(request, env, headers);
+  }
 
   const route = ROUTES[url.pathname];
   if (!route) return reply(404, 'Unknown endpoint.', headers);

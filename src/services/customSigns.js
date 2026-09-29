@@ -143,9 +143,15 @@ function emit() {
 
 // ── Queries (synchronous) ───────────────────────────────────────────────────
 
+/** Every sign the recognisers use: the user's own AND the community dictionary's. */
 export function listSigns() {
   return [...cache.values()].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 }
+
+/** Signs this user taught (editable, exported, publishable). */
+export const listOwnSigns = () => listSigns().filter((s) => !s.shared);
+/** Signs from the community dictionary (read-only here). */
+export const listSharedSigns = () => listSigns().filter((s) => s.shared);
 
 export const getSign = (id) => cache.get(id) || null;
 
@@ -183,7 +189,11 @@ export function validate(record, { ignoreId = null } = {}) {
     errors.push(`${token} is already a built-in sign or model word.`);
   }
   const clash = findByToken(token);
-  if (clash && clash.id !== ignoreId) errors.push(`You already have a sign called ${token}.`);
+  if (clash && clash.id !== ignoreId) {
+    errors.push(clash.shared
+      ? `${token} is already in the community dictionary.`
+      : `You already have a sign called ${token}.`);
+  }
   if (!SIGN_KINDS.includes(record.kind)) errors.push('Unknown sign kind.');
   const glove = String(record.kind).startsWith('glove');
   if (!glove && !['one', 'two'].includes(record.hands)) errors.push('Choose one or two hands.');
@@ -245,12 +255,60 @@ export async function deleteSign(id) {
 
 // ── Export / import ─────────────────────────────────────────────────────────
 
+/** The user's OWN signs (community dictionary signs are not theirs to export). */
 export function exportJSON() {
   return JSON.stringify({
     format: EXPORT_FORMAT,
     exportedAt: new Date().toISOString(),
-    signs: listSigns(),
+    signs: listOwnSigns(),
   }, null, 2);
+}
+
+/**
+ * Make the local copy of the community dictionary match `remote` (the
+ * server's signs): add and update them, remove ones no longer published.
+ * They are stored with the user's signs (so every recogniser uses them, and
+ * they work offline) but marked `shared`, with id "shared:<server id>".
+ * A sign the user taught under the same name wins; that shared one is skipped.
+ * One change notification at the end, not one per sign.
+ * -> {added, updated, removed, skipped: [{token, reason}]}
+ */
+export async function applyShared(remote) {
+  await init();
+  const report = { added: 0, updated: 0, removed: 0, skipped: [] };
+  const keep = new Set();
+  const own = new Map(listOwnSigns().map((s) => [s.token, s]));
+  for (const raw of remote || []) {
+    const token = String(raw?.token || '').toUpperCase();
+    if (own.has(token)) { report.skipped.push({ token, reason: 'you have your own sign with this name' }); continue; }
+    const id = `shared:${raw.id}`;
+    const prev = cache.get(id);
+    // Same publication as the copy already here: nothing to write.
+    if (prev && raw.publishedAt && prev.publishedAt === raw.publishedAt) { keep.add(id); continue; }
+    const record = {
+      kind: 'handshape', hands: 'one', eitherHand: false,
+      ...raw,
+      id, token, shared: true, sharedId: raw.id,
+      output: { texts: {}, ...(raw.output || {}) },
+      untrained: !raw.samples?.length,
+      createdAt: raw.createdAt || prev?.createdAt || Date.now(),
+      updatedAt: Date.now(),
+    };
+    const errors = validate(record, { ignoreId: id });
+    if (errors.length || record.untrained) {
+      report.skipped.push({ token, reason: errors[0] || 'no samples' });
+      continue;
+    }
+    keep.add(id);
+    if (prev) report.updated += 1; else report.added += 1;
+    cache.set(id, record);
+    await putRecord(record);
+  }
+  for (const s of listSharedSigns()) {
+    if (!keep.has(s.id)) { cache.delete(s.id); await deleteRecord(s.id); report.removed += 1; }
+  }
+  if (report.added || report.updated || report.removed) emit();
+  return report;
 }
 
 /**
@@ -267,10 +325,12 @@ export async function importJSON(json, { mode = 'merge' } = {}) {
     throw new Error('Not an Aangika sign export.');
   }
   if (mode === 'replace') {
-    for (const id of [...cache.keys()]) { cache.delete(id); await deleteRecord(id); }
+    // Replaces the user's OWN signs; the community dictionary stays.
+    for (const s of listOwnSigns()) { cache.delete(s.id); await deleteRecord(s.id); }
   }
   const report = { added: 0, renamed: [], skipped: [] };
   for (const raw of data.signs) {
+    if (raw?.shared) continue;                      // never import dictionary copies as own signs
     const r = { ...raw, id: undefined };
     let token = String(r.token || '').toUpperCase();
     // Glove signs and single letters may reuse a model word; only a clash
@@ -355,7 +415,8 @@ export async function prunePlaceholders() {
 }
 
 export default {
-  init, listSigns, prunePlaceholders, getSign, findByToken, saveSign, deleteSign, exportJSON,
-  importJSON, migrateFromVocab, subscribe, getVersion, textFor, tokenFromText,
-  validate, setReservedTokens, isPersistent, OUTPUT_TYPES, WORD_CATEGORIES,
+  init, listSigns, listOwnSigns, listSharedSigns, applyShared, prunePlaceholders, getSign,
+  findByToken, saveSign, deleteSign, exportJSON, importJSON, migrateFromVocab, subscribe,
+  getVersion, textFor, tokenFromText, validate, setReservedTokens, isPersistent,
+  OUTPUT_TYPES, WORD_CATEGORIES,
 };

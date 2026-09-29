@@ -5,7 +5,7 @@
  *
  *     node scripts/test-proxy.mjs
  */
-import { handle, _test } from '../proxy/sarvam/worker.js';
+import { handle, _test } from '../server/worker.js';
 
 let pass = 0;
 let fail = 0;
@@ -49,7 +49,7 @@ check(r.status === 404, 'endpoints the app does not use are refused');
 r = await handle(req('/translate', { method: 'GET', ip: '3.3.3.4' }), ENV, upstream);
 check(r.status === 405, 'GET is refused');
 r = await handle(req('/translate', { method: 'OPTIONS' }), ENV, upstream);
-check(r.status === 204 && r.headers.get('Access-Control-Allow-Methods') === 'POST, OPTIONS', 'CORS preflight answered');
+check(r.status === 204 && r.headers.get('Access-Control-Allow-Methods') === 'GET, POST, OPTIONS', 'CORS preflight answered');
 
 r = await handle(req('/v1/chat/completions', { ip: '4.4.4.4', body: JSON.stringify({ model: 'sarvam-30b', messages: [], max_tokens: 99999 }) }), ENV, upstream);
 check(r.status === 200 && JSON.parse(seen.body).max_tokens === _test.MAX_CHAT_TOKENS, 'chat max_tokens capped', `sent ${JSON.parse(seen.body).max_tokens}`);

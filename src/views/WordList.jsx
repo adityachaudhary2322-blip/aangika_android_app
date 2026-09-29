@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Search, BookOpen, Plus, Volume2 } from 'lucide-react';
 import { listSigns, subscribe } from '../services/customSigns.js';
+import { DictionaryPanel } from '../components/CommunityDictionary.jsx';
 import { GESTURE_TOKENS } from '../config/gestureSentences.js';
 import { speak } from '../services/ttsService.js';
 
@@ -84,6 +85,8 @@ export default function WordList({ onBack, onNavigate }) {
       </header>
 
       <div className="px-5 pb-3">
+        {/* Signs developers shared with every user; updates by itself too. */}
+        <div className="mb-3"><DictionaryPanel compact /></div>
         <div data-tour="word-search" className="flex items-center gap-2 rounded-2xl border border-subtle bg-card px-4 py-2.5 shadow-card transition focus-within:border-primary">
           <Search size={15} className="text-ink-dim" />
           <input
