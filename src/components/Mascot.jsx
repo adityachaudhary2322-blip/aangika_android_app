@@ -4,7 +4,7 @@ import { useTheme } from '../context/ThemeContext.jsx';
 import {
   answer, topicById, CONTEXT, TOPICS, TOURS, TIPS, guideFacts,
 } from '../config/guide.js';
-import { sarvamChat, getKeys, isOnline } from '../services/translator.js';
+import { sarvamChat, hasSarvam, isOnline } from '../services/translator.js';
 
 const INTRO_KEY = 'isl.mascot.introduced';
 const SIZE = 60;
@@ -235,7 +235,7 @@ export default function Mascot({ view, onNavigate, raised, hidden }) {
           />
         )}
         {atHome && intro && !open && (
-          <div className={(peek && W < 1024 ? 'right-9 ' : 'right-6 ') + 'animate-pop-in absolute bottom-full mb-2 w-56 rounded-2xl rounded-br-md border border-subtle bg-card px-3.5 py-2.5 text-xs shadow-card lg:right-2'}>
+          <div className={(peek && W < 1024 ? 'right-9 ' : 'right-6 ') + 'float-pane animate-pop-in absolute bottom-full mb-2 w-56 rounded-2xl rounded-br-md border border-subtle bg-card px-3.5 py-2.5 text-xs shadow-card lg:right-2'}>
             <p className="font-semibold">Hi, I’m Mudra!</p>
             <p className="mt-0.5 text-ink-dim">Want me to show you around?</p>
             <div className="mt-2 flex gap-3">
@@ -249,7 +249,7 @@ export default function Mascot({ view, onNavigate, raised, hidden }) {
           </div>
         )}
         {tip && (
-          <div className="animate-pop-in absolute bottom-full left-1/2 mb-2 w-56 -translate-x-1/2 rounded-2xl border border-subtle bg-card px-3.5 py-2.5 text-xs shadow-card">
+          <div className="float-pane animate-pop-in absolute bottom-full left-1/2 mb-2 w-56 -translate-x-1/2 rounded-2xl border border-subtle bg-card px-3.5 py-2.5 text-xs shadow-card">
             <p className="flex items-center gap-1 font-semibold text-primary"><Sparkles size={12} /> Tip</p>
             <p className="mt-0.5 leading-relaxed">{tip.text}</p>
             {tip.go && (
@@ -319,7 +319,7 @@ function TourBubble({ tour, mascot, onBack, onNext, onClose, onGo }) {
     <div
       role="dialog"
       aria-label="Tour"
-      className="animate-pop-in fixed z-50 rounded-3xl border border-subtle bg-card p-4 shadow-card"
+      className="float-pane animate-pop-in fixed z-50 rounded-3xl border border-subtle bg-card p-4 shadow-card"
       style={style}
     >
       <div className="flex items-center gap-2">
@@ -421,7 +421,7 @@ function MascotSprite({ onClick, open, peek, running, facing }) {
       }
     >
       {happy && (
-        <span className="animate-pop-in absolute -top-7 right-2 whitespace-nowrap rounded-full bg-card px-2 py-0.5 text-[10px] font-bold text-primary shadow-card">
+        <span className="float-pane animate-pop-in absolute -top-7 right-2 whitespace-nowrap rounded-full bg-card px-2 py-0.5 text-[10px] font-bold text-primary shadow-card">
           hehe, that tickles!
         </span>
       )}
@@ -522,7 +522,7 @@ function GuidePanel({ peek, view, onClose, onNavigate, onPalette, onHide, onTour
       ]);
       return;
     }
-    const canAsk = Boolean(getKeys().sarvam) && isOnline();
+    const canAsk = hasSarvam() && isOnline();
     if (!canAsk) {
       setThread((list) => [
         ...list,
@@ -584,7 +584,7 @@ function GuidePanel({ peek, view, onClose, onNavigate, onPalette, onHide, onTour
     <div
       role="dialog"
       aria-label="Guide"
-      className={(peek ? 'right-9 ' : 'right-4 ') + 'animate-pop-in absolute bottom-full mb-3 flex max-h-[min(32rem,70vh)] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-subtle bg-card shadow-card lg:right-0'}
+      className={(peek ? 'right-9 ' : 'right-4 ') + 'float-pane animate-pop-in absolute bottom-full mb-3 flex max-h-[min(32rem,70vh)] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-subtle bg-card shadow-card lg:right-0'}
     >
       <header className="flex items-center gap-2 border-b border-subtle px-4 py-3">
         <span className="display text-base">Mudra</span>

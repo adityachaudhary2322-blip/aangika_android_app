@@ -61,7 +61,7 @@ export default function ModelPicker({ value, onChange }) {
         <ul
           role="listbox"
           aria-label="Recognition models"
-          className="absolute left-0 top-full z-30 mt-2 w-[17rem] max-w-[calc(100vw-2rem)] space-y-1 rounded-2xl border border-subtle bg-card p-1.5 shadow-card"
+          className="float-pane absolute left-0 top-full z-30 mt-2 w-[17rem] max-w-[calc(100vw-2rem)] space-y-1 rounded-2xl border border-subtle bg-card p-1.5 shadow-card"
         >
           {MODELS.map((m) => {
             const on = m.id === current.id;

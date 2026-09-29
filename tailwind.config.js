@@ -13,6 +13,15 @@
  * nothing. See src/index.css for the values.
  */
 const themed = (name) => `rgb(var(${name}) / <alpha-value>)`;
+/**
+ * Surfaces and hairlines also take a style-level multiplier: the glass style
+ * (index.css, [data-style="glass"]) lowers --card-alpha / --line-alpha so
+ * every `bg-card` and `border-subtle` in the app turns to frosted glass
+ * without touching each component. Classic leaves both at 1 (unchanged).
+ */
+const surface = (name) => `rgb(var(${name}) / calc(<alpha-value> * var(--card-alpha, 1)))`;
+const line = (name) => `rgb(var(${name}) / calc(<alpha-value> * var(--line-alpha, 1)))`;
+const lineStrong = (name) => `rgb(var(${name}) / calc(<alpha-value> * var(--line-strong-alpha, 1)))`;
 
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
@@ -25,9 +34,9 @@ export default {
         // Page and raised surfaces, lightest-to-deepest in whichever theme.
         surface: themed('--bg-main'),
         'surface-low': themed('--bg-deep'),
-        card: themed('--bg-surface'),
-        'card-high': themed('--bg-surface-high'),
-        'card-highest': themed('--bg-surface-highest'),
+        card: surface('--bg-surface'),
+        'card-high': surface('--bg-surface-high'),
+        'card-highest': surface('--bg-surface-highest'),
 
         // Accents. In light these are the 600/700 ramp so they stay legible as
         // TEXT on white; in dark they are the bright 300/400 ramp.
@@ -47,12 +56,12 @@ export default {
 
         // Hairlines. Solid colours rather than white-at-low-alpha: a
         // `border-white/10` is invisible on an off-white page.
-        subtle: themed('--border-subtle'),
-        strong: themed('--border-strong'),
+        subtle: line('--border-subtle'),
+        strong: lineStrong('--border-strong'),
       },
       borderColor: {
-        subtle: themed('--border-subtle'),
-        strong: themed('--border-strong'),
+        subtle: line('--border-subtle'),
+        strong: lineStrong('--border-strong'),
       },
       boxShadow: {
         glow: '0 10px 30px -12px rgb(var(--fill-a) / 0.55)',

@@ -332,10 +332,133 @@
     --fill-d: 133 77 14;
   }
 
+  /* Lagoon: teal mist (the default for new users). */
+  [data-palette="lagoon"] {
+    --bg-main: 238 246 244;
+    --bg-surface: 255 255 255;
+    --bg-surface-high: 231 242 239;
+    --bg-surface-highest: 214 231 226;
+    --bg-deep: 226 238 235;
+    --text-primary: 14 36 33;
+    --text-muted: 70 99 94;
+    --accent-brand: 4 108 88;
+    --accent-cyan: 22 94 128;
+    --border-subtle: 214 232 227;
+    --border-strong: 188 214 207;
+    --fill-a: 21 128 101;
+    --fill-b: 13 94 80;
+    --fill-c: 30 102 140;
+    --fill-d: 21 72 102;
+  }
+
+  .dark[data-palette="lagoon"] {
+    --bg-main: 8 20 20;
+    --bg-surface: 16 34 33;
+    --bg-surface-high: 26 48 47;
+    --bg-surface-highest: 38 64 62;
+    --bg-deep: 4 11 12;
+    --text-primary: 232 244 241;
+    --text-muted: 160 190 184;
+    --accent-brand: 110 231 183;
+    --accent-cyan: 125 211 252;
+    --border-subtle: 30 52 50;
+    --border-strong: 48 74 71;
+    --fill-a: 29 138 104;
+    --fill-b: 15 94 76;
+    --fill-c: 34 110 150;
+    --fill-d: 20 74 104;
+  }
+
+  /* Copper: warm amber glow. */
+  [data-palette="copper"] {
+    --bg-main: 250 244 239;
+    --bg-surface: 255 255 255;
+    --bg-surface-high: 245 235 227;
+    --bg-surface-highest: 234 219 208;
+    --bg-deep: 242 231 222;
+    --text-primary: 43 24 14;
+    --text-muted: 112 86 72;
+    --accent-brand: 170 70 20;
+    --accent-cyan: 124 45 18;
+    --border-subtle: 240 226 215;
+    --border-strong: 224 204 189;
+    --fill-a: 194 94 38;
+    --fill-b: 146 60 20;
+    --fill-c: 124 45 18;
+    --fill-d: 92 34 14;
+  }
+
+  .dark[data-palette="copper"] {
+    --bg-main: 20 11 7;
+    --bg-surface: 34 20 14;
+    --bg-surface-high: 50 32 23;
+    --bg-surface-highest: 70 46 34;
+    --bg-deep: 10 6 4;
+    --text-primary: 246 236 228;
+    --text-muted: 196 170 155;
+    --accent-brand: 251 170 110;
+    --accent-cyan: 253 186 116;
+    --border-subtle: 56 36 26;
+    --border-strong: 80 55 41;
+    --fill-a: 200 103 42;
+    --fill-b: 150 64 22;
+    --fill-c: 122 52 19;
+    --fill-d: 88 36 14;
+  }
+
+  /* ── Glass style tokens ──────────────────────────────────────────────────
+     After every palette so they win at equal specificity. Surfaces become
+     translucent (tailwind.config.js multiplies card colours by --card-alpha)
+     and hairlines become light edges, over the lit backdrop drawn on body. */
+  :root[data-style="glass"] {
+    --card-alpha: 0.58;
+    --line-alpha: 0.75;
+    --line-strong-alpha: 1;
+    --border-subtle: 255 255 255;
+    --border-strong: 255 255 255;
+    --g-hi: 0.78;
+    --g-lo: 0.46;
+    --g-edge: 0.85;
+    --g-shine: 0.9;
+    --shadow-card: 0 1px 2px 0 rgb(24 22 43 / 0.04),
+      0 18px 40px -22px rgb(var(--fill-b) / 0.45);
+  }
+
+  :root[data-style="glass"].dark {
+    --card-alpha: 0.42;
+    --line-alpha: 0.12;
+    --line-strong-alpha: 0.24;
+    --g-hi: 0.13;
+    --g-lo: 0.04;
+    --g-edge: 0.14;
+    --g-shine: 0.16;
+    --shadow-card: 0 24px 50px -28px rgb(0 0 0 / 0.75);
+  }
+
   html,
   body,
   #root {
     height: 100%;
+  }
+
+  /* The lit backdrop behind the glass: soft pools of the palette's colours
+     over its deepest shade, fixed so the glass slides over it. Gradients
+     only (no image to download), so it costs nothing offline. */
+  :root[data-style="glass"] body {
+    background-color: rgb(var(--bg-main));
+    background-image:
+      radial-gradient(42rem 32rem at 12% -6%, rgb(var(--fill-a) / 0.34), transparent 64%),
+      radial-gradient(38rem 30rem at 108% 32%, rgb(var(--fill-c) / 0.28), transparent 62%),
+      radial-gradient(46rem 34rem at 28% 108%, rgb(var(--accent-brand) / 0.22), transparent 66%),
+      linear-gradient(180deg, rgb(var(--bg-main)), rgb(var(--bg-deep)));
+  }
+
+  :root[data-style="glass"].dark body {
+    background-image:
+      radial-gradient(42rem 32rem at 12% -6%, rgb(var(--fill-a) / 0.55), transparent 64%),
+      radial-gradient(38rem 30rem at 108% 32%, rgb(var(--fill-c) / 0.42), transparent 62%),
+      radial-gradient(46rem 34rem at 28% 108%, rgb(var(--fill-b) / 0.5), transparent 66%),
+      linear-gradient(180deg, rgb(var(--bg-main)), rgb(var(--bg-deep)));
   }
 
   body {
@@ -469,6 +592,101 @@
   /** A round control sitting on video: filled when on, ghosted when off. */
   .chrome-ghost {
     @apply bg-slate-900/10 text-slate-900 dark:bg-white/15 dark:text-white;
+  }
+
+  /* ── Glass style ─────────────────────────────────────────────────────────
+     Frosted panes with a lit top edge, pill-shaped controls, a clean sans
+     for titles. Blur is applied only to these shared surfaces (a few per
+     screen), never to every list row, to keep phones smooth. Camera chrome
+     (.chrome-plate) is deliberately left opaque: text over live video must
+     stay readable whatever the camera sees. */
+  [data-style="glass"] .surface-card,
+  [data-style="glass"] .tile,
+  [data-style="glass"] .glass,
+  [data-style="glass"] .hero-glass {
+    background-image: linear-gradient(150deg, rgb(255 255 255 / var(--g-hi)), rgb(255 255 255 / var(--g-lo)));
+    background-color: transparent;
+    border-color: rgb(255 255 255 / var(--g-edge));
+    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / var(--g-shine)), var(--shadow-card);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    backdrop-filter: blur(22px) saturate(150%);
+  }
+
+  [data-style="glass"] .surface-card,
+  [data-style="glass"] .tile {
+    border-radius: 1.75rem;
+  }
+
+  /* Hero cards: tinted glass, the palette's colour glowing through. */
+  [data-style="glass"] .hero-glass {
+    background-image:
+      linear-gradient(140deg, rgb(var(--fill-a) / 0.88), rgb(var(--fill-b) / 0.55) 55%, rgb(255 255 255 / 0.10)),
+      linear-gradient(150deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.02));
+    border: 1px solid rgb(255 255 255 / 0.22);
+  }
+  [data-style="glass"] .hero-glass.hero-alt {
+    background-image:
+      linear-gradient(140deg, rgb(var(--fill-c) / 0.88), rgb(var(--fill-d) / 0.55) 55%, rgb(255 255 255 / 0.10)),
+      linear-gradient(150deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.02));
+  }
+
+  /* The main action: a lit pill fading into glass ("View details"). */
+  [data-style="glass"] .btn-primary {
+    background-image: linear-gradient(115deg, rgb(var(--fill-a) / 0.95), rgb(var(--fill-a) / 0.55) 60%, rgb(255 255 255 / 0.14));
+    border: 1px solid rgb(255 255 255 / 0.28);
+    border-radius: 9999px;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.32), 0 14px 32px -16px rgb(var(--fill-a) / 0.9);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+  }
+
+  [data-style="glass"] .btn-quiet,
+  [data-style="glass"] .btn-icon {
+    background-color: rgb(255 255 255 / var(--g-lo));
+    background-image: linear-gradient(150deg, rgb(255 255 255 / var(--g-hi)), rgb(255 255 255 / var(--g-lo)));
+    border-color: rgb(255 255 255 / var(--g-edge));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / var(--g-shine));
+    border-radius: 9999px;
+  }
+
+  [data-style="glass"] .pill:not(.chrome-plate) {
+    border-color: rgb(255 255 255 / var(--g-edge));
+  }
+
+  [data-style="glass"] .field {
+    background-color: rgb(255 255 255 / var(--g-lo));
+    border-color: rgb(255 255 255 / var(--g-edge));
+    border-radius: 1.25rem;
+  }
+
+  /* Menus, dialogs and speech bubbles float OVER other content, so they stay
+     nearly solid (with blur) instead of turning see-through like cards. */
+  [data-style="glass"] .float-pane {
+    background-color: rgb(var(--bg-surface) / 0.94);
+    background-image: none;
+    border-color: rgb(255 255 255 / var(--g-edge));
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    backdrop-filter: blur(24px) saturate(140%);
+  }
+
+  /* Light glass: keep the tinted hero cards deep enough for white text. */
+  [data-style="glass"]:not(.dark) .hero-glass {
+    background-image:
+      linear-gradient(140deg, rgb(var(--fill-a) / 0.92), rgb(var(--fill-b) / 0.78) 60%, rgb(var(--fill-b) / 0.62)),
+      linear-gradient(150deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.02));
+  }
+  [data-style="glass"]:not(.dark) .hero-glass.hero-alt {
+    background-image:
+      linear-gradient(140deg, rgb(var(--fill-c) / 0.92), rgb(var(--fill-d) / 0.78) 60%, rgb(var(--fill-d) / 0.62)),
+      linear-gradient(150deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.02));
+  }
+
+  /* Titles in a clean, tight sans, like the rest of the glass look. */
+  [data-style="glass"] .display {
+    font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+    font-variation-settings: normal;
+    font-weight: 700;
+    letter-spacing: -0.025em;
   }
 }
 

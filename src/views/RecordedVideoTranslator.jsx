@@ -5,7 +5,7 @@ import {
 import LanguageSelect from '../components/LanguageSelect.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import landmarker from '../services/landmarker.js';
-import { classifyFrame } from '../services/signbridgeCombined.js';
+import { createSignBridgeTracker } from '../services/signbridgeTracker.js';
 import { init as initCustomSigns } from '../services/customSigns.js';
 import { translate } from '../services/translationService.js';
 import {
@@ -39,6 +39,7 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
   const videoRef = useRef(null);
   const samplesRef = useRef([]);
   const timestampRef = useRef(0);
+  const trackerRef = useRef(createSignBridgeTracker());
   const cancelRef = useRef(false);
   const trackRef = useRef(null);
 
@@ -89,6 +90,7 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
 
     samplesRef.current = [];
     timestampRef.current = 0;
+    trackerRef.current = createSignBridgeTracker();
     cancelRef.current = false;
     setCues([]);
     setStatus('scanning');
@@ -112,7 +114,8 @@ export default function RecordedVideoTranslator({ language, setLanguage, mode, o
         // A file of a signer facing the camera has the geometry of the live
         // front camera's raw frames, so it uses the same side convention
         // (mirrored) as the frames "My signs" were recorded from.
-        const hit = classifyFrame(result.hands, result.pose, { mirrored: true });
+        // Same smoothing as the live camera, on the video's own clock.
+        const hit = trackerRef.current.classify(result.hands, result.pose, { mirrored: true, t: ts });
         samplesRef.current.push({
           timeMs: mediaMs,
           token: hit?.token || null,

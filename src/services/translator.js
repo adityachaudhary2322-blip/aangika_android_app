@@ -17,10 +17,13 @@ import { buildAslRequest } from './aslRules.js';
 const requestFor = (signLanguage) => (signLanguage === 'ASL' ? buildAslRequest : buildGeminiRequest);
 import { getLanguage, sarvamTtsPayload } from '../config/languages.js';
 
+import { hasSarvam, sarvamFetch } from './sarvamClient.js';
+
 const GEMINI_ENDPOINT =
   'https://generativelanguage.googleapis.com/v1beta/models';
-const SARVAM_TTS_URL = 'https://api.sarvam.ai/text-to-speech';
-const SARVAM_STT_URL = 'https://api.sarvam.ai/speech-to-text';
+// Sarvam paths: sent with the user's own key, or through the hosted proxy.
+const SARVAM_TTS_PATH = '/text-to-speech';
+const SARVAM_STT_PATH = '/speech-to-text';
 
 // Measured against this project's key on 2026-09-07: gemini-3.6-flash works;
 // 2.5-flash, 2.0-flash and 1.5-flash all return 404 "no longer available to
@@ -37,10 +40,13 @@ const STT_MODELS = ['saaras:v3', 'saaras:v2.5', 'saarika:v2.5', 'saarika:v2'];
 
 // Sarvam's chat models as of 2026-09 (sarvam-m is retired and now rejected).
 // 30b first: it is the faster one, and a sign sentence is a short job.
-const SARVAM_CHAT_URL = 'https://api.sarvam.ai/v1/chat/completions';
+const SARVAM_CHAT_PATH = '/v1/chat/completions';
 const SARVAM_CHAT_MODELS = ['sarvam-30b', 'sarvam-105b'];
 
-/** Keys live in localStorage, never in the bundle. */
+/**
+ * The user's own keys (localStorage, never in the bundle). Whether Sarvam can
+ * be used at all is hasSarvam(): a hosted proxy works without a key.
+ */
 export function getKeys() {
   try {
     return {
@@ -170,16 +176,15 @@ function stripThinking(text) {
  * ([{role, content}]). Returns { text, model }; throws when every model fails.
  */
 export async function sarvamChat(messages, { temperature = 0.2, maxTokens = 600 } = {}) {
-  const { sarvam } = getKeys();
-  if (!sarvam) throw new Error('No Sarvam key set.');
+  if (!hasSarvam()) throw new Error('No Sarvam key set.');
   if (!isOnline()) throw new Error('Device is offline.');
 
   const errors = [];
   for (const model of SARVAM_CHAT_MODELS) {
     try {
-      const response = await fetch(SARVAM_CHAT_URL, {
+      const response = await sarvamFetch(SARVAM_CHAT_PATH, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'api-subscription-key': sarvam },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens }),
       });
       if (!response.ok) { errors.push(`${model}: HTTP ${response.status}`); continue; }
@@ -236,16 +241,12 @@ export async function sarvamReconstruct(tags, languageCode, { glossary = [], sig
 
 /** Synthesise with Sarvam; returns a Blob. Throws on failure. */
 export async function synthesize(text, languageCode) {
-  const { sarvam } = getKeys();
-  if (!sarvam) throw new Error('No Sarvam key set.');
+  if (!hasSarvam()) throw new Error('No Sarvam key set.');
   if (!text || !text.trim()) throw new Error('Nothing to speak.');
 
-  const response = await fetch(SARVAM_TTS_URL, {
+  const response = await sarvamFetch(SARVAM_TTS_PATH, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'api-subscription-key': sarvam,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(sarvamTtsPayload(text, languageCode)),
   });
 
@@ -293,20 +294,19 @@ export async function speak(text, languageCode) {
   }
 }
 
-const SARVAM_TRANSLATE_URL = 'https://api.sarvam.ai/translate';
+const SARVAM_TRANSLATE_PATH = '/translate';
 /** Mayura first; sarvam-translate:v1 covers anything Mayura rejects. */
 const TRANSLATE_MODELS = ['mayura:v1', 'sarvam-translate:v1'];
 const TRANSLATE_CHAR_LIMIT = 1000;
 
 /**
- * English -> target language with Sarvam /translate (dev key path; Phase 9
- * moves this behind the proxy). Throws on failure so callers can queue a retry.
+ * English -> target language with Sarvam /translate (own key or the hosted
+ * proxy). Throws on failure so callers can queue a retry.
  */
 export async function sarvamTranslate(
   text, targetCode, { mode = 'modern-colloquial', source = 'en-IN' } = {}
 ) {
-  const { sarvam } = getKeys();
-  if (!sarvam) throw new Error('No Sarvam key set.');
+  if (!hasSarvam()) throw new Error('No Sarvam key set.');
   const input = String(text || '').trim();
   if (!input) return '';
   if (targetCode === source) return input;
@@ -315,9 +315,9 @@ export async function sarvamTranslate(
   const errors = [];
   for (const model of TRANSLATE_MODELS) {
     try {
-      const response = await fetch(SARVAM_TRANSLATE_URL, {
+      const response = await sarvamFetch(SARVAM_TRANSLATE_PATH, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'api-subscription-key': sarvam },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           input,
           // 'auto' lets Mayura detect the language, for transcripts.
@@ -341,8 +341,7 @@ export async function sarvamTranslate(
 
 /** Transcribe a recorded Blob with Sarvam STT. Throws on failure. */
 export async function transcribe(blob, languageCode = 'unknown') {
-  const { sarvam } = getKeys();
-  if (!sarvam) throw new Error('No Sarvam key set.');
+  if (!hasSarvam()) throw new Error('No Sarvam key set.');
 
   const errors = [];
   for (const model of STT_MODELS) {
@@ -352,11 +351,7 @@ export async function transcribe(blob, languageCode = 'unknown') {
     form.append('language_code', languageCode);
 
     try {
-      const response = await fetch(SARVAM_STT_URL, {
-        method: 'POST',
-        headers: { 'api-subscription-key': sarvam },
-        body: form,
-      });
+      const response = await sarvamFetch(SARVAM_STT_PATH, { method: 'POST', body: form });
       if (response.ok) {
         const body = await response.json();
         return (body.transcript || '').trim();
@@ -369,7 +364,9 @@ export async function transcribe(blob, languageCode = 'unknown') {
   throw new Error('All STT models failed - ' + errors.join(' | '));
 }
 
+export { hasSarvam };
+
 export default {
   reconstruct, sarvamReconstruct, sarvamChat, synthesize, speak, transcribe,
-  sarvamTranslate, getKeys, setKey, isOnline,
+  sarvamTranslate, getKeys, setKey, isOnline, hasSarvam,
 };

@@ -17,7 +17,7 @@ import {
   handsBySide, shoulderFrame, packSample, shapeVector, LOCATION_LABELS,
 } from '../services/handshapeFeatures.js';
 import { matchMeter, currentIndex } from '../services/customHandshapes.js';
-import { classifyFrame } from '../services/signbridgeCombined.js';
+import { createSignBridgeTracker } from '../services/signbridgeTracker.js';
 import { checkConflicts } from '../services/signConflicts.js';
 import { fillSentenceLanguages, missingLanguages } from '../services/customSignTranslations.js';
 import { LANGUAGES } from '../config/languages.js';
@@ -710,16 +710,19 @@ function TryIt({ sign, cameraError }) {
   const [overall, setOverall] = useState(null);
   const frameRef = useRef(null);
   const lastPush = useRef(0);
+  // Every frame goes through the same smoothing as the translator, so "what
+  // the translator sees" here is exactly what it would say.
+  const trackerRef = useRef(createSignBridgeTracker());
 
   useEffect(() => cameraManager.subscribe((s) => setMirrored(s.isFrontCamera)), []);
 
   const onFrame = useCallback((result) => {
     frameRef.current = recognizer.packFrame(result.pose, result.hands, mirrored);
     const now = performance.now();
+    const hit = trackerRef.current.classify(result.hands, result.pose, { mirrored, t: now });
     if (now - lastPush.current < 100) return;          // 10 UI updates / second
     lastPush.current = now;
     setMeter(matchMeter(result.hands, result.pose, sign.id, { mirrored, index: currentIndex() }));
-    const hit = classifyFrame(result.hands, result.pose, { mirrored });
     setOverall(hit?.token ? { token: hit.token, engine: hit.engine, confidence: hit.confidence } : null);
   }, [mirrored, sign.id]);
 

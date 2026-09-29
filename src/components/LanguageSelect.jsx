@@ -51,7 +51,7 @@ export default function LanguageSelect({
         <div
           role="listbox"
           className={
-            'absolute z-50 mt-1 max-h-64 w-44 overflow-y-auto rounded-xl ' +
+            'float-pane absolute z-50 mt-1 max-h-64 w-44 overflow-y-auto rounded-xl ' +
             'border border-subtle bg-card-high p-1 shadow-xl no-scrollbar ' +
             (align === 'right' ? 'right-0' : 'left-0')
           }

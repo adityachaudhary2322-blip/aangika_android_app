@@ -2,8 +2,8 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
 import {
-  DEFAULT_PALETTE, CUSTOM, DEFAULT_CUSTOM_ACCENT, getPalette, customAccentVars,
-  CUSTOM_VAR_NAMES,
+  DEFAULT_PALETTE, INITIAL_PALETTE, CUSTOM, DEFAULT_CUSTOM_ACCENT, getPalette, customAccentVars,
+  CUSTOM_VAR_NAMES, UI_STYLES, DEFAULT_UI_STYLE,
 } from '../config/themes.js';
 
 /**
@@ -36,6 +36,7 @@ const PALETTE_KEY = 'app_palette';
 const ACCENT_KEY = 'app_accent';
 const AMBIENT_KEY = 'app_ambient';
 const MASCOT_KEY = 'app_mascot';
+const STYLE_KEY = 'app_style';
 
 function readPref(key, fallback) {
   try {
@@ -113,9 +114,21 @@ export function ThemeProvider({ children }) {
   );
   const [explicit, setExplicit] = useState(() => readStored() !== null);
   const [palette, setPaletteState] = useState(() => {
-    const p = readPref(PALETTE_KEY, DEFAULT_PALETTE);
+    const p = readPref(PALETTE_KEY, INITIAL_PALETTE);
     return p === CUSTOM || getPalette(p) ? p : DEFAULT_PALETTE;
   });
+  const [uiStyle, setUiStyleState] = useState(() => {
+    const s = readPref(STYLE_KEY, DEFAULT_UI_STYLE);
+    return UI_STYLES.includes(s) ? s : DEFAULT_UI_STYLE;
+  });
+  useEffect(() => {
+    if (typeof document !== 'undefined') document.documentElement.setAttribute('data-style', uiStyle);
+  }, [uiStyle]);
+  const setUiStyle = useCallback((s) => {
+    const v = UI_STYLES.includes(s) ? s : DEFAULT_UI_STYLE;
+    setUiStyleState(v);
+    writePref(STYLE_KEY, v);
+  }, []);
   const [customAccent, setCustomAccentState] = useState(
     () => readPref(ACCENT_KEY, DEFAULT_CUSTOM_ACCENT)
   );
@@ -197,9 +210,12 @@ export function ThemeProvider({ children }) {
     setAmbient,
     mascotOn,
     setMascot,
+    /** 'glass' (default) or 'classic'. */
+    uiStyle,
+    setUiStyle,
   }), [
     theme, explicit, choose, toggleTheme, palette, setPalette, customAccent,
-    setCustomAccent, ambientOn, setAmbient, mascotOn, setMascot,
+    setCustomAccent, ambientOn, setAmbient, mascotOn, setMascot, uiStyle, setUiStyle,
   ]);
 
   return (

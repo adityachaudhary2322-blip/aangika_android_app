@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0C0B14" />
-    <title>Aangika — ISL Connect</title>
-    <meta name="description" content="Indian Sign Language to speech, speech to text, and signed video calls." />
+    <title>Aangika — Sign Language Translator</title>
+    <meta name="description" content="Indian Sign Language (and ASL for international users) to speech, speech to text, and signed video calls. By team HealX." />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/favicon.png" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -34,10 +34,14 @@
             ? saved === 'dark'
             : window.matchMedia('(prefers-color-scheme: dark)').matches;
           document.documentElement.classList.toggle('dark', dark);
-          var palette = localStorage.getItem('app_palette');
-          if (palette && palette !== 'iris' && palette !== 'custom') {
+          // New users start on the Lagoon palette in the glass style.
+          var palette = localStorage.getItem('app_palette') || 'lagoon';
+          if (palette !== 'iris' && palette !== 'custom') {
             document.documentElement.setAttribute('data-palette', palette);
           }
+          document.documentElement.setAttribute(
+            'data-style', localStorage.getItem('app_style') === 'classic' ? 'classic' : 'glass'
+          );
           document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
           document
             .querySelector('meta[name="theme-color"]')

@@ -144,14 +144,37 @@ console.log('\n4. SignBridge: switch frees the tagger, same output as before\n' 
       handedness: r() < 0.5 ? 'Left' : 'Right',
     }]),
   ];
-  let same = 0;
-  for (const hands of frames) {
-    const a = classifyFrame(hands, pose, { mirrored: true });
-    const b = res.engine.classify({ hands, pose, mirrored: true });
-    if (a?.token === b?.token && a?.confidence === b?.confidence) same += 1;
+  // The engine now runs classifyFrame() through the SignBridge tracker
+  // (smoothing + voting), so a HELD sign must come out as classifyFrame()
+  // reads it, and random garbage frames must never produce a sign that
+  // classifyFrame() did not see at all.
+  res.engine.reset();
+  let t = 0;
+  let held = null;
+  for (let i = 0; i < 8; i++) {
+    t += 33;
+    held = res.engine.classify({ hands: frames[0], pose, mirrored: true, t });
   }
-  check(same === frames.length, 'classify() == classifyFrame() on 32 frames', `${same}/${frames.length}`);
-  const words = await res.engine.recognize([{ hands: frames[0], pose, mirrored: true }]);
+  const raw = classifyFrame(frames[0], pose, { mirrored: true });
+  check(held?.token === raw?.token && held?.engine === raw?.engine,
+    'a held sign: classify() agrees with classifyFrame()', `${held?.token} / ${raw?.token}`);
+  res.engine.reset();
+  const seenRaw = new Set();
+  let invented = 0;
+  for (const hands of frames.slice(2)) {
+    t += 33;
+    const a = classifyFrame(hands, pose, { mirrored: true });
+    if (a?.token) seenRaw.add(a.token);
+    const b = res.engine.classify({ hands, pose, mirrored: true, t });
+    if (b?.token && !seenRaw.has(b.token)) invented += 1;
+  }
+  check(invented === 0, 'noise frames: never a sign the raw classifier did not see', `${invented} invented`);
+  res.engine.reset();
+  let words = [];
+  for (let i = 0; i < 4; i++) {
+    t += 33;
+    words = await res.engine.recognize([{ hands: frames[0], pose, mirrored: true, t }]);
+  }
   check(words[0]?.word === 'HELLO', 'recognize([frame]) -> [{word, confidence}]', JSON.stringify(words));
 }
 
