@@ -232,6 +232,15 @@ export default function Settings({
           matched separately and are usually far more reliable for you.
         </p>
       </section>
+
+      <section className="mt-4 overflow-hidden rounded-3xl border border-subtle bg-black text-center">
+        <img
+          src="/brand/logo-720.jpg"
+          alt="Aangika, ISL translator. Made by team HealX: healing the unknown."
+          className="mx-auto w-full max-w-sm"
+          loading="lazy"
+        />
+      </section>
     </div>
   );
 }
