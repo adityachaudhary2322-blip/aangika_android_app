@@ -113,6 +113,31 @@ export async function addContact(contactId) {
   if (error && error.code !== '23505') throw error;         // already a contact: fine
 }
 
+/** Insert rows as the signed-in user (RLS decides what is allowed). */
+export async function insertAsUser(table, rows) {
+  const s = await getSession();
+  if (!s) throw new Error('Sign in first.');
+  const { error } = await (await sb()).from(table).insert(rows.map((r) => ({ ...r, owner: s.user.id })));
+  if (error) throw error;
+}
+
+/** Rows for the review page (admins only, enforced by RLS). */
+export async function listForReview(status = 'pending', limit = 50) {
+  const { data, error } = await (await sb()).from('contributions')
+    .select('id, created_at, label, sign_language, model_id, model_version, frames, feature_dim, review_status, device')
+    .eq('review_status', status).order('created_at', { ascending: true }).limit(limit);
+  if (error) throw error;
+  return data;
+}
+
+export async function review(id, status) {
+  const s = await getSession();
+  const { error } = await (await sb()).from('contributions')
+    .update({ review_status: status, reviewed_by: s.user.id, reviewed_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 /** Chrome Android's Contact Picker, if available (read-only, user-chosen). */
 export const contactPickerAvailable = () => typeof navigator !== 'undefined'
   && 'contacts' in navigator && typeof navigator.contacts?.select === 'function';

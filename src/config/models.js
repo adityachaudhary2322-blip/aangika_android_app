@@ -36,6 +36,7 @@ export const ORT_WASM = {
 export const MODELS = [
   {
     id: 'isl-aangika-v2',
+    version: 2,
     name: 'Aangika ISL tagger v2',
     language: 'ISL',
     kind: 'sign tagger',
@@ -75,6 +76,7 @@ export const MODELS = [
   },
   {
     id: 'isl-signbridge',
+    version: 1,
     name: 'SignBridge + My signs',
     language: 'ISL',
     kind: 'handshape rules',
@@ -110,6 +112,7 @@ export const MODELS = [
 
 MODELS.push({
   id: 'asl-islr-250',
+  version: 1,
   name: 'ASL isolated signs (250)',
   language: 'ASL',
   kind: 'isolated signs',

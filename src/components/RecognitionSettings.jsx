@@ -8,6 +8,7 @@ import {
   getSignLanguage, setSignLanguage, modelIdFor, visionFor,
 } from '../services/engineState.js';
 import { formatMB } from '../services/download.js';
+import { onUpdates } from '../services/modelUpdates.js';
 
 /**
  * Settings > Recognition: which sign language, and which model reads it.
@@ -36,6 +37,9 @@ export default function RecognitionSettings({ visionEngine, chooseVision }) {
 
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => engines.subscribe(setLoad), []);
+  // A newly published model (models/index.json) appears without a reload.
+  const [, bump] = useState(0);
+  useEffect(() => onUpdates(() => { bump((n) => n + 1); refresh(); }), [refresh]);
 
   const pickLanguage = (l) => {
     const { language, vision } = setSignLanguage(l);

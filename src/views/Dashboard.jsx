@@ -12,6 +12,9 @@ import { useCall } from '../context/CallContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import BrandMark from '../components/BrandMark.jsx';
+import {
+  getSigner, setSigner, subscribe as subscribeSigner,
+} from '../services/signerPrefs.js';
 
 /** Secondary tools, below the two primary actions. */
 const TOOLS = [
@@ -45,6 +48,12 @@ export default function Dashboard({
   const [phrases, setPhrases] = useState(() => listPhrases());
 
   useEffect(() => subscribePhrases(setPhrases), []);
+
+  // Asked once: does the user sign, or are they here for someone who does?
+  const [signer, setSignerState] = useState(() => getSigner());
+  useEffect(() => subscribeSigner((s) => setSignerState(s.signer)), []);
+  const [asking, setAsking] = useState(false);
+  const answer = (v) => { setSigner(v); setAsking(false); };
 
   useEffect(() => {
     if (!note) return undefined;
@@ -137,7 +146,22 @@ export default function Dashboard({
               >
                 {badge.icon} {badge.short}
               </button>
+              {signer && (
+                <button
+                  type="button"
+                  onClick={() => setAsking((v) => !v)}
+                  className="pill border-subtle bg-card py-1.5 text-ink transition hover:border-strong"
+                >
+                  <Hand size={13} className="text-primary" />
+                  {signer === 'me' ? 'I sign' : 'For someone who signs'}
+                  <ChevronDown size={12} className={'transition ' + (asking ? 'rotate-180' : '')} />
+                </button>
+              )}
             </section>
+
+            {(!signer || asking) && (
+              <SignerQuestion value={signer} onAnswer={answer} />
+            )}
 
             {pickerOpen && (
               <div className="surface-card mt-3 grid animate-fade-up grid-cols-2 gap-1 p-2 sm:grid-cols-3">
@@ -162,14 +186,17 @@ export default function Dashboard({
             )}
 
             {/* ── Primary actions ──────────────────────────────────── */}
+            {/* Worded for whoever is holding the phone. */}
             <section className="mt-5 grid gap-3 sm:grid-cols-2">
               <HeroCard
                 onClick={() => onNavigate('sign')}
                 tour="hero-sign"
                 Icon={Hand}
-                eyebrow="Camera"
-                title="Sign to speech"
-                detail="Sign in front of the camera and it is spoken aloud."
+                eyebrow={signer === 'friend' ? 'Back camera' : 'Camera'}
+                title={signer === 'friend' ? 'Understand their signs' : 'Sign to speech'}
+                detail={signer === 'friend'
+                  ? 'Point the camera at the person signing; their signs are read out to you.'
+                  : 'Sign in front of the camera and it is spoken aloud.'}
                 fill="from-fill-a to-fill-b"
                 delay="60ms"
               />
@@ -178,8 +205,10 @@ export default function Dashboard({
                 tour="hero-hearing"
                 Icon={Mic}
                 eyebrow="Microphone"
-                title="Speech to text"
-                detail="Live captions, with typed replies read aloud."
+                title={signer === 'friend' ? 'Reply by speaking' : 'Speech to text'}
+                detail={signer === 'friend'
+                  ? 'Talk normally; they read your words as live captions.'
+                  : 'Live captions of what people say, with typed replies read aloud.'}
                 fill="from-fill-c to-fill-d"
                 delay="120ms"
               />
@@ -294,6 +323,37 @@ export default function Dashboard({
         </div>
       </main>
     </div>
+  );
+}
+
+/** The one question the app asks up front. Either answer can be changed later. */
+function SignerQuestion({ value, onAnswer }) {
+  const options = [
+    { id: 'me', title: 'Yes, I sign', detail: 'Front camera. What I sign is spoken aloud.' },
+    { id: 'friend', title: 'No, I talk with someone who signs', detail: 'Back camera on them. I reply by speaking.' },
+  ];
+  return (
+    <section className="surface-card mt-4 animate-fade-up p-4" aria-labelledby="signer-q">
+      <p id="signer-q" className="text-sm font-semibold">Do you use sign language yourself?</p>
+      <p className="mt-0.5 text-[11px] text-ink-dim">So the camera and buttons fit how you will use Aangika.</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {options.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => onAnswer(o.id)}
+            aria-pressed={value === o.id}
+            className={
+              'rounded-2xl border px-3 py-2.5 text-left transition hover:border-strong '
+              + (value === o.id ? 'border-primary/50 bg-primary/10' : 'border-subtle bg-card')
+            }
+          >
+            <span className="block text-sm font-semibold">{o.title}</span>
+            <span className="block text-[11px] leading-snug text-ink-dim">{o.detail}</span>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
