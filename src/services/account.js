@@ -13,8 +13,6 @@ import { normaliseList } from './phone.js';
 
 const URL = import.meta.env?.VITE_SUPABASE_URL || '';
 const ANON = import.meta.env?.VITE_SUPABASE_ANON_KEY || '';
-/** Phone OTP costs money per SMS: off unless explicitly enabled. */
-export const PHONE_OTP_ENABLED = import.meta.env?.VITE_FEATURE_PHONE_OTP === 'true';
 
 export const isConfigured = () => Boolean(URL && ANON);
 
@@ -49,6 +47,40 @@ export async function signInWithGoogle() {
   if (error) throw error;
 }
 
+/**
+ * Account from a phone number alone: no SMS, no Google. An anonymous Supabase
+ * session is created on this device and the number (plus a name) is saved to
+ * it and made findable. Nobody can sign in to it by typing the number: the
+ * account lives in this device's session until Google is linked.
+ */
+export async function signUpWithNumber({ phone, displayName }) {
+  if (!phone) throw new Error('Enter a valid phone number.');
+  if (!String(displayName || '').trim()) throw new Error('Enter your name, so friends know it is you.');
+  const db = await sb();
+  if (!(await getSession())) {
+    const { error } = await db.auth.signInAnonymously();
+    if (error) {
+      throw new Error(/anonymous/i.test(error.message)
+        ? 'Number sign-up is not enabled on the server yet (Supabase: Authentication > Sign In / Providers > Allow anonymous sign-ins).'
+        : error.message);
+    }
+  }
+  const profile = await saveProfile({ phone, displayName: displayName.trim() });
+  await setDiscoverable(true);
+  return { ...profile, discoverable: true };
+}
+
+/** An account made from a number only (no Google linked yet). */
+export const isNumberOnly = (session) => Boolean(session?.user?.is_anonymous);
+
+/** Attach Google to a number-only account, to use it on other devices too. */
+export async function linkGoogle() {
+  const { error } = await (await sb()).auth.linkIdentity({
+    provider: 'google', options: { redirectTo: window.location.origin },
+  });
+  if (error) throw error;
+}
+
 export async function signOut() {
   if (isConfigured()) await (await sb()).auth.signOut();
 }
@@ -76,13 +108,18 @@ export async function saveProfile({ handle, displayName, role, signLanguage, dev
   if (role !== undefined) row.role = role;
   if (signLanguage !== undefined) row.sign_language = signLanguage;
   if (deviceId !== undefined) row.device_id = deviceId;
-  if (phone !== undefined) row.phone_e164 = phone || null;       // verified server-side only
+  if (phone !== undefined) row.phone_e164 = phone || null;       // self-declared; never marked verified here
   const { data, error } = await (await sb()).from('profiles').upsert(row).select().single();
+  if (error?.code === '23505') {
+    throw new Error(/phone/.test(error.message || '')
+      ? 'This number is already used by another Aangika account.'
+      : 'That handle is taken; try another.');
+  }
   if (error) throw error;
   return data;
 }
 
-/** Opt in or out of being findable by people who have your verified number. */
+/** Opt in or out of being findable by people who have your number. */
 export async function setDiscoverable(on) {
   const s = await getSession();
   if (!s) throw new Error('Sign in first.');
@@ -94,9 +131,9 @@ export async function setDiscoverable(on) {
 }
 
 /**
- * Ask the server which of these numbers belong to discoverable users with a
- * VERIFIED number. The reply contains matches only; nothing is learned about
- * numbers that did not match. Requires your own consent first.
+ * Ask the server which of these numbers belong to discoverable users. The
+ * reply contains matches only (each with `verified`); nothing is learned
+ * about numbers that did not match. Requires your own consent first.
  */
 export async function discoverFriends(rawNumbers) {
   const numbers = normaliseList(rawNumbers);
@@ -150,5 +187,5 @@ export async function pickContactNumbers() {
 export default {
   isConfigured, getSession, onAuthChange, signInWithGoogle, signOut, getProfile, saveProfile,
   setDiscoverable, discoverFriends, addContact, contactPickerAvailable, pickContactNumbers,
-  PHONE_OTP_ENABLED,
+  signUpWithNumber, isNumberOnly, linkGoogle,
 };

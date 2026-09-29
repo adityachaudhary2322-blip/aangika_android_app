@@ -33,15 +33,17 @@ export function normaliseList(raws, max = 500) {
 }
 
 /**
- * Server-side rule (mirrored in supabase/functions/discover-friends): only
- * profiles that are discoverable AND have a verified number may match, and
- * the reply contains matches only: nothing about numbers that did not match.
+ * Server-side rule (mirrored in supabase/functions/discover-friends): a
+ * profile matches when its owner made it discoverable and the number is one
+ * the caller looked up. Numbers are self-declared (no SMS check), so each
+ * match says whether the number was verified. The reply contains matches
+ * only: nothing about numbers that did not match.
  */
-export function matchVerified(profiles, numbers) {
+export function matchDiscoverable(profiles, numbers) {
   const wanted = new Set(numbers);
   return profiles
-    .filter((p) => p.discoverable && p.phone_verified && wanted.has(p.phone_e164))
-    .map((p) => ({ id: p.id, handle: p.handle, display_name: p.display_name }));
+    .filter((p) => p.discoverable && p.phone_e164 && wanted.has(p.phone_e164))
+    .map((p) => ({ id: p.id, handle: p.handle, display_name: p.display_name, verified: Boolean(p.phone_verified) }));
 }
 
-export default { toE164, normaliseList, matchVerified };
+export default { toE164, normaliseList, matchDiscoverable };
