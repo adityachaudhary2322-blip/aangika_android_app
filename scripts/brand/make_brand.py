@@ -53,7 +53,9 @@ def square(img: Image.Image, fill: float, bg, size: int) -> Image.Image:
     return canvas
 
 
-def unblend(img: Image.Image, floor: int = 10) -> Image.Image:
+# The backdrop is not pure black: a faint vignette reaches ~27/255 near the
+# mark (p99), which otherwise shows as a ghost rectangle on light surfaces.
+def unblend(img: Image.Image, floor: int = 30) -> Image.Image:
     """Transparent version of art drawn on black.
 
     The logo is light on a black backdrop, so each pixel is (colour x alpha)
