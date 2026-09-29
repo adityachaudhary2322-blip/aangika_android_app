@@ -74,3 +74,6 @@ training/.venv-tf/
 # PlatformIO build output
 firmware/**/.pio/
 firmware/**/.vscode/
+
+# Offline MediaPipe assets staged for the Android build (scripts/fetch-offline-assets.mjs)
+public/mediapipe/

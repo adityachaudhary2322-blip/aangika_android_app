@@ -162,6 +162,20 @@ export default function App() {
     });
   }, []);
 
+  // Android back button (the Capacitor app dispatches 'aangika:back'): step
+  // back to Home from any screen; on Home, let the app close.
+  useEffect(() => {
+    const onBack = (e) => {
+      if (view === 'dashboard' || view === 'messenger') {
+        e.detail?.exit?.();
+        return;
+      }
+      go(view === 'mysigns' ? returnTo : view === 'demo' ? 'settings' : 'dashboard');
+    };
+    window.addEventListener('aangika:back', onBack);
+    return () => window.removeEventListener('aangika:back', onBack);
+  }, [view, returnTo, go]);
+
   const unread = useMemo(
     () => chatStore.getContacts().reduce((n, c) => n + (c.unread || 0), 0),
     [revision]

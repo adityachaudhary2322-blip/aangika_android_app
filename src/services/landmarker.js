@@ -15,6 +15,10 @@
 import {
   FilesetResolver, HandLandmarker, PoseLandmarker, FaceLandmarker,
 } from '@mediapipe/tasks-vision';
+import { assetUrl, LOCAL_MEDIAPIPE } from './platform.js';
+
+/** CDN on the website; the copy bundled in the APK in the Android app. */
+const local = (url) => assetUrl(url, `${LOCAL_MEDIAPIPE.models}/${url.split('/').pop()}`);
 
 // Model versions are pinned, not "latest": training/extract.py runs the same
 // .task files (training/download_models.py) so training features match what
@@ -44,15 +48,15 @@ export async function load(onProgress = () => {}) {
   if (loading) return loading;
 
   loading = (async () => {
-    onProgress('Loading MediaPipe runtime…');
-    fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
+    onProgress('Loading MediaPipe runtimeâ€¦');
+    fileset = await FilesetResolver.forVisionTasks(assetUrl(WASM_BASE, LOCAL_MEDIAPIPE.wasm));
 
     // Both models are the float16 builds -- roughly half the weights of the
     // float32 ones and the variants MediaPipe ships for mobile.
     const build = async (delegate) => {
-      onProgress(`Loading hand landmarker (${delegate})…`);
+      onProgress(`Loading hand landmarker (${delegate})â€¦`);
       handLandmarker = await HandLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: HAND_MODEL, delegate },
+        baseOptions: { modelAssetPath: local(HAND_MODEL), delegate },
         runningMode: 'VIDEO',
         numHands: 2,
         minHandDetectionConfidence: 0.5,
@@ -60,9 +64,9 @@ export async function load(onProgress = () => {}) {
         minTrackingConfidence: 0.5,
       });
 
-      onProgress(`Loading pose landmarker (${delegate})…`);
+      onProgress(`Loading pose landmarker (${delegate})â€¦`);
       poseLandmarker = await PoseLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: POSE_MODEL, delegate },
+        baseOptions: { modelAssetPath: local(POSE_MODEL), delegate },
         runningMode: 'VIDEO',
         numPoses: 1,
         minPoseDetectionConfidence: 0.5,
@@ -113,9 +117,9 @@ export async function loadFace(onProgress = () => {}) {
   if (faceLoading) return faceLoading;
   faceLoading = (async () => {
     await load(onProgress);
-    onProgress('Loading face landmarker…');
+    onProgress('Loading face landmarkerâ€¦');
     const make = (delegate) => FaceLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: FACE_MODEL, delegate },
+      baseOptions: { modelAssetPath: local(FACE_MODEL), delegate },
       runningMode: 'VIDEO',
       numFaces: 1,
       minFaceDetectionConfidence: 0.5,

@@ -9,6 +9,22 @@
 
 import { GLOVE_NAME, SERVICE_UUID, FRAME_UUID, CONTROL_UUID } from './protocol.js';
 
+// ── Registry: the Android app registers its native BLE transport here ──────
+const registry = new Map();
+
+/** e.g. registerTransport('native-ble', () => capacitorBleTransport()) */
+export function registerTransport(kind, factory) {
+  registry.set(kind, factory);
+}
+
+/** The best Bluetooth transport available: native (Android app) or Web Bluetooth. */
+export function bluetoothTransport() {
+  const native = registry.get('native-ble');
+  return native ? native() : webBluetoothTransport();
+}
+
+export const hasNativeBluetooth = () => registry.has('native-ble');
+
 /** Why Web Bluetooth is unavailable here, or null if it is available. */
 export function webBluetoothBlocker() {
   if (typeof navigator === 'undefined') return 'No browser.';

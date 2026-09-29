@@ -3,7 +3,9 @@ import {
   Bluetooth, Wifi, Volume2, Loader2, Trash2, AlertTriangle, Battery,
 } from 'lucide-react';
 import glove from '../services/glove/glove.js';
-import { webBluetoothTransport, webSocketTransport, webBluetoothBlocker } from '../services/glove/transports.js';
+import {
+  bluetoothTransport, webSocketTransport, webBluetoothBlocker, hasNativeBluetooth,
+} from '../services/glove/transports.js';
 import { FINGERS } from '../services/glove/protocol.js';
 import { featureOf, MOTION_FRAMES } from '../services/glove/recognizer.js';
 import {
@@ -28,7 +30,8 @@ export default function GloveSettings() {
   const [wsUrl, setWsUrl] = useState('ws://192.168.4.1:81');
   const [busy, setBusy] = useState(null);
   const [note, setNote] = useState(null);
-  const blocker = webBluetoothBlocker();
+  // The Android app brings its own Bluetooth; the browser needs Web Bluetooth.
+  const blocker = hasNativeBluetooth() ? null : webBluetoothBlocker();
   useEffect(() => glove.subscribe(setS), []);
 
   const run = async (label, fn) => {
@@ -50,7 +53,7 @@ export default function GloveSettings() {
 
       {!connected && (
         <div className="mt-3 space-y-2">
-          <button type="button" disabled={Boolean(blocker) || busy} onClick={() => run('ble', () => glove.connect(webBluetoothTransport()))}
+          <button type="button" disabled={Boolean(blocker) || busy} onClick={() => run('ble', () => glove.connect(bluetoothTransport()))}
             className="btn-quiet flex w-full items-center justify-center gap-2 disabled:opacity-50">
             {busy === 'ble' ? <Loader2 size={14} className="animate-spin" /> : <Bluetooth size={14} />} Connect over Bluetooth
           </button>
