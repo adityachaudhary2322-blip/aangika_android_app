@@ -12,6 +12,7 @@ import DemoMode from './views/DemoMode.jsx';
 import ReviewContributions from './views/ReviewContributions.jsx';
 import { checkForUpdates } from './services/modelUpdates.js';
 import { flush as flushContributions } from './services/contributions.js';
+import { checkForUpdates as checkDictionary } from './services/sharedDictionary.js';
 import { installGloveSim } from './services/glove/sim.js';
 
 // Simulated glove for tests / development (only with ?glove=sim in the URL).
@@ -125,6 +126,8 @@ export default function App() {
           setReservedTokens(vocab.words || []);
           await prunePlaceholders();
         }
+        // Community dictionary: signs developers shared with everyone.
+        checkDictionary().catch(() => {});
       } catch (err) {
         console.warn('[custom signs] bootstrap', err);
       }
@@ -137,6 +140,16 @@ export default function App() {
     if (online) checkForUpdates().catch(() => {});
     // Consented samples waiting on this device, if signed in.
     if (online) flushContributions().catch(() => {});
+    // Back online: pick up any signs published while offline.
+    if (online) checkDictionary().catch(() => {});
+  }, [online]);
+
+  // Left open for a long time: look for newly shared signs every 15 minutes
+  // (a 304 when nothing changed, so this costs almost nothing).
+  useEffect(() => {
+    if (!online) return undefined;
+    const id = setInterval(() => checkDictionary().catch(() => {}), 15 * 60 * 1000);
+    return () => clearInterval(id);
   }, [online]);
 
   useEffect(() => {

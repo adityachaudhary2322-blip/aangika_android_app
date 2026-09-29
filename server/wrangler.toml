@@ -1,0 +1,21 @@
+# Cloudflare Worker: Aangika's API (Sarvam proxy + community sign dictionary).
+# See README.md in this folder.
+name = "aangika-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# Your site's origin(s), comma-separated, in addition to the built-in
+# localhost / Android app origins in worker.js.
+ALLOWED_ORIGINS = "https://isl-connect.onrender.com"
+RATE_PER_MIN = "30"
+
+# Community sign dictionary storage. Create it once and paste the id here:
+#   npx wrangler kv namespace create DICT
+[[kv_namespaces]]
+binding = "DICT"
+id = "PASTE_THE_ID_FROM_wrangler_kv_namespace_create"
+
+# SECRETS, never written here:
+#   npx wrangler secret put SARVAM_API_KEY    (your Sarvam key)
+#   npx wrangler secret put DEV_CODE          (the developer code for publishing signs)

@@ -21,6 +21,9 @@ import { createSignBridgeTracker } from '../services/signbridgeTracker.js';
 import { checkConflicts } from '../services/signConflicts.js';
 import { fillSentenceLanguages, missingLanguages } from '../services/customSignTranslations.js';
 import { LANGUAGES } from '../config/languages.js';
+import {
+  DictionaryPanel, SharedSignList, DeveloperPublish,
+} from '../components/CommunityDictionary.jsx';
 
 const CAPTURES = 3;
 const CAPTURE_MS = 2000;
@@ -86,6 +89,8 @@ function useLandmarkLoop(active, onFrame) {
 
 export default function MySigns({ onBack, online, cameraError }) {
   const [signs, setSigns] = useState(() => listSigns());
+  // The list shows what THIS user taught; community signs are listed below it.
+  const ownSigns = useMemo(() => signs.filter((s) => !s.shared), [signs]);
   const [screen, setScreen] = useState({ name: 'list' });
   const [notice, setNotice] = useState(null);
   const fileRef = useRef(null);
@@ -144,7 +149,7 @@ export default function MySigns({ onBack, online, cameraError }) {
             <button type="button" onClick={() => fileRef.current?.click()} aria-label="Import signs" className="flex h-9 w-9 items-center justify-center rounded-full bg-card-high">
               <Upload size={15} />
             </button>
-            <button type="button" onClick={doExport} disabled={!signs.length} aria-label="Export signs" className="flex h-9 w-9 items-center justify-center rounded-full bg-card-high disabled:opacity-40">
+            <button type="button" onClick={doExport} disabled={!ownSigns.length} aria-label="Export signs" className="flex h-9 w-9 items-center justify-center rounded-full bg-card-high disabled:opacity-40">
               <Download size={15} />
             </button>
             <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={doImport} />
@@ -160,14 +165,22 @@ export default function MySigns({ onBack, online, cameraError }) {
 
       <div className="flex-1 overflow-y-auto px-4 pb-4 no-scrollbar">
         {screen.name === 'list' && (
-          <SignList
-            signs={signs}
-            onNew={() => setScreen({ name: 'edit', draft: emptyDraft() })}
-            onEdit={(s) => setScreen({ name: 'edit', draft: { ...s, tokenTouched: true } })}
-            onRecord={(s) => setScreen({ name: 'capture', draft: { ...s, samples: [], side: null, tokenTouched: true } })}
-            onTry={(s) => setScreen({ name: 'try', sign: s })}
-            onDelete={async (s) => { await deleteSign(s.id); flash(`Deleted ${s.token}.`); }}
-          />
+          <>
+            <SignList
+              signs={ownSigns}
+              onNew={() => setScreen({ name: 'edit', draft: emptyDraft() })}
+              onEdit={(s) => setScreen({ name: 'edit', draft: { ...s, tokenTouched: true } })}
+              onRecord={(s) => setScreen({ name: 'capture', draft: { ...s, samples: [], side: null, tokenTouched: true } })}
+              onTry={(s) => setScreen({ name: 'try', sign: s })}
+              onDelete={async (s) => { await deleteSign(s.id); flash(`Deleted ${s.token}.`); }}
+            />
+            {/* Signs shared with every user, and (for developers) publishing. */}
+            <div className="mt-6">
+              <DictionaryPanel />
+              <SharedSignList onTry={(s) => setScreen({ name: 'try', sign: s })} />
+              <DeveloperPublish />
+            </div>
+          </>
         )}
         {screen.name === 'edit' && (
           <SignForm
