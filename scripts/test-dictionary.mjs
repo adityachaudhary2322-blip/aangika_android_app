@@ -56,6 +56,8 @@ check(r.status === 403 && afterWrong.signs.length === 0, 'publishing with a wron
 
 r = await call('/dictionary/verify', { body: { code: CODE }, ip: '2.2.2.2' });
 check(r.status === 200 && (await jsonOf(r)).ok === true, 'the right code verifies');
+r = await call('/dictionary/verify', { body: { code: ` ${CODE} ` }, ip: '2.2.2.2', env: { ...ENV, DEV_CODE: `${CODE}\r\n` } });
+check(r.status === 200, 'a secret saved with a trailing CR/LF (Windows shell) and a padded entry still match');
 const verifyText = JSON.stringify(await jsonOf(await call('/dictionary/verify', { body: { code: CODE }, ip: '2.2.2.2' })));
 check(!verifyText.includes(CODE), 'the code is never echoed back');
 

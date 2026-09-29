@@ -47,8 +47,10 @@ async function save(env, dict) {
 }
 
 function sameCode(a, b) {
-  const x = new TextEncoder().encode(String(a || ''));
-  const y = new TextEncoder().encode(String(b || ''));
+  // Trim both: a secret set from a Windows shell can carry a trailing CR/LF
+  // (and a pasted code a stray space), which would make the right code fail.
+  const x = new TextEncoder().encode(String(a || '').trim());
+  const y = new TextEncoder().encode(String(b || '').trim());
   let diff = x.length ^ y.length;
   for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] || 0) ^ (y[i] || 0);
   return diff === 0 && x.length > 0;
