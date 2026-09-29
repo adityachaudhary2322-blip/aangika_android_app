@@ -38,10 +38,10 @@ const GEMINI_MODELS = [
 
 const STT_MODELS = ['saaras:v3', 'saaras:v2.5', 'saarika:v2.5', 'saarika:v2'];
 
-// Sarvam's chat models as of 2026-09 (sarvam-m is retired and now rejected).
-// 30b first: it is the faster one, and a sign sentence is a short job.
+// Sarvam's chat models as of 2026-09-29: sarvam-m and sarvam-30b are retired
+// (Sarvam rejects them as deprecated), so only sarvam-105b is tried.
 const SARVAM_CHAT_PATH = '/v1/chat/completions';
-const SARVAM_CHAT_MODELS = ['sarvam-30b', 'sarvam-105b'];
+const SARVAM_CHAT_MODELS = ['sarvam-105b'];
 
 /**
  * The user's own keys (localStorage, never in the bundle). Whether Sarvam can
@@ -185,7 +185,10 @@ export async function sarvamChat(messages, { temperature = 0.2, maxTokens = 600 
       const response = await sarvamFetch(SARVAM_CHAT_PATH, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens }),
+        // Thinking off: sarvam-105b otherwise reasons for ~700 tokens (5-7 s)
+        // before a one-line answer, or runs out and answers nothing. Measured
+        // 2026-09-29: off = 0.4 s, 11 tokens, same sentence.
+        body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens, reasoning_effort: null }),
       });
       if (!response.ok) { errors.push(`${model}: HTTP ${response.status}`); continue; }
       const body = await response.json();

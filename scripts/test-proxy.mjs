@@ -51,7 +51,7 @@ check(r.status === 405, 'GET is refused');
 r = await handle(req('/translate', { method: 'OPTIONS' }), ENV, upstream);
 check(r.status === 204 && r.headers.get('Access-Control-Allow-Methods') === 'GET, POST, OPTIONS', 'CORS preflight answered');
 
-r = await handle(req('/v1/chat/completions', { ip: '4.4.4.4', body: JSON.stringify({ model: 'sarvam-30b', messages: [], max_tokens: 99999 }) }), ENV, upstream);
+r = await handle(req('/v1/chat/completions', { ip: '4.4.4.4', body: JSON.stringify({ model: 'sarvam-105b', messages: [], max_tokens: 99999 }) }), ENV, upstream);
 check(r.status === 200 && JSON.parse(seen.body).max_tokens === _test.MAX_CHAT_TOKENS, 'chat max_tokens capped', `sent ${JSON.parse(seen.body).max_tokens}`);
 r = await handle(req('/v1/chat/completions', { ip: '4.4.4.5', body: JSON.stringify({ model: 'some-big-model', messages: [] }) }), ENV, upstream);
 check(r.status === 400, 'chat models outside the app\'s list are refused');
