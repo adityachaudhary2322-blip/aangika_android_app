@@ -2,27 +2,25 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import cameraManager from '../services/cameraManager.js';
 import landmarker from '../services/landmarker.js';
 import recognizer from '../services/signRecognizer.js';
-import { classifyFrame } from '../services/signbridgeCombined.js';
-import { VISION_SIGNBRIDGE } from '../services/engineState.js';
+import engines from '../services/engines/manager.js';
+import { modelIdFor } from '../services/engineState.js';
 import { translate } from '../services/translationService.js';
 import { speak } from '../services/ttsService.js';
 
-/** Frames retained. The model was trained at 192; see MODEL_CARD.md. */
-const WINDOW = 40;
-/** Run inference every N frames -- roughly 1.5x/second at 30 fps. */
-const STRIDE = 20;
-
-/**
- * How many consecutive agreeing classifications count as "held".
+/*
+ * The engine comes from the model registry (src/config/models.js) through the
+ * engine manager, which frees the previous model on a switch. Each adapter
+ * declares how it wants to be fed:
  *
- * SignBridge classifies every frame, so 9 frames is ~300 ms at 30 fps -- long
- * enough to reject a hand passing through a shape on its way somewhere else.
- * Aangika only produces a result every STRIDE frames (~1.5/second), so the same
- * frame count would mean six seconds of holding still; two agreeing results is
- * the equivalent evidence.
+ *   mode 'frame'   classify every frame on its own (SignBridge + My signs);
+ *                  holdTarget = consecutive agreeing FRAMES (9 ~ 300 ms)
+ *   mode 'window'  a rolling window of `window` normalised frames, inference
+ *                  every `stride` frames (Aangika: 40 / 20);
+ *                  holdTarget = consecutive agreeing RESULTS (2)
+ *
+ * Two agreeing window results are the equivalent evidence of nine agreeing
+ * frames: a window result only arrives every stride frames (~1.5/second).
  */
-const HOLD_FRAMES_SIGNBRIDGE = 9;
-const HOLD_RESULTS_AANGIKA = 2;
 
 /** Do not repeat the same phrase inside this window. */
 const PHRASE_COOLDOWN_MS = 2500;
@@ -90,17 +88,37 @@ export default function useSignPipeline({
   const optionsRef = useRef({ autoSpeak, language, mode });
   optionsRef.current = { autoSpeak, language, mode };
 
-  // ── Load models once ─────────────────────────────────────────────────────
+  // ── Load the landmarker and the chosen model ────────────────────────────
+  // Switching models goes through the manager, which frees the old one. If
+  // the chosen model fails to load, the manager falls back to the default and
+  // says so; the pipeline then runs whatever it actually got.
+  const modelId = modelIdFor(visionEngine);
+  const engineRef = useRef(null);
+  const [engineMode, setEngineMode] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setStatus('loading');
+        engineRef.current = null;
+        setEngineMode(null);
+        bufferRef.current = [];
         await landmarker.load((m) => !cancelled && setProgress(m));
-        await recognizer.load((m) => !cancelled && setProgress(m));
+        const res = await engines.activate(modelId, {
+          onProgress: ({ message, loaded, total }) => {
+            if (cancelled) return;
+            setProgress(total
+              ? `${message || 'Downloading model'} ${Math.round((loaded / total) * 100)}%`
+              : message || '');
+          },
+        });
         if (!cancelled) {
+          engineRef.current = res.engine;
+          setEngineMode(res.engine.mode);
           setStatus('ready');
           setProgress('');
+          setError(res.fellBack ? `Could not load that model (${res.error}); using ${res.modelId}.` : null);
         }
       } catch (err) {
         if (!cancelled) {
@@ -110,7 +128,7 @@ export default function useSignPipeline({
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [modelId]);
 
   /**
    * Called on every classification. Counts agreeing reads and, once a sign has
@@ -159,16 +177,14 @@ export default function useSignPipeline({
   }, []);
 
   // ── Detection loop ───────────────────────────────────────────────────────
-  // SignBridge classifies a single frame geometrically, so it only needs the
-  // landmarker -- not the 21 MB ONNX graph. Gating it on the tagger's load
-  // would make an "ultra-low latency" engine wait on the slow one.
-  const usingSignBridge = visionEngine === VISION_SIGNBRIDGE;
-  const pipelineReady = usingSignBridge
-    ? status === 'ready' || status === 'landmarker-ready'
-    : status === 'ready';
+  // Only the chosen model is loaded: a frame engine never waits on the 21 MB
+  // ONNX graph, and switching frees whatever ran before.
+  const pipelineReady = status === 'ready' && Boolean(engineMode);
 
   useEffect(() => {
     if (!enabled || !pipelineReady) return undefined;
+    const engine = engineRef.current;
+    if (!engine) return undefined;
     let raf = 0;
     let stopped = false;
 
@@ -218,10 +234,10 @@ export default function useSignPipeline({
         setStats({ ...telemetryRef.current });
       }
 
-      // ── SignBridge: classify this frame alone, then stop ─────────────
-      if (usingSignBridge) {
-        // Built-in rules and the user's own signs ("My signs") together.
-        const hit = classifyFrame(result.hands, result.pose, { mirrored });
+      // ── Frame engines: classify this frame alone, then stop ──────────
+      if (engine.mode === 'frame') {
+        // SignBridge: built-in rules and the user's own signs together.
+        const hit = engine.classify({ hands: result.hands, pose: result.pose, mirrored });
         // classifyFrame returns `token`, not `label`. Reading the
         // wrong field made every frame look like a miss, which then called
         // setWords([]) with a fresh array 30x/second -- a full re-render per
@@ -233,7 +249,7 @@ export default function useSignPipeline({
           : 0;
 
         // Stability is counted per FRAME here: SignBridge classifies every one.
-        considerSpeaking(token ? [token] : [], HOLD_FRAMES_SIGNBRIDGE);
+        considerSpeaking(token ? [token] : [], engine.holdTarget);
 
         // Only touch React state when the classification actually changes.
         const key = token ? `${token}:${hit.confidence.toFixed(2)}` : '';
@@ -245,12 +261,12 @@ export default function useSignPipeline({
               index: token,
               confidence: hit.confidence,
               peakFrame: 0,
-              engine: hit.engine === 'custom' ? 'custom' : 'signbridge',
+              engine: hit.engine === 'custom' ? 'custom' : engine.chipEngine,
               ambiguous: hit.ambiguous,
               motionAssumed: hit.motionAssumed,
             }]);
             setClosest((hit.alternatives || []).map((label) => ({
-              word: label, index: label, confidence: 0, engine: 'signbridge',
+              word: label, index: label, confidence: 0, engine: engine.chipEngine,
             })));
           } else {
             setWords([]);
@@ -260,24 +276,24 @@ export default function useSignPipeline({
         return;
       }
 
-      // ── Aangika: accumulate a temporal window ────────────────────────
+      // ── Window engines: accumulate a temporal window ─────────────────
       const buffer = bufferRef.current;
       buffer.push(recognizer.bodyNormalise(raw));
-      if (buffer.length > WINDOW) buffer.shift();
+      if (buffer.length > engine.window) buffer.shift();
 
-      if (buffer.length < WINDOW) return;
-      if (seenRef.current % STRIDE !== 0) return;
+      if (buffer.length < engine.window) return;
+      if (seenRef.current % engine.stride !== 0) return;
       if (isProcessingRef.current) return;   // drop this frame, never queue
       isProcessingRef.current = true;
 
-      recognizer
-        .recognize(buffer.slice())
+      engine
+        .recognizeDetailed(buffer.slice())
         .then((r) => {
-          setWords(r.words.map((w) => ({ ...w, engine: 'aangika' })));
-          setClosest(r.closest.map((w) => ({ ...w, engine: 'aangika' })));
-          // Stability is counted per RESULT here, not per frame -- Aangika only
-          // produces one every STRIDE frames.
-          considerSpeaking(r.words.map((w) => w.word), HOLD_RESULTS_AANGIKA);
+          setWords(r.words.map((w) => ({ ...w, engine: engine.chipEngine })));
+          setClosest(r.closest.map((w) => ({ ...w, engine: engine.chipEngine })));
+          // Stability is counted per RESULT here, not per frame -- a window
+          // engine only produces one every `stride` frames.
+          considerSpeaking(r.words.map((w) => w.word), engine.holdTarget);
           telemetryRef.current.latencyMs = r.latencyMs;
           setError(null);
         })
@@ -290,7 +306,7 @@ export default function useSignPipeline({
       stopped = true;
       cancelAnimationFrame(raf);
     };
-  }, [enabled, pipelineReady, mirrored, usingSignBridge, considerSpeaking]);
+  }, [enabled, pipelineReady, engineMode, modelId, mirrored, considerSpeaking]);
 
   const clear = useCallback(() => {
     bufferRef.current = [];

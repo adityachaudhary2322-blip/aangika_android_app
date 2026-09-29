@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "dev:https": "node scripts/dev-https.mjs"
+    "dev:https": "node scripts/dev-https.mjs",
+    "test": "node scripts/test-signbridge.mjs && node scripts/test-grammar.mjs && node scripts/test-models.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",
@@ -20,6 +22,7 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@vitejs/plugin-basic-ssl": "^1.2.0",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.5.5",

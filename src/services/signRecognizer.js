@@ -39,8 +39,14 @@ let session = null;
 let vocab = null;
 let loading = null;
 
-/** Load the 21 MB graph and the 1500-word vocabulary. Idempotent. */
-export async function load(onProgress = () => {}) {
+/**
+ * Load the 21 MB graph and the 1500-word vocabulary. Idempotent.
+ *
+ * `onBytes(loaded, total)` reports real download progress; the graph is
+ * fetched through the service worker (so it is cached for offline use) and
+ * handed to onnxruntime as bytes.
+ */
+export async function load(onProgress = () => {}, { onBytes = null, modelUrl = MODEL_URL } = {}) {
   if (session && vocab) return { session, vocab };
   if (loading) return loading;
 
@@ -68,7 +74,12 @@ export async function load(onProgress = () => {}) {
     ort.env.wasm.numThreads = 1;   // cross-origin isolation is not guaranteed
     ort.env.wasm.simd = true;
 
-    session = await ort.InferenceSession.create(MODEL_URL, {
+    // Imported lazily: training/tests/parity copies this file on its own and
+    // must not need any sibling module to import it.
+    const source = onBytes
+      ? await (await import('./download.js')).fetchWithProgress(modelUrl, onBytes)
+      : modelUrl;
+    session = await ort.InferenceSession.create(source, {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
     });
@@ -81,6 +92,17 @@ export async function load(onProgress = () => {}) {
   });
 
   return loading;
+}
+
+/** Free the ONNX session (wasm memory). load() works again afterwards. */
+export async function unload() {
+  if (loading) {
+    try { await loading; } catch { /* a failed load leaves nothing to free */ }
+  }
+  const s = session;
+  session = null;
+  loading = null;
+  if (s && typeof s.release === 'function') await s.release();
 }
 
 export function isLoaded() {
@@ -238,4 +260,4 @@ export async function recognize(frames, {
   };
 }
 
-export default { load, isLoaded, getVocab, packFrame, bodyNormalise, recognize };
+export default { load, unload, isLoaded, getVocab, packFrame, bodyNormalise, recognize };

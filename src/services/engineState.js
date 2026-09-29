@@ -8,6 +8,8 @@
  * Aangika tokens can be left as raw gloss.
  */
 
+import { MODELS, getModel, defaultModel, SIGN_LANGUAGES } from '../config/models.js';
+
 const VISION_KEY = 'vision_engine';
 const GRAMMAR_KEY = 'grammar_engine';
 
@@ -19,7 +21,21 @@ export const GRAMMAR_GEMINI_ONLINE = 'gemini_online';
 export const GRAMMAR_SARVAM_ONLINE = 'sarvam_online';
 export const GRAMMAR_RAW_GLOSS = 'raw_gloss';
 
-const VISION_VALUES = [VISION_AANGIKA, VISION_SIGNBRIDGE];
+/**
+ * The vision engine value is either a legacy alias ('aangika', 'signbridge',
+ * kept so saved settings and the compact toggles keep working) or any model
+ * id from src/config/models.js.
+ */
+const VISION_ALIASES = {
+  [VISION_AANGIKA]: 'isl-aangika-v2',
+  [VISION_SIGNBRIDGE]: 'isl-signbridge',
+};
+export const modelIdFor = (vision) => VISION_ALIASES[vision] || vision;
+export function visionFor(modelId) {
+  const alias = Object.entries(VISION_ALIASES).find(([, id]) => id === modelId);
+  return alias ? alias[0] : modelId;
+}
+const VISION_VALUES = [VISION_AANGIKA, VISION_SIGNBRIDGE, ...MODELS.map((m) => m.id)];
 const GRAMMAR_VALUES = [
   GRAMMAR_QWEN_OFFLINE, GRAMMAR_SARVAM_ONLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS,
 ];
@@ -131,6 +147,28 @@ export function toggleVisionEngine() {
   );
 }
 
+const SIGN_LANGUAGE_KEY = 'sign_language';
+
+/** The sign language being recognised: 'ISL' (default) or 'ASL'. */
+export function getSignLanguage() {
+  return read(SIGN_LANGUAGE_KEY, SIGN_LANGUAGES, 'ISL');
+}
+
+/**
+ * Switch sign language. If the current model is for another language, the
+ * new language's default model is chosen too. -> {language, vision}
+ */
+export function setSignLanguage(language) {
+  const lang = write(SIGN_LANGUAGE_KEY, SIGN_LANGUAGES.includes(language) ? language : 'ISL');
+  const current = getModel(modelIdFor(getVisionEngine()));
+  let vision = getVisionEngine();
+  if (!current || current.language !== lang) {
+    const d = defaultModel(lang);
+    if (d && d.language === lang) vision = setVisionEngine(visionFor(d.id));
+  }
+  return { language: lang, vision };
+}
+
 export function getGrammarEngine() {
   return read(GRAMMAR_KEY, GRAMMAR_VALUES, GRAMMAR_QWEN_OFFLINE);
 }
@@ -155,4 +193,5 @@ export default {
   VISION_ENGINES, GRAMMAR_ENGINES,
   getVisionEngine, setVisionEngine, toggleVisionEngine,
   getGrammarEngine, setGrammarEngine, grammarToPipelineMode,
+  getSignLanguage, setSignLanguage, modelIdFor, visionFor,
 };

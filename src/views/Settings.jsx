@@ -8,9 +8,10 @@ import {
 import { getKeys, setKey } from '../services/translator.js';
 import { getTurnCredentials, setTurnCredentials } from '../services/iceConfig.js';
 import {
-  VISION_ENGINES, GRAMMAR_ENGINES, VISION_AANGIKA, VISION_SIGNBRIDGE,
+  GRAMMAR_ENGINES,
   GRAMMAR_QWEN_OFFLINE, GRAMMAR_GEMINI_ONLINE, GRAMMAR_RAW_GLOSS, GRAMMAR_SARVAM_ONLINE,
 } from '../services/engineState.js';
+import RecognitionSettings from '../components/RecognitionSettings.jsx';
 import { LANGUAGES, VOICES, getVoice, setVoice } from '../config/languages.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
@@ -53,29 +54,7 @@ export default function Settings({
 
       <AppAndOffline />
 
-      <section className="mt-4 surface-card p-4">
-        <p className="eyebrow">
-          Vision engine
-        </p>
-        <p className="mt-1 text-[11px] text-ink-dim">
-          How landmarks become words.
-        </p>
-        <div className="mt-3 space-y-2">
-          {[VISION_AANGIKA, VISION_SIGNBRIDGE].map((id) => (
-            <EngineCard
-              key={id}
-              engine={VISION_ENGINES[id]}
-              selected={visionEngine === id}
-              onSelect={() => chooseVision(id)}
-            />
-          ))}
-        </div>
-        <p className="mt-3 text-[11px] leading-relaxed text-ink-dim">
-          SignBridge sees one frame at a time, so it recognises handshapes and
-          fingerspelling but nothing defined by movement. Aangika reads a
-          40-frame window and can, but costs ~200x the latency per inference.
-        </p>
-      </section>
+      <RecognitionSettings visionEngine={visionEngine} chooseVision={chooseVision} />
 
       {onNavigate && (
         <section className="mt-4 surface-card p-4">

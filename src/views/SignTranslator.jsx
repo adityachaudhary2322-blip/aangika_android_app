@@ -246,6 +246,7 @@ export default function SignTranslator({
             <button
               type="button"
               onClick={startTranslating}
+              aria-label="Start translating"
               className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-fill-a to-fill-b shadow-glow active:scale-95"
             >
               <Play size={38} className="ml-1 text-white" />

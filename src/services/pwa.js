@@ -8,7 +8,8 @@
  */
 import { registerSW } from 'virtual:pwa-register';
 import landmarker from './landmarker.js';
-import recognizer from './signRecognizer.js';
+import engines from './engines/manager.js';
+import { getVisionEngine, modelIdFor } from './engineState.js';
 
 const state = {
   installEvent: null,       // the deferred beforeinstallprompt event
@@ -110,11 +111,17 @@ export async function offlineStatus() {
 }
 
 /**
- * Load both recognisers once while online. Loading goes through the service
- * worker, which keeps every file, so recognition then works offline.
+ * Load the landmarker and the chosen recognition model once while online.
+ * Loading goes through the service worker, which keeps every file, so
+ * recognition then works offline. `modelId` defaults to the model selected
+ * in Settings > Recognition.
  */
-export async function prepareOffline(onProgress) {
+export async function prepareOffline(onProgress, modelId = modelIdFor(getVisionEngine())) {
   await landmarker.load((m) => onProgress?.(m));
-  await recognizer.load((m) => onProgress?.(m));
+  await engines.activate(modelId, {
+    onProgress: ({ message, loaded, total }) => onProgress?.(
+      total ? `${message || 'Downloading'} ${Math.round((loaded / total) * 100)}%` : message,
+    ),
+  });
   return offlineStatus();
 }
