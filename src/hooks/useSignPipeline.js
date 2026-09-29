@@ -324,6 +324,9 @@ export default function useSignPipeline({
     };
   }, [enabled, pipelineReady, engineMode, modelId, mirrored, considerSpeaking]);
 
+  /** A copy of the current model-input window (window engines only). */
+  const getWindow = useCallback(() => bufferRef.current.map((f) => Float32Array.from(f)), []);
+
   const clear = useCallback(() => {
     bufferRef.current = [];
     frameRef.current = null;
@@ -343,6 +346,6 @@ export default function useSignPipeline({
 
   return {
     status, progress, words, closest, stats, error, frameRef, clear,
-    visionEngine, spoken, handsUp,
+    visionEngine, spoken, handsUp, getWindow, modelId,
   };
 }

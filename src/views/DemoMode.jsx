@@ -12,6 +12,9 @@ import { listSigns } from '../services/customSigns.js';
 import { translate } from '../services/translationService.js';
 import { tokenLabel } from '../hooks/useTokenStream.js';
 import {
+  contribute, flush as flushContributions, isEnabled as isContributionEnabled,
+} from '../services/contributions.js';
+import {
   recordAttempt, reliability, reliableSigns, resetPractice, practiceSentences, isReliable,
 } from '../services/practice.js';
 
@@ -33,7 +36,9 @@ export default function DemoMode({ onBack, visionEngine, cameraError, language }
   const [mirrored, setMirrored] = useState(() => cameraManager.isFrontCamera());
   useEffect(() => cameraManager.subscribe((s) => setMirrored(s.isFrontCamera)), []);
 
-  const { status, progress, words, closest, frameRef, stats } = useSignPipeline({
+  const {
+    status, progress, words, closest, frameRef, stats, getWindow,
+  } = useSignPipeline({
     enabled: started, mirrored, visionEngine, autoSpeak: false, language,
   });
 
@@ -61,6 +66,8 @@ export default function DemoMode({ onBack, visionEngine, cameraError, language }
   const [phase, setPhase] = useState('idle');           // idle | countdown | recording
   const [count, setCount] = useState(3);
   const [lastResult, setLastResult] = useState(null);
+  const [shared, setShared] = useState(null);           // null | true | false | error text
+  const contributionsOn = isContributionEnabled();
   const [table, setTable] = useState(() => reliability(model?.id));
   const seenRef = useRef({ tokens: new Set(), conf: 0 });
   const recordingRef = useRef(false);
@@ -90,7 +97,9 @@ export default function DemoMode({ onBack, visionEngine, cameraError, language }
     recordingRef.current = false;
     const recognised = [...seenRef.current.tokens];
     const { ok } = recordAttempt(model.id, target, { recognised, confidence: seenRef.current.conf });
-    setLastResult({ ok, recognised, conf: seenRef.current.conf });
+    // Keep this attempt's landmark window, in case the user chooses to share it.
+    setLastResult({ ok, recognised, conf: seenRef.current.conf, label: target, window: getWindow() });
+    setShared(null);
     setTable(reliability(model.id));
     setPhase('idle');
   };
@@ -202,6 +211,28 @@ export default function DemoMode({ onBack, visionEngine, cameraError, language }
               : `Not recognised. The model said: ${lastResult.recognised.map(tokenLabel).join(', ') || 'nothing'}.`}
           </p>
         )}
+        {/* Per-sample consent: only when "Help improve recognition" is on. */}
+        {lastResult && contributionsOn && lastResult.window?.length > 0 && shared === null && (
+          <div className="mt-2 rounded-lg border border-subtle p-2 text-[11px]">
+            Share this attempt as a training example of <b>{tokenLabel(lastResult.label)}</b>?
+            Only hand and body points are sent, never video.
+            <div className="mt-1.5 flex gap-2">
+              <button type="button" onClick={() => setShared(false)} className="btn-quiet flex-1 py-1 text-[11px]">No</button>
+              <button type="button" onClick={() => {
+                try {
+                  contribute({
+                    label: lastResult.label, frames: lastResult.window, consent: true,
+                    modelId: model.id, modelVersion: model.version || model.id, signLanguage: model.language,
+                  });
+                  setShared(true);
+                  flushContributions().catch(() => {});
+                } catch (err) { setShared(err.message); }
+              }} className="flex-1 rounded-lg bg-primary py-1 text-[11px] font-semibold text-surface">Share</button>
+            </div>
+          </div>
+        )}
+        {shared === true && <p className="mt-1 text-[11px] text-primary">Saved. It uploads when you are online and signed in, and is reviewed before any use.</p>}
+        {typeof shared === 'string' && <p className="mt-1 text-[11px] text-rose">{shared}</p>}
       </section>
 
       {/* Measured reliability */}

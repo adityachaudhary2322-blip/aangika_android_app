@@ -8,6 +8,9 @@ import Settings from './views/Settings.jsx';
 import RecordedVideoTranslator from './views/RecordedVideoTranslator.jsx';
 import MySigns from './views/MySigns.jsx';
 import DemoMode from './views/DemoMode.jsx';
+import ReviewContributions from './views/ReviewContributions.jsx';
+import { checkForUpdates } from './services/modelUpdates.js';
+import { flush as flushContributions } from './services/contributions.js';
 import { installGloveSim } from './services/glove/sim.js';
 
 // Simulated glove for tests / development (only with ?glove=sim in the URL).
@@ -129,6 +132,10 @@ export default function App() {
 
   useEffect(() => {
     if (online) fillPendingTranslations().catch(() => {});
+    // Approved model releases (models/index.json), downloaded in the background.
+    if (online) checkForUpdates().catch(() => {});
+    // Consented samples waiting on this device, if signed in.
+    if (online) flushContributions().catch(() => {});
   }, [online]);
 
   useEffect(() => {
@@ -224,6 +231,7 @@ export default function App() {
             {view === 'settings' && <Settings {...shared} onNavigate={go} />}
             {view === 'words' && <WordList {...shared} onNavigate={go} />}
             {view === 'phrases' && <Phrases {...shared} cameraError={cameraError} />}
+        {view === 'review' && <ReviewContributions onBack={() => go('settings')} />}
         {view === 'demo' && (
           <DemoMode {...shared} cameraError={cameraError} onBack={() => go('settings')} />
         )}

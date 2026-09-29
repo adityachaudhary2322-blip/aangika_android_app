@@ -13,6 +13,8 @@ import {
 } from '../services/engineState.js';
 import RecognitionSettings from '../components/RecognitionSettings.jsx';
 import GloveSettings from '../components/GloveSettings.jsx';
+import AccountSettings from '../components/AccountSettings.jsx';
+import ContributeSettings from '../components/ContributeSettings.jsx';
 import { LANGUAGES, VOICES, getVoice, setVoice } from '../config/languages.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
@@ -58,6 +60,10 @@ export default function Settings({
       <RecognitionSettings visionEngine={visionEngine} chooseVision={chooseVision} />
 
       <GloveSettings />
+
+      <AccountSettings />
+
+      <ContributeSettings onNavigate={onNavigate} />
 
       {onNavigate && (
         <section className="mt-4 surface-card p-4">
