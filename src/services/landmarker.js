@@ -12,7 +12,9 @@
  * whether accuracy survives the substitution has never been measured.
  */
 
-import { FilesetResolver, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
+import {
+  FilesetResolver, HandLandmarker, PoseLandmarker, FaceLandmarker,
+} from '@mediapipe/tasks-vision';
 
 // Model versions are pinned, not "latest": training/extract.py runs the same
 // .task files (training/download_models.py) so training features match what
@@ -23,9 +25,15 @@ const HAND_MODEL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const POSE_MODEL =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+/** Face mesh: only loaded when a recognition model reads lips (ASL ISLR). */
+export const FACE_MODEL =
+  'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
 let handLandmarker = null;
 let poseLandmarker = null;
+let faceLandmarker = null;
+let faceLoading = null;
+let fileset = null;
 let loading = null;
 
 /** Which delegate actually got used. GPU init can fail silently on mobile. */
@@ -37,7 +45,7 @@ export async function load(onProgress = () => {}) {
 
   loading = (async () => {
     onProgress('Loading MediaPipe runtime…');
-    const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
+    fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
 
     // Both models are the float16 builds -- roughly half the weights of the
     // float32 ones and the variants MediaPipe ships for mobile.
@@ -95,6 +103,44 @@ export function isLoaded() {
   return Boolean(handLandmarker && poseLandmarker);
 }
 
+/**
+ * Add the face mesh (468 points + irises) to every detect() call. Costs a
+ * ~3.6 MB download and a third detector per frame, so it is loaded only for
+ * models that need it and freed again with unloadFace().
+ */
+export async function loadFace(onProgress = () => {}) {
+  if (faceLandmarker) return true;
+  if (faceLoading) return faceLoading;
+  faceLoading = (async () => {
+    await load(onProgress);
+    onProgress('Loading face landmarker…');
+    const make = (delegate) => FaceLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: FACE_MODEL, delegate },
+      runningMode: 'VIDEO',
+      numFaces: 1,
+      minFaceDetectionConfidence: 0.5,
+      minFacePresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+      outputFaceBlendshapes: false,
+      outputFacialTransformationMatrixes: false,
+    });
+    try {
+      faceLandmarker = await make(activeDelegate === 'CPU' ? 'CPU' : 'GPU');
+    } catch {
+      faceLandmarker = await make('CPU');
+    }
+    return true;
+  })().finally(() => { faceLoading = null; });
+  return faceLoading;
+}
+
+export function unloadFace() {
+  try { faceLandmarker?.close(); } catch { /* already closed */ }
+  faceLandmarker = null;
+}
+
+export const hasFace = () => Boolean(faceLandmarker);
+
 export function getDelegate() {
   return activeDelegate;
 }
@@ -132,12 +178,23 @@ export function detect(video, timestampMs) {
     // Same.
   }
 
-  return { pose, hands };
+  let face = null;
+  if (faceLandmarker) {
+    try {
+      const faceResult = faceLandmarker.detectForVideo(video, timestampMs);
+      if (faceResult?.faceLandmarks?.length) face = faceResult.faceLandmarks[0];
+    } catch {
+      // Same.
+    }
+  }
+
+  return { pose, hands, face };
 }
 
 export function close() {
   try { handLandmarker?.close(); } catch { /* already closed */ }
   try { poseLandmarker?.close(); } catch { /* already closed */ }
+  unloadFace();
   handLandmarker = null;
   poseLandmarker = null;
   loading = null;
@@ -161,4 +218,5 @@ export const POSE_BONES = [
 
 export default {
   load, isLoaded, detect, close, getDelegate, HAND_BONES, POSE_BONES,
+  loadFace, unloadFace, hasFace,
 };

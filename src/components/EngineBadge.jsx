@@ -8,9 +8,11 @@ import { VISION_ENGINES } from '../services/engineState.js';
  */
 /** A sign the user taught ("My signs"), matched alongside the built-in rules. */
 const CUSTOM = { icon: '✋', name: 'My sign', tone: 'amber' };
+/** American Sign Language isolated-sign model (Kaggle ISLR). */
+const ASL = { icon: '🤟', name: 'ASL', tone: 'primary' };
 
 export default function EngineBadge({ engine, confidence }) {
-  const e = engine === 'custom' ? CUSTOM : VISION_ENGINES[engine];
+  const e = engine === 'custom' ? CUSTOM : engine === 'asl' ? ASL : VISION_ENGINES[engine];
   if (!e) return null;
   const tint = e.tone === 'primary' ? 'text-primary'
     : e.tone === 'amber' ? 'text-amber' : 'text-secondary';

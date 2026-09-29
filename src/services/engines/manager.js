@@ -19,10 +19,12 @@ import { getModel, defaultModel, ORT_WASM } from '../../config/models.js';
 import { fetchWithProgress } from '../download.js';
 import { createAangikaEngine } from './aangika.js';
 import { createSignBridgeEngine } from './signbridge.js';
+import { createAslIslrEngine } from './aslIslr.js';
 
 const FACTORIES = {
   aangika: createAangikaEngine,
   signbridge: createSignBridgeEngine,
+  'asl-islr': createAslIslrEngine,
 };
 
 /** Register an adapter factory for a new runtime (used by later phases). */
@@ -96,7 +98,10 @@ export function activate(modelId, { onProgress } = {}) {
       engine = await loadOne(modelId, onProgress);
     } catch (err) {
       failure = err?.message || String(err);
-      const fallback = defaultModel(getModel(modelId)?.language);
+      // The language's default first; if that is the model that just failed
+      // (e.g. the only ASL model), the app-wide default so recognition goes on.
+      let fallback = defaultModel(getModel(modelId)?.language);
+      if (!fallback || fallback.id === modelId) fallback = defaultModel('ISL');
       if (!fallback || fallback.id === modelId) {
         emit({ status: 'error', error: failure, message: '' });
         throw err;

@@ -205,7 +205,9 @@ export default function useSignPipeline({
       const ts = Math.max(now, timestampRef.current + 1);
       timestampRef.current = ts;
 
+      const detectStart = performance.now();
       const result = landmarker.detect(video, ts);
+      fpsRef.current.detectMs = (fpsRef.current.detectMs || 0) + (performance.now() - detectStart);
       if (!result) return;
 
       const raw = recognizer.packFrame(result.pose, result.hands, mirrored);
@@ -221,10 +223,13 @@ export default function useSignPipeline({
       fps.count += 1;
       if (now - fps.start >= 1000) {
         telemetryRef.current.fps = fps.count;
+        // Mean landmark-detection time per frame (hands + pose [+ face]).
+        telemetryRef.current.detectMs = Math.round((fps.detectMs || 0) / fps.count);
         telemetryRef.current.handCoverage = seenRef.current
           ? Math.round((handFramesRef.current * 100) / seenRef.current)
           : 0;
         fps.count = 0;
+        fps.detectMs = 0;
         fps.start = now;
       }
 
@@ -278,7 +283,11 @@ export default function useSignPipeline({
 
       // ── Window engines: accumulate a temporal window ─────────────────
       const buffer = bufferRef.current;
-      buffer.push(recognizer.bodyNormalise(raw));
+      // Each model decides its own per-frame input (ISL: 225 normalised
+      // features; ASL ISLR: the 543-point Holistic layout).
+      buffer.push(engine.frameFromLandmarks
+        ? engine.frameFromLandmarks(result, mirrored)
+        : recognizer.bodyNormalise(raw));
       if (buffer.length > engine.window) buffer.shift();
 
       if (buffer.length < engine.window) return;

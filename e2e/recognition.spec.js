@@ -5,9 +5,9 @@ import { test, expect } from '@playwright/test';
  * Collect page errors; each test asserts there were none. The one expected
  * exception: while the test deliberately cuts the network, Messages' PeerJS
  * connection to its signalling server fails. That is the network being off,
- * not a recognition fault.
+ * not a recognition fault. MediaPipe's wasm also prints 'INFO:' lines on the error console.
  */
-const EXPECTED_OFFLINE = /peerjs|ERR_INTERNET_DISCONNECTED|Lost connection to server/i;
+const EXPECTED_OFFLINE = /peerjs|ERR_INTERNET_DISCONNECTED|Lost connection to server|^INFO: /i;
 function watchErrors(page) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
@@ -38,7 +38,9 @@ test('Settings > Recognition lists the registry with size, offline, accuracy, li
   await expect(sb).toContainText('Not measured on real hands');
 
   await page.getByRole('button', { name: 'American (ASL)' }).click();
-  await expect(page.getByText(/No ASL models installed/)).toBeVisible();
+  const asl = card(page, 'ASL isolated signs (250)');
+  await expect(asl).toContainText('MIT');
+  await expect(asl).toContainText('Not measured in this app');
   await page.getByRole('button', { name: 'Indian (ISL)' }).click();
   await expect(card(page, 'Aangika ISL tagger v2')).toBeVisible();
   expect(errors).toEqual([]);

@@ -108,6 +108,48 @@ export const MODELS = [
   },
 ];
 
+MODELS.push({
+  id: 'asl-islr-250',
+  name: 'ASL isolated signs (250)',
+  language: 'ASL',
+  kind: 'isolated signs',
+  runtime: 'onnx',
+  engine: 'asl-islr',
+  input: {
+    landmarks: ['face 468 (lips used)', 'left hand 21', 'pose 33', 'right hand 21'],
+    features: 543 * 3,
+    frames: 30,
+    stride: 10,
+    normalisation: 'none outside the model: raw MediaPipe coordinates, NaN = missing; the graph normalises',
+    needsFace: true,
+  },
+  decode: 'softmax over 250 signs on a 30-frame window; top-1 if p >= 0.5 and hands in >= 30% of frames',
+  decodeParams: { threshold: 0.5 },
+  vocabUrl: '/models/asl/islr-1st/vocab.json',
+  vocabSize: 250,
+  files: [
+    { url: '/models/asl/islr-1st/model.onnx', bytes: 22_187_818, role: 'weights' },
+    { url: '/models/asl/islr-1st/vocab.json', bytes: 3_761, role: 'vocabulary' },
+  ],
+  sharedFiles: ['ort-wasm'],
+  extraDownloads: [{ what: 'MediaPipe face landmarker', bytes: 3_758_596 }],
+  licence: {
+    code: 'MIT (Kaggle ISLR 1st place, Hoyeol Sohn)',
+    weights: 'MIT (huggingface.co/sign/kaggle-asl-signs-1st-place)',
+    data: 'PopSign ASL v1.0 (Georgia Tech), CC BY 4.0',
+    commercial: true,
+    attribution: 'Hoyeol Sohn (ISLR 1st place); PopSign ASL v1.0, Georgia Tech / Google',
+  },
+  sourceUrl: 'https://huggingface.co/sign/kaggle-asl-signs-1st-place',
+  accuracy: {
+    summary: 'Not measured in this app yet. Reported on Kaggle held-out data (MediaPipe Holistic landmarks), not re-verified here.',
+    metrics: null,
+    measuredOn: 'n/a: needs the Kaggle ISLR data (account required); see docs/ASL_MODELS.md',
+    date: '2026-09-29',
+  },
+  default: true,
+});
+
 export const SIGN_LANGUAGES = ['ISL', 'ASL'];
 
 export const getModel = (id) => MODELS.find((m) => m.id === id) || null;
@@ -120,7 +162,8 @@ export const defaultModel = (language = 'ISL') =>
 /** Total download for a model, counting the shared runtime once. */
 export function downloadBytes(model) {
   const own = (model.files || []).reduce((s, f) => s + (f.bytes || 0), 0);
-  return own + (model.sharedFiles?.includes('ort-wasm') ? ORT_WASM.bytes : 0);
+  const extra = (model.extraDownloads || []).reduce((s, f) => s + (f.bytes || 0), 0);
+  return own + extra + (model.sharedFiles?.includes('ort-wasm') ? ORT_WASM.bytes : 0);
 }
 
 export const REQUIRED_FIELDS = [

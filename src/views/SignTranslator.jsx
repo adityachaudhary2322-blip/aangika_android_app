@@ -177,7 +177,7 @@ export default function SignTranslator({
             <ArrowLeft size={18} />
           </button>
           <span className="pill chrome-plate text-ink backdrop-blur">
-            {stats.fps} FPS · {stats.latencyMs} ms
+            {stats.fps} FPS · {stats.latencyMs} ms{stats.detectMs ? ` · landmarks ${stats.detectMs} ms` : ''}
             {runtime.delegate !== "unknown" && (
               <span className={runtime.delegate === "GPU" ? "text-primary" : "text-amber"}>
                 {runtime.delegate}

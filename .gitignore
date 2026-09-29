@@ -69,3 +69,4 @@ __pycache__/
 # Playwright output
 test-results/
 playwright-report/
+training/.venv-tf/
