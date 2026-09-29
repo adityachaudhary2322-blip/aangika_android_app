@@ -14,7 +14,7 @@ RATE_PER_MIN = "30"
 #   npx wrangler kv namespace create DICT
 [[kv_namespaces]]
 binding = "DICT"
-id = "PASTE_THE_ID_FROM_wrangler_kv_namespace_create"
+id = "38f7b9ebefba41b8a043bf8b0534856c"
 
 # SECRETS, never written here:
 #   npx wrangler secret put SARVAM_API_KEY    (your Sarvam key)
