@@ -5,21 +5,22 @@
 //
 // Privacy rules (India DPDP Act 2023: purpose-limited, consented):
 // - the CALLER must have given discovery consent;
-// - only profiles that are discoverable AND have a VERIFIED number can match;
+// - only profiles whose owner made them discoverable can match. Numbers are
+//   self-declared (no SMS OTP), so each match carries `verified`;
 // - the reply lists matches only: nothing reveals whether any other number
-//   exists, is registered, or is unverified;
+//   exists or is registered;
 // - numbers are never stored or logged; at most 500 per call.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const E164 = /^\+[1-9]\d{6,14}$/;
 const MAX_NUMBERS = 500;
 
-// Same rule as src/services/phone.js matchVerified(), kept identical.
-function matchVerified(profiles: any[], numbers: string[]) {
+// Same rule as src/services/phone.js matchDiscoverable(), kept identical.
+function matchDiscoverable(profiles: any[], numbers: string[]) {
   const wanted = new Set(numbers);
   return profiles
-    .filter((p) => p.discoverable && p.phone_verified && wanted.has(p.phone_e164))
-    .map((p) => ({ id: p.id, handle: p.handle, display_name: p.display_name }));
+    .filter((p) => p.discoverable && p.phone_e164 && wanted.has(p.phone_e164))
+    .map((p) => ({ id: p.id, handle: p.handle, display_name: p.display_name, verified: Boolean(p.phone_verified) }));
 }
 
 const cors = {
@@ -52,10 +53,9 @@ Deno.serve(async (req) => {
       .select('id, handle, display_name, phone_e164, phone_verified, discoverable')
       .in('phone_e164', numbers)
       .eq('discoverable', true)
-      .eq('phone_verified', true)
       .neq('id', user.id);
     if (error) return json({ error: 'Lookup failed.' }, 500);
-    return json({ matches: matchVerified(data ?? [], numbers) });
+    return json({ matches: matchDiscoverable(data ?? [], numbers) });
   } catch {
     return json({ error: 'Bad request.' }, 400);
   }
