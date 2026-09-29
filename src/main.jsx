@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext.jsx';
 import { CallProvider } from './context/CallContext.jsx';
 import './index.css';
 import { armAudioUnlock } from './services/ttsService.js';
+import setupNative from './native/index.js';
 // Early, so the one-shot beforeinstallprompt event is never missed.
 import './services/pwa.js';
 
@@ -12,6 +13,9 @@ import './services/pwa.js';
 // the page. Arm one-shot listeners now so the first tap anywhere unlocks
 // playback for the rest of the session.
 armAudioUnlock();
+
+// Android app only: native Bluetooth for the glove, back button, splash.
+setupNative();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

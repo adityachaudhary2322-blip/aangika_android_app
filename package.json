@@ -12,6 +12,11 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@capacitor-community/bluetooth-le": "^7.3.2",
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/core": "^7.6.9",
+    "@capacitor/splash-screen": "^7.0.5",
     "@mediapipe/tasks-vision": "^1.0.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.43.0",
@@ -22,6 +27,8 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.6.9",
     "@playwright/test": "^1.63.0",
     "@vitejs/plugin-basic-ssl": "^1.2.0",
     "@vitejs/plugin-react": "^4.7.0",

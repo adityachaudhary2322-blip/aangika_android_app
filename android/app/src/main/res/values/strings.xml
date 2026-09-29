@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Aangika</string>
+    <string name="title_activity_main">Aangika</string>
+    <string name="package_name">com.aangika.app</string>
+    <string name="custom_url_scheme">com.aangika.app</string>
+</resources>

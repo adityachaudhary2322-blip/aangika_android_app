@@ -1,0 +1,28 @@
+{
+  "appId": "com.aangika.app",
+  "appName": "Aangika",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "launchAutoHide": false,
+      "backgroundColor": "#0B1220",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    },
+    "BluetoothLe": {
+      "displayStrings": {
+        "scanning": "Looking for the Aangika glove…",
+        "cancel": "Cancel",
+        "availableDevices": "Gloves nearby",
+        "noDeviceFound": "No glove found. Is it switched on and awake?"
+      }
+    }
+  }
+}
