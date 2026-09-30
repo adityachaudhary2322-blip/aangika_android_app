@@ -18,6 +18,7 @@ const env = {
   DICT: { get: async (k) => (kv.has(k) ? kv.get(k) : null), put: async (k, v) => { kv.set(k, v); } },
   DEV_CODE: process.env.DEV_CODE || '',
   SARVAM_API_KEY: process.env.SARVAM_API_KEY || '',
+  SESSION_SECRET: process.env.SESSION_SECRET || 'dev-only-session-secret',
   ALLOWED_ORIGINS: ['http://localhost:4175', process.env.ALLOWED_ORIGINS].filter(Boolean).join(','),
   RATE_PER_MIN: '600',
 };

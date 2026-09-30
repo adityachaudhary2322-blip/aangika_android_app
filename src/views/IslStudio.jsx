@@ -12,6 +12,8 @@ import LearnTab from './IslLearn.jsx';
 import { frameFeatures, describeFeatures } from '../services/isl/islFeatures.js';
 import { SAMPLE_MS, SPOTTER_VERSION } from '../services/isl/islSpotter.js';
 import isl, { tokenFor } from '../services/isl/islDictionary.js';
+import personal from '../services/isl/islPersonal.js';
+import session from '../services/session.js';
 import { checkSign, checkDictionary } from '../services/isl/islHealth.js';
 import { matchStudioRules, isSayRule } from '../services/isl/islTranslate.js';
 import devSession from '../services/sharedDictionary.js';
@@ -32,7 +34,7 @@ const TABS = [['translate', 'Translate'], ['learn', 'Learn'], ['dictionary', 'Di
  */
 export default function IslStudio({ onBack, language, mode }) {
   const [tab, setTab] = useState('translate');
-  const { signs, syncState, resync } = useIslSigns();
+  const { signs, teamSigns, mine, syncState, resync } = useIslSigns();
   const [unlocked, setUnlocked] = useState(() => devSession.isUnlocked());
 
   useEffect(() => devSession.onDevChange(setUnlocked), []);
@@ -43,7 +45,7 @@ export default function IslStudio({ onBack, language, mode }) {
         <button type="button" onClick={onBack} aria-label="Back" className="btn-icon"><ArrowLeft size={18} /></button>
         <div className="min-w-0">
           <h1 className="display text-2xl leading-none">ISL Studio</h1>
-          <p className="text-[11px] text-ink-dim">Indian Sign Language · your team's dictionary · {signs.length} signs</p>
+          <p className="text-[11px] text-ink-dim">Indian Sign Language · team dictionary{mine.signs.length || Object.keys(mine.overrides).length ? ' + my dictionary' : ''} · {signs.length} signs</p>
         </div>
       </header>
       <div role="tablist" className="mx-4 flex gap-1 rounded-2xl bg-card-high p-1">
@@ -56,7 +58,7 @@ export default function IslStudio({ onBack, language, mode }) {
       </div>
       <div className="flex-1 overflow-y-auto px-4 pb-6 pt-3 no-scrollbar">
         {tab === 'translate' && <TranslateTab signs={signs} language={language} mode={mode} onDictionary={() => setTab('dictionary')} />}
-        {tab === 'dictionary' && <DictionaryTab signs={signs} unlocked={unlocked} syncState={syncState} onSync={resync} />}
+        {tab === 'dictionary' && <DictionaryTab signs={teamSigns} mine={mine} unlocked={unlocked} syncState={syncState} onSync={resync} />}
         {tab === 'learn' && <LearnTab signs={signs} />}
         {tab === 'rules' && <RulesTab signs={signs} unlocked={unlocked} />}
       </div>
@@ -173,7 +175,9 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
 
 // ── Dictionary: record, assign, edit, delete, publish ───────────────────────
 
-function DictionaryTab({ signs, unlocked, syncState, onSync }) {
+function DictionaryTab({ signs, mine, unlocked, syncState, onSync }) {
+  const [layer, setLayer] = useState('team');             // team | mine
+  const [changing, setChanging] = useState(null);         // team sign: "Change for me"
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState(null);           // sign draft being edited / recorded
   const [msg, setMsg] = useState(null);
@@ -201,6 +205,17 @@ function DictionaryTab({ signs, unlocked, syncState, onSync }) {
     setBusy(false);
   };
 
+  const layerSwitch = (
+    <div role="tablist" aria-label="Which dictionary" className="flex gap-1 rounded-2xl bg-card-high p-1">
+      {[['team', 'Team dictionary'], ['mine', 'My dictionary']].map(([id, label]) => (
+        <button key={id} type="button" role="tab" aria-selected={layer === id} onClick={() => setLayer(id)}
+          className={'flex-1 rounded-xl py-1.5 text-xs font-semibold ' + (layer === id ? 'bg-card text-ink shadow-card' : 'text-ink-dim')}>{label}</button>
+      ))}
+    </div>
+  );
+  if (layer === 'mine') return <div className="space-y-3">{layerSwitch}<MyDictionary teamSigns={signs} mine={mine} /></div>;
+  if (changing) return <ChangeForMe sign={changing} override={mine.overrides[changing.id]} onDone={() => setChanging(null)} />;
+
   if (editing) {
     return (
       <SignEditor
@@ -215,6 +230,7 @@ function DictionaryTab({ signs, unlocked, syncState, onSync }) {
   const drafts = signs.filter((s) => s.status !== 'published');
   return (
     <div className="space-y-3">
+      {layerSwitch}
       {!unlocked && <UnlockCard />}
       <div className="flex items-center gap-2">
         <div className="flex flex-1 items-center gap-2 rounded-2xl border border-subtle bg-card px-3 py-2">
@@ -291,6 +307,7 @@ function DictionaryTab({ signs, unlocked, syncState, onSync }) {
               </p>
             )}
             {health?.get(s.id)?.status === 'ok' && <p className="mt-1 text-[11px] text-primary">Distinct and consistent.</p>}
+            <ForMeControls sign={s} override={mine.overrides[s.id]} onChange={() => setChanging(s)} />
             {unlocked && (
               <div className="mt-2 flex flex-wrap gap-2">
                 <button type="button" onClick={() => setEditing({ ...s })} className="btn-quiet px-3 py-1.5 text-xs"><Pencil size={12} /> Edit / reassign</button>
@@ -311,6 +328,149 @@ function DictionaryTab({ signs, unlocked, syncState, onSync }) {
             )}
           </li>
         ))}
+      </ul>
+    </div>
+  );
+}
+
+// ── My dictionary: this person's own layer (islPersonal.js) ─────────────────
+
+/** On every team sign, for everyone: change it or hide it for me only. */
+function ForMeControls({ sign, override: o, onChange }) {
+  const active = o && !o.disabled;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      {active && (o.word || o.texts) && <span className="text-[11px] font-semibold text-secondary">For me it says “{o.word || sign.word}”</span>}
+      {active && o.hidden && <span className="text-[11px] font-semibold text-secondary">Hidden for me{o.by ? ' (my own sign is used instead)' : ''}</span>}
+      <button type="button" onClick={onChange} className="btn-quiet px-3 py-1.5 text-xs"><Pencil size={12} /> Change for me</button>
+      {o?.hidden
+        ? <button type="button" onClick={() => personal.setOverride(sign.id, { hidden: false })} className="btn-quiet px-3 py-1.5 text-xs">Show again for me</button>
+        : <button type="button" onClick={() => personal.setOverride(sign.id, { hidden: true })} className="btn-quiet px-3 py-1.5 text-xs">Hide for me</button>}
+      {o && <button type="button" onClick={() => personal.clearOverride(sign.id)} className="btn-quiet px-3 py-1.5 text-xs"><RotateCcw size={12} /> Undo my changes</button>}
+    </div>
+  );
+}
+
+/** "Change for me": the team's recording, my word and translations. */
+function ChangeForMe({ sign, override: o = {}, onDone }) {
+  const [v, setV] = useState({
+    word: o.word || sign.word, hi: o.texts?.['hi-IN'] ?? sign.texts?.['hi-IN'] ?? '',
+    hinglish: o.texts?.hinglish ?? sign.texts?.hinglish ?? '', category: o.category || sign.category || 'other',
+  });
+  const save = async () => {
+    // Only what differs from the team's sign is stored as my change.
+    const texts = {};
+    if (v.hi !== (sign.texts?.['hi-IN'] || '')) texts['hi-IN'] = v.hi;
+    if (v.hinglish !== (sign.texts?.hinglish || '')) texts.hinglish = v.hinglish;
+    await personal.setOverride(sign.id, {
+      word: v.word.trim() && v.word.trim() !== sign.word ? v.word.trim() : undefined,
+      texts: Object.keys(texts).length ? texts : undefined,
+      category: v.category !== sign.category ? v.category : undefined,
+    });
+    onDone();
+  };
+  return (
+    <section className="surface-card space-y-2 p-3">
+      <p className="text-sm font-semibold">Change “{sign.word}” for me</p>
+      <p className="text-[11px] text-ink-dim">The team's sign stays the same for everyone else. Undo any time to get the team's word back.</p>
+      <label className="block text-[11px] text-ink-dim">Word it means for me
+        <input value={v.word} onChange={(e) => setV({ ...v, word: e.target.value })} aria-label="Word for me" className="field mt-1 py-2 text-sm" />
+      </label>
+      <label className="block text-[11px] text-ink-dim">Hindi
+        <input value={v.hi} onChange={(e) => setV({ ...v, hi: e.target.value })} className="field mt-1 py-2 text-sm" />
+      </label>
+      <label className="block text-[11px] text-ink-dim">Hinglish
+        <input value={v.hinglish} onChange={(e) => setV({ ...v, hinglish: e.target.value })} className="field mt-1 py-2 text-sm" />
+      </label>
+      <label className="block text-[11px] text-ink-dim">Category (for rules)
+        <select value={v.category} onChange={(e) => setV({ ...v, category: e.target.value })} className="field mt-1 py-2 text-sm">
+          {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </label>
+      <div className="flex gap-2">
+        <button type="button" onClick={save} disabled={!v.word.trim()} className="btn-primary flex-1">Save for me</button>
+        <button type="button" onClick={onDone} className="btn-quiet px-4">Cancel</button>
+      </div>
+    </section>
+  );
+}
+
+function MyDictionary({ teamSigns, mine }) {
+  const [editing, setEditing] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const team = new Map(teamSigns.map((s) => [s.id, s]));
+  const own = mine.signs.slice().sort((a, b) => a.word.localeCompare(b.word));
+  const changes = Object.entries(mine.overrides).filter(([id]) => team.has(id));
+
+  if (editing) {
+    return (
+      <SignEditor
+        personal
+        sign={editing}
+        teamSigns={teamSigns}
+        others={[...teamSigns, ...own].filter((s) => s.id !== editing.id)}
+        onCancel={() => setEditing(null)}
+        onSaved={(d) => { setEditing(null); setMsg(`“${d.word}” saved to my dictionary.`); }}
+      />
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <section className="surface-card p-3 text-[12px]">
+        <p className="font-semibold">My dictionary</p>
+        <p className="text-[11px] text-ink-dim">
+          Signs and changes only you use, on top of the team dictionary. They are never published.
+          Delete or disable one and the team's version is used again.
+        </p>
+        {!session.isSignedIn() && <p className="mt-1 text-[11px] text-primary">Kept on this device. Sign in (Settings → Account) to have it on all your devices.</p>}
+      </section>
+      <button type="button" onClick={() => setEditing({ word: '', type: 'word', category: 'other', hands: 'one', texts: {}, takes: [] })} className="btn-primary w-full"><Plus size={15} /> Record a sign for me</button>
+      {msg && <p className="text-[11px] text-primary">{msg}</p>}
+
+      <p className="eyebrow">My signs ({own.length})</p>
+      {!own.length && <p className="text-[11px] text-ink-dim">None yet.</p>}
+      <ul className="space-y-2">
+        {own.map((s) => {
+          const replaced = Object.entries(mine.overrides).filter(([, o]) => o.by === s.id).map(([id]) => team.get(id)?.word).filter(Boolean);
+          return (
+            <li key={s.id} className={'rounded-2xl border border-subtle bg-card p-3 ' + (s.disabled ? 'opacity-60' : '')}>
+              <p className="text-sm font-semibold">{s.word} <span className="ml-1 text-[10px] text-secondary">mine{s.disabled ? ' · disabled' : ''}</span></p>
+              <p className="text-[10px] text-ink-dim">{s.category} · {s.takes.length} takes{replaced.length ? ` · used instead of the team's ${replaced.join(', ')}` : ''}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" onClick={() => personal.setPersonalDisabled(s.id, !s.disabled)} className="btn-quiet px-3 py-1.5 text-xs">{s.disabled ? 'Enable' : 'Disable'}</button>
+                <button type="button" onClick={() => setEditing({ ...s })} className="btn-quiet px-3 py-1.5 text-xs"><Pencil size={12} /> Edit</button>
+                <button type="button" onClick={() => setEditing({ ...s, takes: [], rerecord: true })} className="btn-quiet px-3 py-1.5 text-xs"><Video size={12} /> Re-record</button>
+                <button type="button" onClick={() => {
+                  if (confirmDel !== s.id) { setConfirmDel(s.id); return; }
+                  setConfirmDel(null);
+                  personal.removePersonal(s.id).then(() => setMsg(`“${s.word}” deleted${replaced.length ? `; the team's ${replaced.join(', ')} is used again` : ''}.`));
+                }} className="btn-quiet px-3 py-1.5 text-xs text-rose">
+                  <Trash2 size={12} /> {confirmDel === s.id ? 'Tap again to delete' : 'Delete'}
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      <p className="eyebrow">My changes to team signs ({changes.length})</p>
+      {!changes.length && <p className="text-[11px] text-ink-dim">None. Use “Change for me” or “Hide for me” on a team sign.</p>}
+      <ul className="space-y-2">
+        {changes.map(([id, o]) => {
+          const t = team.get(id);
+          return (
+            <li key={id} className={'flex items-center gap-2 rounded-2xl border border-subtle bg-card p-3 text-[12px] ' + (o.disabled ? 'opacity-60' : '')}>
+              <span className="min-w-0 flex-1">
+                <span className="font-semibold">{t.word}</span>
+                {o.hidden ? ' → hidden for me' : ''}{o.word ? ` → “${o.word}”` : ''}{!o.hidden && !o.word ? ' → my translations' : ''}
+                {o.disabled ? ' (disabled)' : ''}
+              </span>
+              <button type="button" onClick={() => personal.setOverride(id, { disabled: !o.disabled })} className="btn-quiet px-2 py-1 text-[11px]">{o.disabled ? 'Enable' : 'Disable'}</button>
+              <button type="button" onClick={() => personal.clearOverride(id)} className="btn-quiet px-2 py-1 text-[11px]"><RotateCcw size={11} /> Undo</button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -337,7 +497,7 @@ function UnlockCard() {
 }
 
 /** Word, meaning and category; then (re)record the takes. */
-function SignEditor({ sign, others, onCancel, onSaved }) {
+function SignEditor({ sign, others, onCancel, onSaved, personal: forMe = false, teamSigns = [] }) {
   const [v, setV] = useState({
     word: sign.word || '', type: sign.type || 'word', category: sign.category || 'other', hands: sign.hands || 'one',
     hi: sign.texts?.['hi-IN'] || '', hinglish: sign.texts?.hinglish || '',
@@ -346,10 +506,29 @@ function SignEditor({ sign, others, onCancel, onSaved }) {
   const [takes, setTakes] = useState(sign.takes || []);
   const [recording, setRecording] = useState(Boolean(sign.rerecord) || !(sign.takes || []).length);
   const [error, setError] = useState(null);
+  // Personal signs: team signs this recording looks like, and which of them to
+  // hide for me while mine is enabled ("use mine instead").
+  const [clashes, setClashes] = useState([]);
+  const [replace, setReplace] = useState(() => new Set());
+  const onReview = (r) => {
+    if (!forMe) return;
+    const hits = teamSigns.filter((t) => r.confusedWith.includes(t.word));
+    setClashes(hits);
+    setReplace(new Set(hits.map((t) => t.id)));
+  };
 
   const save = async () => {
     setError(null);
     try {
+      if (forMe) {
+        const d = await personal.savePersonal({
+          id: sign.id, word: v.word, type: v.type, category: v.category, hands: v.hands, description: v.description,
+          texts: { ...(v.hi ? { 'hi-IN': v.hi } : {}), ...(v.hinglish ? { hinglish: v.hinglish } : {}) },
+          takes, disabled: sign.disabled,
+        }, { replaces: [...replace] });
+        onSaved(d);
+        return;
+      }
       const d = await isl.saveDraft({
         id: sign.id, word: v.word, type: v.type, category: v.category, hands: v.hands,
         description: v.description, videoUrl: /^https:\/\//.test(v.videoUrl.trim()) ? v.videoUrl.trim() : '',
@@ -363,7 +542,8 @@ function SignEditor({ sign, others, onCancel, onSaved }) {
   return (
     <div className="space-y-3">
       <section className="surface-card space-y-2 p-3">
-        <p className="text-sm font-semibold">{sign.id ? `Edit “${sign.word}”` : 'New sign'}</p>
+        <p className="text-sm font-semibold">{sign.id ? `Edit “${sign.word}”` : forMe ? 'New sign for me' : 'New sign'}</p>
+        {forMe && <p className="text-[11px] text-ink-dim">Only you use this sign. It is never published.</p>}
         <label className="block text-[11px] text-ink-dim">Word this sign means
           <input value={v.word} onChange={(e) => setV({ ...v, word: e.target.value })} placeholder="e.g. water, Rahul, full stop" className="field mt-1 py-2 text-sm" />
         </label>
@@ -396,23 +576,37 @@ function SignEditor({ sign, others, onCancel, onSaved }) {
           <textarea value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} rows={2} maxLength={500}
             placeholder="e.g. Flat right hand at the chin, palm in, move it forward." aria-label="How to make it" className="field mt-1 py-2 text-sm" />
         </label>
-        <label className="block text-[11px] text-ink-dim">Reference video link (optional, https)
-          <input value={v.videoUrl} onChange={(e) => setV({ ...v, videoUrl: e.target.value })} placeholder="https://…" aria-label="Reference video link" className="field mt-1 py-2 text-sm" />
-        </label>
+        {!forMe && (
+          <label className="block text-[11px] text-ink-dim">Reference video link (optional, https)
+            <input value={v.videoUrl} onChange={(e) => setV({ ...v, videoUrl: e.target.value })} placeholder="https://…" aria-label="Reference video link" className="field mt-1 py-2 text-sm" />
+          </label>
+        )}
       </section>
 
       {recording ? (
-        <Recorder others={others} onDone={(t) => { setTakes(t); setRecording(false); }} onCancel={() => (takes.length ? setRecording(false) : onCancel())} />
+        <Recorder others={others} onReview={onReview} onDone={(t) => { setTakes(t); setRecording(false); }} onCancel={() => (takes.length ? setRecording(false) : onCancel())} />
       ) : (
         <section className="surface-card p-3 text-[12px]">
           <p><Check size={13} className="mr-1 inline text-primary" />{takes.length} takes recorded.</p>
           <button type="button" onClick={() => setRecording(true)} className="btn-quiet mt-2 px-3 py-1.5 text-xs"><Video size={12} /> Record again</button>
         </section>
       )}
+      {forMe && !recording && clashes.length > 0 && (
+        <section className="surface-card space-y-1 p-3 text-[12px]">
+          <p className="font-semibold">This looks like a team sign</p>
+          {clashes.map((t) => (
+            <label key={t.id} className="flex items-center gap-2">
+              <input type="checkbox" checked={replace.has(t.id)} onChange={(e) => { const n = new Set(replace); if (e.target.checked) n.add(t.id); else n.delete(t.id); setReplace(n); }} />
+              Use mine instead of “{t.word}” (only for me)
+            </label>
+          ))}
+          <p className="text-[10px] text-ink-dim">Delete or disable your sign later and the team's sign comes back.</p>
+        </section>
+      )}
       {error && <p className="text-[11px] text-rose">{error}</p>}
       {!recording && (
         <div className="flex gap-2">
-          <button type="button" onClick={save} disabled={!v.word.trim() || !takes.length} className="btn-primary flex-1">Save sign</button>
+          <button type="button" onClick={save} disabled={!v.word.trim() || !takes.length} className="btn-primary flex-1">{forMe ? 'Save to my dictionary' : 'Save sign'}</button>
           <button type="button" onClick={onCancel} className="btn-quiet px-4">Cancel</button>
         </div>
       )}
@@ -432,7 +626,7 @@ const DURATIONS = [
 ];
 
 /** Three takes with a countdown; checks quality and similarity to other signs. */
-function Recorder({ others, onDone, onCancel }) {
+function Recorder({ others, onDone, onCancel, onReview }) {
   const [duration, setDuration] = useState(2);
   const [takes, setTakesState] = useState([]);
   // The frame callback outlives renders: read takes through a ref, never a stale copy.
@@ -479,6 +673,7 @@ function Recorder({ others, onDone, onCancel }) {
   // BEFORE it is saved, not after it has confused the whole dictionary.
   function review(all) {
     const r = checkSign(all, others);
+    onReview?.(r);
     setVerdict(r.status);
     setNotes(r.status === 'ok'
       ? ['Consistent takes, distinct from the other signs.']

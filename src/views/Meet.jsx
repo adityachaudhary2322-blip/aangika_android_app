@@ -14,6 +14,7 @@ import useLiveSpeech from '../hooks/useLiveSpeech.js';
 import cameraManager from '../services/cameraManager.js';
 import { speak, unlockAudio } from '../services/ttsService.js';
 import { ROLE_SIGNER, ROLE_SPEAKER } from '../services/chatStorage.js';
+import { getUser } from '../services/session.js';
 
 /** How long a caption stays on a tile after the person stops. */
 const CAPTION_MS = 7000;
@@ -43,11 +44,12 @@ export default function Meet({
     try { return localStorage.getItem(ROLE_KEY) || profile?.role || ROLE_SIGNER; } catch { return ROLE_SIGNER; }
   });
   const setRole = (r) => { setRoleState(r); try { localStorage.setItem(ROLE_KEY, r); } catch { /* not remembered */ } };
+  const account = getUser();
   const me = useMemo(() => ({
-    name: profile?.auto ? `Guest ${profile.handle.slice(0, 3).toUpperCase()}` : (profile?.name || 'Guest'),
+    name: account?.name ? account.name : profile?.auto ? `Guest ${profile.handle.slice(0, 3).toUpperCase()}` : (profile?.name || 'Guest'),
     role,
     uid: profile?.handle,
-  }), [profile, role]);
+  }), [profile, role, account?.name]);
   const meeting = useMeeting(me);
   const live = meeting.status === 'live' || meeting.status === 'starting';
 

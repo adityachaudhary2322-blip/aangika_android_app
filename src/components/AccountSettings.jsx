@@ -5,6 +5,7 @@ import account, {
 } from '../services/account.js';
 import { ensureProfile } from '../services/chatStorage.js';
 import { toE164 } from '../services/phone.js';
+import CloudAccount from './CloudAccount.jsx';
 
 /**
  * Settings > Account. Entirely optional: signed out (or with accounts not
@@ -41,16 +42,9 @@ export default function AccountSettings() {
     setBusy(false);
   };
 
-  if (!isConfigured()) {
-    return (
-      <section className="mt-4 surface-card p-4">
-        <p className="eyebrow">Account</p>
-        <p className="mt-1 text-[11px] text-ink-dim">
-          Optional. This build has no account server configured, so everything stays on this device.
-        </p>
-      </section>
-    );
-  }
+  // Accounts on the Aangika server (Cloudflare). The older Supabase accounts
+  // below only appear in a build configured for them.
+  if (!isConfigured()) return <CloudAccount />;
 
   return (
     <section className="mt-4 surface-card p-4">

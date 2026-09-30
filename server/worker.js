@@ -1,5 +1,6 @@
 import { handleDictionary } from './dictionary.js';
 import { handleIsl } from './isl.js';
+import { handleAuth } from './auth.js';
 
 /**
  * Aangika's API (Cloudflare Worker): the Sarvam proxy below, and the
@@ -50,7 +51,7 @@ function cors(origin) {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'content-type, if-none-match',
+    'Access-Control-Allow-Headers': 'content-type, if-none-match, authorization',
     'Access-Control-Expose-Headers': 'ETag',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
@@ -93,6 +94,10 @@ export async function handle(request, env, fetchImpl = fetch) {
   // ISL Studio dictionary (isl.js).
   if (url.pathname === '/isl' || url.pathname.startsWith('/isl/')) {
     return handleIsl(request, env, headers);
+  }
+  // Accounts and my dictionary (auth.js).
+  if (url.pathname.startsWith('/auth/') || url.pathname === '/me' || url.pathname.startsWith('/me/')) {
+    return handleAuth(request, env, headers, fetchImpl);
   }
 
   const route = ROUTES[url.pathname];

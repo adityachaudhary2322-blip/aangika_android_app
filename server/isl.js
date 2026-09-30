@@ -62,7 +62,11 @@ const saveBin = (env, bin) => env.DICT.put(BIN_KEY, JSON.stringify(bin.slice(0, 
 const num01 = (v) => typeof v === 'number' && Number.isFinite(v) && v >= -0.001 && v <= 1.001;
 
 /** Keep only well-formed fields; round features to 3 decimals. */
-export function cleanIslSign(s) {
+export function cleanIslSign(s, { personal = false } = {}) {
+  // A person's own dictionary is private: never publishable (islPersonal.js);
+  // only the account store (auth.js) keeps personal signs.
+  const isPersonal = Boolean(s?.personal) || String(s?.id || '').startsWith('p-');
+  if (isPersonal !== personal) return { error: personal ? 'not a personal sign' : 'personal signs cannot be published' };
   const token = String(s?.token || '').toUpperCase();
   if (!/^[A-Z0-9_]{1,32}$/.test(token)) return { error: 'bad token' };
   const word = String(s.word || '').trim();
@@ -98,6 +102,7 @@ export function cleanIslSign(s) {
       hands: ['one', 'two', 'either'].includes(s.hands) ? s.hands : 'one',
       takes: clean,
       ...(num01(s.tau) ? { tau: s.tau } : {}),
+      ...(personal ? { personal: true, disabled: s.disabled === true, updatedAt: Number(s.updatedAt) || 0 } : {}),
       featureVersion: FEATURE_VERSION,
     },
   };
