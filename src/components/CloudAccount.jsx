@@ -14,7 +14,17 @@ export default function CloudAccount() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const googleRef = useRef(null);
-  const googleOn = Boolean(session.googleClientId()) && !isNativeApp();
+  const googleOn = Boolean(session.googleClientId()) && !isNativeApp();   // web: Google's own button
+  const nativeOn = isNativeApp() && session.hasNativeGoogle();              // Android app: native sign-in
+  const nativeGoogle = () => run(async () => {
+    const idToken = await session.nativeGoogleToken();
+    if (s) await session.linkGoogle(idToken); else await session.googleLogin(idToken);
+  }, s ? 'Google linked: you can sign in with it too.' : null);
+  const NativeButton = () => (
+    <button type="button" disabled={busy} onClick={nativeGoogle} className="btn-quiet w-full py-2 text-sm">
+      <span className="font-bold text-[#4285F4]">G</span> Continue with Google
+    </button>
+  );
 
   useEffect(() => session.subscribe(setS), []);
 
@@ -39,10 +49,10 @@ export default function CloudAccount() {
         <p className="eyebrow">Account</p>
         <p className="text-sm">Signed in as <b>{u.name}</b>{u.username ? <span className="text-ink-dim"> (@{u.username})</span> : ''}</p>
         <p className="flex items-center gap-1.5 text-[11px] text-ink-dim"><CloudUpload size={12} /> My dictionary is saved to your account and appears on every device you sign in on.</p>
-        {u.username && !u.google && googleOn && (
+        {u.username && !u.google && (googleOn || nativeOn) && (
           <div>
             <p className="text-[11px] text-ink-dim">Link Google, so you can get back in if you forget your PIN:</p>
-            <div ref={googleRef} className="mt-1" />
+            {googleOn ? <div ref={googleRef} className="mt-1" /> : <NativeButton />}
           </div>
         )}
         {msg && <p className={'text-[11px] ' + (msg.ok ? 'text-primary' : 'text-rose')}>{msg.text}</p>}
@@ -80,6 +90,7 @@ export default function CloudAccount() {
         {register ? 'I already have an account' : 'New here? Create an account'}
       </button>
       {googleOn && <div className="flex justify-center pt-1"><div ref={googleRef} /></div>}
+      {nativeOn && <NativeButton />}
     </section>
   );
 }

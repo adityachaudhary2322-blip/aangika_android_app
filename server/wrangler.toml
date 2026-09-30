@@ -9,6 +9,9 @@ compatibility_date = "2026-09-01"
 # localhost / Android app origins in worker.js.
 ALLOWED_ORIGINS = "https://aangika-pwa02.onrender.com"
 RATE_PER_MIN = "30"
+# Google sign-in (auth.js): the OAuth WEB client id(s) whose ID tokens are
+# accepted. Not a secret. The Android app signs in with this same web id.
+GOOGLE_CLIENT_IDS = "580018307108-ra5vrfv8oi7tejr90fr8f8qock11t6o8.apps.googleusercontent.com"
 
 # Community sign dictionary storage. Create it once and paste the id here:
 #   npx wrangler kv namespace create DICT
