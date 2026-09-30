@@ -17,6 +17,8 @@
 
 import { FEATURE_DIM, HAND_DIM, GROUPS, mirrorFeatures } from './islFeatures.js';
 
+// Shown in ISL Studio, so the team can tell which recogniser a device runs.
+export const SPOTTER_VERSION = 2;
 export const TEMPLATE_LEN = 16;        // typical take length (takes keep their natural length)
 export const SAMPLE_MS = 66;           // ~15 frames per second into the spotter
 // Per non-diagonal DTW step. Kept well below a typical frame difference so
@@ -253,7 +255,12 @@ export function createSpotter(signs, { minLen = 5 } = {}) {
       // movement in between.
       const prev = lastEmitted;
       if (!(prev && prev.id === win.sign.id && (win.ts - prev.te <= 1 || stillBetween(prev.te, win.ts)))) {
-        out.push({ id: win.sign.id, token: win.sign.token, confidence: Math.max(0, Math.min(1, 1 - win.score / 2)), ts: win.ts, te: win.te, cost: win.cost });
+        // Runner-up (a different sign): shown in ISL Studio to explain mix-ups.
+        const next = rivals.filter((c) => c.sign.id !== win.sign.id).sort((a, b) => a.cost - b.cost)[0];
+        out.push({
+          id: win.sign.id, token: win.sign.token, confidence: Math.max(0, Math.min(1, 1 - win.score / 2)), ts: win.ts, te: win.te, cost: win.cost,
+          ...(next ? { runnerUp: next.sign.id, runnerCost: next.cost } : {}),
+        });
         lastEmitted = { id: win.sign.id, te: win.te };
       } else {
         lastEmitted.te = win.te;
