@@ -85,10 +85,16 @@ export function cleanIslSign(s) {
   for (const [k, v] of Object.entries(s.texts || {})) {
     if (LANG_RE.test(k) && typeof v === 'string' && v.trim()) texts[k] = v.trim().slice(0, 300);
   }
+  // For Learn: how to make the sign, and an optional reference video (https only).
+  const description = typeof s.description === 'string' ? s.description.trim().slice(0, 500) : '';
+  let videoUrl = '';
+  try { if (s.videoUrl && new URL(s.videoUrl).protocol === 'https:') videoUrl = String(s.videoUrl).slice(0, 300); } catch { /* not a URL */ }
   return {
     sign: {
       id: String(s.id || '').slice(0, 64) || token,
       token, word, texts, category, type: s.type,
+      ...(description ? { description } : {}),
+      ...(videoUrl ? { videoUrl } : {}),
       hands: ['one', 'two', 'either'].includes(s.hands) ? s.hands : 'one',
       takes: clean,
       ...(num01(s.tau) ? { tau: s.tau } : {}),

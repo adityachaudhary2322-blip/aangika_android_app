@@ -186,6 +186,23 @@ console.log('\n2. Continuous signing: 200 random sentences, 20 similar signs + F
   let at = -1;
   [...seq, ...Array.from({ length: 12 }, rest)].forEach((f, i) => { for (const h of live.push(f)) if (h.id === 'fullstop') at = i - seq.length; });
   check(at >= 0 && at <= 6, 'FULL STOP is decided within a few frames of the hands dropping', `after ${at} frames`);
+
+  // Learn: an attempt at the right sign scores high and is "read"; at another sign, low.
+  const { scoreAttempt, describeSign } = await import('../src/services/isl/islLearn.js');
+  const ownScores = []; const otherScores = []; let read = 0; let wrongRead = 0;
+  for (let k = 0; k < 20; k++) {
+    const attempt = perform(protos[k], 0.02);
+    const r = scoreAttempt(signs[k], attempt, signs);
+    ownScores.push(r.score); if (r.recognised) read++;
+    const o = scoreAttempt(signs[(k + 5) % 20], attempt, signs);
+    otherScores.push(o.score); if (o.recognised) wrongRead++;
+  }
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  check(mean(ownScores) >= 80 && read >= 17, 'Learn: the right sign scores high and the translator would read it',
+    `mean ${mean(ownScores).toFixed(0)}%, read ${read}/20`);
+  check(Math.max(...otherScores) <= 40 && wrongRead === 0, 'Learn: another sign scores low and is never "read"',
+    `max ${Math.max(...otherScores)}%, read ${wrongRead}/20`);
+  check(describeSign(signs[0]).length >= 2, 'Learn: a description is made from the recording', describeSign(signs[0]).join(' '));
 }
 
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));

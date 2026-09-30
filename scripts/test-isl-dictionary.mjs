@@ -205,5 +205,21 @@ console.log('\n8. Nothing is lost: deleted signs can be restored, every change i
     'the previous dictionary is kept in rotating backups (at most 10)', `${backups.length} backups, newest v${newest.version}`);
 }
 
+console.log('\n9. Learn: a description and a reference video travel with the sign\n' + '-'.repeat(74));
+{
+  const one = isl.listSigns().find((s) => s.word === 'hospital');
+  await isl.saveDraft({ ...one, description: 'Flat hand on the chest, then a cross.', videoUrl: 'https://example.org/hospital.mp4' });
+  await isl.publish(CODE, [one.id]);
+  isl._resetForTests();
+  await isl.sync({ force: true });
+  const got = isl.getSign(one.id);
+  check(got.description === 'Flat hand on the chest, then a cross.' && got.videoUrl === 'https://example.org/hospital.mp4', 'another device receives the description and video link');
+  await isl.saveDraft({ ...got, videoUrl: 'javascript:alert(1)' });
+  await isl.publish(CODE, [one.id]);
+  isl._resetForTests();
+  await isl.sync({ force: true });
+  check(!isl.getSign(one.id).videoUrl, 'a link that is not https is dropped by the server');
+}
+
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));
 process.exit(fail ? 1 : 0);
