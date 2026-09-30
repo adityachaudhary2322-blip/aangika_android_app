@@ -91,9 +91,14 @@ export async function translateStudio(signs, language, { mode } = {}) {
   const words = signs.filter((s) => s.type !== 'full-stop');
   if (!words.length) return { english: '', translated: '', engine: 'none' };
 
-  const fixed = words.length === 1 && words[0].type === 'sentence'
-    ? { english: words[0].word, texts: words[0].texts || {}, rule: 'isl-sentence-sign' }
-    : matchStudioRules(words);
+  // A rule for exactly these signs wins; otherwise one sign alone says its own
+  // word ("Welcome.") rather than a grammar guess ("I am a welcome.").
+  const one = words.length === 1 ? words[0] : null;
+  const fixed = matchStudioRules(words) || (one ? {
+    english: one.type === 'sentence' || /[.!?।]$/.test(one.word) ? one.word : `${cap(one.word.toLowerCase() === one.word ? one.word : one.word.charAt(0) + one.word.slice(1).toLowerCase())}.`,
+    texts: one.texts || {},
+    rule: one.type === 'sentence' ? 'isl-sentence-sign' : 'isl-single-sign',
+  } : null);
   if (fixed?.english) {
     let translated = language === 'en-IN' ? '' : (fixed.texts[language] || '');
     let engine = fixed.rule;

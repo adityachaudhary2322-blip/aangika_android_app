@@ -479,6 +479,65 @@ function Recorder({ others, onDone, onCancel }) {
 
 // ── Rules: this dictionary's own grammar ────────────────────────────────────
 
+/**
+ * The simple way to make a rule: "when I sign these signs, in this order,
+ * say this sentence". Saved as an ordinary rule of this dictionary.
+ */
+function SignsToSentence({ signs, onSave }) {
+  const [picked, setPicked] = useState([]);           // sign tokens, in order
+  const [say, setSay] = useState('');
+  const [hi, setHi] = useState('');
+  const [hinglish, setHinglish] = useState('');
+  const usable = signs.filter((s) => s.type !== 'full-stop');
+  const bySign = new Map(signs.map((s) => [s.token, s]));
+  const ready = picked.length > 0 && say.trim();
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!ready) return;
+    const text = say.trim();
+    onSave({
+      id: `say-${picked.join('-').toLowerCase().replace(/[^a-z0-9-]+/g, '-')}`.slice(0, 40),
+      pattern: picked,
+      english: /[.!?।]$/.test(text) ? text : `${text}.`,
+      texts: { ...(hi.trim() ? { 'hi-IN': hi.trim() } : {}), ...(hinglish.trim() ? { hinglish: hinglish.trim() } : {}) },
+    });
+    setPicked([]); setSay(''); setHi(''); setHinglish('');
+  };
+
+  return (
+    <form onSubmit={submit} className="surface-card space-y-2 border-primary/40 p-3">
+      <p className="text-sm font-semibold">When I sign these… say this sentence</p>
+      <p className="text-[11px] text-ink-dim">Tap your signs in the order you sign them. Then FULL STOP speaks your sentence.</p>
+      <div className="flex min-h-[2.25rem] flex-wrap items-center gap-1.5 rounded-2xl border border-subtle p-2">
+        {!picked.length && <span className="text-[11px] text-ink-dim">No signs chosen yet</span>}
+        {picked.map((t, i) => (
+          <button key={`${t}-${i}`} type="button" onClick={() => setPicked(picked.filter((_, j) => j !== i))} title="Remove"
+            className="pill border-primary/40 bg-primary/10 text-primary">
+            {i + 1}. {bySign.get(t)?.word || t} ✕
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {usable.map((s) => (
+          <button key={s.id} type="button" onClick={() => setPicked([...picked, s.token])} className="pill border-subtle bg-card-high text-[11px] text-ink">
+            + {s.word}
+          </button>
+        ))}
+        {!usable.length && <span className="text-[11px] text-amber">Record some signs first (Dictionary tab).</span>}
+      </div>
+      <input value={say} onChange={(e) => setSay(e.target.value)} placeholder="Say this, e.g. Welcome to Segue" aria-label="Sentence to say" className="field py-2 text-sm" />
+      <div className="grid grid-cols-2 gap-2">
+        <input value={hi} onChange={(e) => setHi(e.target.value)} placeholder="Hindi (optional)" aria-label="Sentence in Hindi" className="field py-2 text-sm" />
+        <input value={hinglish} onChange={(e) => setHinglish(e.target.value)} placeholder="Hinglish (optional)" aria-label="Sentence in Hinglish" className="field py-2 text-sm" />
+      </div>
+      <button type="submit" disabled={!ready} className="btn-primary w-full py-2 text-sm">
+        Save: {picked.map((t) => bySign.get(t)?.word || t).join(' + ') || '…'} → “{say.trim() || '…'}”
+      </button>
+    </form>
+  );
+}
+
 function RulesTab({ signs, unlocked }) {
   const [rules, setRules] = useState(() => isl.getRules());
   const [test, setTest] = useState('');
@@ -505,6 +564,12 @@ function RulesTab({ signs, unlocked }) {
 
   return (
     <div className="space-y-3">
+      {unlocked && (
+        <SignsToSentence
+          signs={signs}
+          onSave={(rule) => save([...rules.filter((x) => x.id !== rule.id), rule], `Saved: signing ${rule.pattern.join(' + ')} now says “${rule.english}”.`)}
+        />
+      )}
       <section className="surface-card p-3">
         <p className="text-xs font-semibold">Try a sentence (words of your signs)</p>
         <input value={test} onChange={(e) => setTest(e.target.value)} placeholder="e.g. I hospital go" aria-label="Signs to try" className="field mt-1 py-2 text-sm" />
@@ -514,11 +579,11 @@ function RulesTab({ signs, unlocked }) {
       </section>
 
       <p className="text-[11px] text-ink-dim">
-        Rules match a whole sentence. Pattern items: a sign's word (WATER), a category (@pronoun @person @action @thing @place @time @describing @question @negation @other) or @name; add ? for optional.
+        <b>Advanced rules</b> (for many sentences at once) match a whole sentence. Pattern items: a sign's word (WATER), a category (@pronoun @person @action @thing @place @time @describing @question @negation @other) or @name; add ? for optional.
         In the text, {'{'}place{'}'}, {'{'}name{'}'} … insert the matched sign's word (its Hindi / Hinglish in those texts).
       </p>
       {unlocked && (
-        <button type="button" onClick={() => setDraft(draft ? null : { pattern: '', english: '', hi: '', hinglish: '' })} className="btn-quiet w-full py-2 text-xs"><Plus size={12} /> New rule</button>
+        <button type="button" onClick={() => setDraft(draft ? null : { pattern: '', english: '', hi: '', hinglish: '' })} className="btn-quiet w-full py-2 text-xs"><Plus size={12} /> New advanced rule</button>
       )}
       {draft && (
         <form className="surface-card space-y-2 p-3" onSubmit={(e) => { e.preventDefault(); const r = toRule(draft); save([...rules.filter((x) => x.id !== r.id), r], `Rule “${r.english}” saved for everyone.`); setDraft(null); }}>

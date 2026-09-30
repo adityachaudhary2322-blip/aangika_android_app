@@ -108,5 +108,28 @@ check(heard.map((s) => s.word).join(' ') === 'I hospital go full stop', 'signs s
 const said = await translateStudio(sentence, 'hinglish', { mode: 'offline' });
 check(said.translated === 'Main hospital ja raha hoon.', 'the sentence before FULL STOP is translated (Hinglish)', said.translated);
 
+console.log('\n5. "When I sign these, say this": WELCOME + SEGUE -> "Welcome to Segue."\n' + '-'.repeat(74));
+{
+  const pw = proto();
+  const ps = proto();
+  await isl.saveDraft({ word: 'WELCOME', category: 'action', type: 'word', takes: [perform(pw), perform(pw, 15), perform(pw, 13)] });
+  await isl.saveDraft({ word: 'SEGUE', category: 'place', type: 'word', hands: 'two', takes: [perform(ps), perform(ps, 15), perform(ps, 13)] });
+  await isl.publish(CODE, isl.listDrafts().map((d) => d.id));
+  // What the app's form saves: the signs, in order, and the typed sentence.
+  await isl.saveRules(CODE, [...isl.getRules(), { id: 'say-welcome-segue', pattern: ['WELCOME', 'SEGUE'], english: 'Welcome to Segue.', texts: { hinglish: 'Segue mein aapka swagat hai.' } }]);
+  const all = isl.listSigns();
+  const sp = createSpotter(all.map((s) => ({ id: s.id, token: s.token, takes: s.takes })));
+  const signed = [rest(), rest(), rest(), ...perform(pw, 14), rest(), ...perform(ps, 14), rest(), ...perform(protos['full stop'], 13), ...Array.from({ length: 6 }, rest)];
+  const got = [...signed.flatMap((f) => sp.push(Float32Array.from(f))), ...sp.flush()].map((h) => all.find((s) => s.id === h.id));
+  const before = got.slice(0, got.findIndex((s) => s.type === 'full-stop'));
+  check(got.map((s) => s.word).join(' ') === 'WELCOME SEGUE full stop', 'WELCOME, SEGUE, FULL STOP spotted', got.map((s) => s.word).join(' '));
+  const en = await translateStudio(before, 'en-IN', { mode: 'offline' });
+  check(en.english === 'Welcome to Segue.', 'it says the typed sentence', `${en.english} (${en.engine})`);
+  const hg = await translateStudio(before, 'hinglish', { mode: 'offline' });
+  check(hg.translated === 'Segue mein aapka swagat hai.', 'and the typed Hinglish', hg.translated);
+  const only = await translateStudio([before[0]], 'en-IN', { mode: 'offline' });
+  check(only.english === 'Welcome.', 'WELCOME alone does not trigger it, and just says its word', only.english);
+}
+
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));
 process.exit(fail ? 1 : 0);
