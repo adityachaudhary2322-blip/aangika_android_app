@@ -12,10 +12,28 @@
  * threshold band was introduced.
  */
 
-import { toTemplate, calibrate, dtwCost, TAU_MAX } from './islSpotter.js';
+import { toTemplate, calibrate, dtwCost, frameDistance, TAU_MAX, SAMPLE_MS } from './islSpotter.js';
 
 const CLOSE = 1.25;           // another sign within 25% of the sign's own fit: at risk
 const LOOSE = 0.15;           // takes disagree this much: re-record (above TAU_MAX: worth a look)
+
+const FPS = 1000 / SAMPLE_MS;
+const LONG_HOLD_S = 1.0;      // still hands after the sign for longer than this: not how a sentence is signed
+const handsIn = (f) => f[0] > 0.5 || f[48] > 0.5;
+
+/** Seconds of still hands (in view) after the last movement of a take; 0 for a held handshape. */
+export function holdAfter(take) {
+  const mv = (k) => frameDistance(take[k], take[k + 1]) > 0.012;
+  let last = -1; let first = -1;
+  for (let k = 0; k < take.length - 1; k++) if (handsIn(take[k]) && mv(k)) { if (first < 0) first = k; last = k; }
+  if (first < 0 || last - first < 3) return 0;                 // static sign: the hold IS the sign
+  let n = 0;
+  for (let k = last + 1; k < take.length; k++) if (handsIn(take[k])) n++;
+  return n / FPS;
+}
+
+/** Largest single-frame jump (a hand flickering in / out of detection). */
+const biggestJump = (take) => { let m = 0; for (let k = 1; k < take.length; k++) m = Math.max(m, frameDistance(take[k], take[k - 1])); return m; };
 
 const templatesOf = (s) => (s.takes || []).map((t) => toTemplate(t)).filter((t) => t.length);
 
@@ -43,13 +61,20 @@ export function checkSign(takes, others) {
   });
   const confusedWith = [...hits.entries()].sort((a, b) => b[1] - a[1]).map(([w]) => w);
   const notes = [];
+  const raw = takes.filter((t) => Array.isArray(t) && t.length);
+  const holds = raw.map(holdAfter);
+  const longHold = Math.max(0, ...holds) > LONG_HOLD_S;
+  const jumps = raw.map(biggestJump);
+  const glitch = jumps.length > 1 && jumps.some((j) => j > 0.15 && j > 3 * Math.min(...jumps));
   if (own.length < 2) notes.push('Only one take: record at least 3.');
+  if (longHold) notes.push(`Hands stay still ${Math.max(...holds).toFixed(1)} s after the sign: pauses may be read as this sign. Re-record with a shorter length and drop the hands right after.`);
+  if (glitch) notes.push(`Take ${jumps.findIndex((j) => j > 0.15 && j > 3 * Math.min(...jumps)) + 1} has a sudden jump (a hand lost or found mid-take): keep both hands clearly in view.`);
   if (consistency > LOOSE) notes.push('Takes disagree: re-record, signing it the same way each time (same start, speed and end).');
   else if (consistency > TAU_MAX) notes.push('Takes differ a little: fine, but a re-record would make it more reliable.');
   if (misread) notes.push(`${misread} of ${own.length} takes look more like “${confusedWith[0]}”: make them more different (hand shape, place or movement).`);
   else if (close) notes.push(`Close to “${confusedWith[0]}”: may be mixed up when signed quickly.`);
-  const status = misread || consistency > LOOSE || own.length < 2 ? 'bad' : close || consistency > TAU_MAX ? 'warn' : 'ok';
-  return { consistency, misread, close, takes: own.length, confusedWith, status, notes };
+  const status = misread || consistency > LOOSE || own.length < 2 ? 'bad' : close || consistency > TAU_MAX || longHold || glitch ? 'warn' : 'ok';
+  return { consistency, misread, close, longHold, glitch, takes: own.length, confusedWith, status, notes };
 }
 
 /**

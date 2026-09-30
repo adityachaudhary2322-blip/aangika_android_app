@@ -7,7 +7,7 @@ import CameraStage from '../components/CameraStage.jsx';
 import cameraManager from '../services/cameraManager.js';
 import useLandmarkLoop from '../hooks/useLandmarkLoop.js';
 import { frameFeatures, describeFeatures } from '../services/isl/islFeatures.js';
-import { createSpotter, SAMPLE_MS } from '../services/isl/islSpotter.js';
+import { createSpotter, SAMPLE_MS, SPOTTER_VERSION } from '../services/isl/islSpotter.js';
 import isl, { tokenFor } from '../services/isl/islDictionary.js';
 import { checkSign, checkDictionary } from '../services/isl/islHealth.js';
 import { translateStudio, matchStudioRules, isSayRule } from '../services/isl/islTranslate.js';
@@ -75,6 +75,8 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
   const [history, setHistory] = useState([]);             // finished sentences
   const [analysis, setAnalysis] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [trace, setTrace] = useState([]);                 // why each sign was chosen (latest first)
+  const [showWhy, setShowWhy] = useState(false);
   const sentenceRef = useRef([]);
   const lastSample = useRef(0);
   const lastAnalysis = useRef(0);
@@ -108,6 +110,7 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
     for (const hit of spotter.push(f)) {
       const sign = byId.get(hit.id);
       if (!sign) continue;
+      setTrace((t) => [{ at: Date.now() + Math.random(), word: sign.word, cost: hit.cost, next: byId.get(hit.runnerUp)?.word, nextCost: hit.runnerCost }, ...t].slice(0, 8));
       if (sign.type === 'full-stop') { finish(); continue; }
       sentenceRef.current = [...sentenceRef.current, sign];
       setSentence(sentenceRef.current);
@@ -173,6 +176,23 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
           {!sentence.length && <span className="text-xs text-ink-dim">Signs appear here as you sign.</span>}
           {sentence.map((s, i) => <span key={`${s.id}-${i}`} className="pill animate-fade-up border-subtle bg-card-high text-ink">{s.word}</span>)}
         </div>
+        <div className="mt-2 flex items-center gap-2 text-[10px] text-ink-dim">
+          <span>Recogniser v{SPOTTER_VERSION}</span>
+          <button type="button" onClick={() => setShowWhy(!showWhy)} className="underline">{showWhy ? 'Hide' : 'Why these signs?'}</button>
+        </div>
+        {showWhy && (
+          <ul className="mt-1 space-y-0.5 text-[11px] text-ink-dim">
+            {!trace.length && <li>Nothing recognised yet.</li>}
+            {trace.map((t) => (
+              <li key={t.at}>
+                <span className="font-semibold text-ink">{t.word}</span> · fit {t.cost.toFixed(3)}
+                {t.next ? ` · next best: ${t.next} ${t.nextCost.toFixed(3)}` : ' · no rival'}
+                {t.next && t.nextCost - t.cost < 0.01 ? ' · nearly a tie: re-record one of them' : ''}
+              </li>
+            ))}
+            <li className="pt-1">Lower fit = closer to the recording. If one sign keeps appearing, run Dictionary → Check dictionary and re-record it.</li>
+          </ul>
+        )}
       </section>
 
       {history.map((h) => (
@@ -430,11 +450,19 @@ function SignEditor({ sign, others, onCancel, onSaved }) {
 }
 
 const TAKES = 3;
-const DURATIONS = [[1.5, 'Short (1.5 s)'], [2.5, 'Normal (2.5 s)'], [4, 'Long (4 s)']];
+// Take length by kind of sign (measured on the team's recordings: the sign's
+// own movement plus ~0.5 s to bring the hands up; anything longer is spent
+// holding still, and a long hold makes pauses read as that sign).
+const DURATIONS = [
+  [1.5, 'Quick: one short movement or a held handshape (1.5 s)'],
+  [2, 'Normal: one movement with a path (2 s)'],
+  [3, 'Long: two parts, two hands or repeated (3 s)'],
+  [4, 'Compound: two signs in one (4 s)'],
+];
 
 /** Three takes with a countdown; checks quality and similarity to other signs. */
 function Recorder({ others, onDone, onCancel }) {
-  const [duration, setDuration] = useState(2.5);
+  const [duration, setDuration] = useState(2);
   const [takes, setTakesState] = useState([]);
   // The frame callback outlives renders: read takes through a ref, never a stale copy.
   const takesRef = useRef([]);
@@ -514,7 +542,7 @@ function Recorder({ others, onDone, onCancel }) {
           {analysis.map((a) => <span key={a.side} className="pill chrome-plate mr-1 text-[11px]">{a.text}</span>)}
         </div>
       </div>
-      <p className="text-[12px]">Take {Math.min(takes.length + 1, TAKES)} of {TAKES}. Start in rest position, sign once, return to rest. Keep face, shoulders and both hands in view.</p>
+      <p className="text-[12px]">Take {Math.min(takes.length + 1, TAKES)} of {TAKES}. Hands down (out of view) → at “go”, sign once at your normal speed → drop the hands straight away; don’t hold the end. Keep face and shoulders in view, and every take the same.</p>
       <div className="flex flex-wrap items-center gap-2">
         <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} aria-label="Take length" className="field w-auto py-1.5 text-xs">
           {DURATIONS.map(([d, label]) => <option key={d} value={d}>{label}</option>)}
