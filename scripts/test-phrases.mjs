@@ -74,6 +74,27 @@ check(t.english === 'I have pain in my lower back.' && t.translated === 'मे�
 t = await translate(['ME', 'WATER'], 'en-IN', { mode: MODE_OFFLINE });
 check(t.english === 'I need water.' && t.engine.startsWith('phrase:'), 'offline English for a phrase', t.engine);
 
+console.log('\n5b. Everyday questions and requests, offline Hindi\n' + '-'.repeat(74));
+for (const [t, m] of [['WHERE', 'where'], ['WHAT', 'what'], ['HOW', 'how'], ['YOU', 'you'], ['NOT', 'not']]) {
+  await signs.saveSign({ token: t, kind: 'handshape', hands: 'one', output: { type: 'word', text_en: m, texts: {} }, samples: [] });
+}
+const EVERYDAY = [
+  [['HOSPITAL', 'WHERE'], 'Where is the hospital?', 'अस्पताल कहाँ है?'],
+  [['I', 'HOSPITAL', 'GO', 'WANT'], 'I want to go to the hospital.', 'मुझे अस्पताल जाना है।'],
+  [['WANT', 'GO', 'HOME'], 'I want to go home.', 'मुझे घर जाना है।'],
+  [['YOU', 'NAME', 'WHAT'], 'What is your name?', 'आपका नाम क्या है?'],
+  [['YOU', 'HOW'], 'How are you?', 'आप कैसे हैं?'],
+  [['DOCTOR', 'CALL'], 'Please call a doctor.', 'कृपया डॉक्टर को बुलाइए।'],
+  [['I', 'NOT', 'UNDERSTAND'], 'I do not understand.', 'मुझे समझ नहीं आया।'],
+  [['PLEASE', 'WAIT'], 'Please wait.', 'कृपया रुकिए।'],
+];
+for (const [tokens, en, hi] of EVERYDAY) {
+  const x = say(tokens);
+  check(x?.english === en && x.texts['hi-IN'] === hi, `${tokens.join(' + ')} -> ${en} / ${hi}`, x ? '' : 'no rule');
+}
+check(say(['I', 'HOSPITAL', 'WENT']) === null, 'past tense (WENT) is left to the general grammar');
+check(say(['I', 'HOSPITAL', 'GO']) === null, 'no WANT signed: "I go to the hospital" stays with the general grammar');
+
 console.log('\n6. Hinglish (casual)\n' + '-'.repeat(74));
 {
   const { getLanguage, sarvamCode, sttCode, browserSpeechLocale, sarvamTtsPayload } = await import('../src/config/languages.js');

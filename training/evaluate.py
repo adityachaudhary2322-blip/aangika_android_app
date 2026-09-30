@@ -68,13 +68,38 @@ def live_windows(stream_norm: np.ndarray) -> list[np.ndarray]:
 
 
 @torch.no_grad()
-def forward_max(model, seqs: list[np.ndarray], device, batch: int = 64) -> np.ndarray:
-    """Max-over-time logits for equal-length sequences -> (len(seqs), V)."""
+def forward_max(model, seqs: list[np.ndarray], device, batch: int = 64, mirrored=None) -> np.ndarray:
+    """Max-over-time logits for equal-length sequences -> (len(seqs), V).
+    With `mirrored` (the same windows mirrored), per-frame logits of the two
+    are averaged before the max: test-time augmentation."""
     res = []
     for i in range(0, len(seqs), batch):
         x = torch.from_numpy(np.stack(seqs[i:i + batch])).to(device)
-        res.append(model(x).amax(dim=1).float().cpu().numpy())
+        out = model(x)
+        if mirrored is not None:
+            xm = torch.from_numpy(np.stack(mirrored[i:i + batch])).to(device)
+            out = (out + model(xm)) / 2
+        res.append(out.amax(dim=1).float().cpu().numpy())
     return np.concatenate(res) if res else np.zeros((0, 0), np.float32)
+
+
+# MediaPipe pose left/right pairs (as train.py), for mirroring.
+_POSE_PERM = np.arange(33)
+for _a, _b in [(1, 4), (2, 5), (3, 6), (7, 8), (9, 10), (11, 12), (13, 14), (15, 16),
+               (17, 18), (19, 20), (21, 22), (23, 24), (25, 26), (27, 28), (29, 30), (31, 32)]:
+    _POSE_PERM[_a], _POSE_PERM[_b] = _b, _a
+
+
+def mirror_raw(x: np.ndarray) -> np.ndarray:
+    """(T, 225) raw packed frames mirrored: x -> 1 - x, pose left/right and the
+    two hand slots swapped; missing points stay exactly 0 (train.py's mirror)."""
+    pts = x.reshape(len(x), 75, 3).copy()
+    present = ~(pts == 0).all(-1)
+    pts[..., 0] = np.where(present, 1.0 - pts[..., 0], 0.0)
+    out = pts.copy()
+    out[:, :33] = pts[:, :33][:, _POSE_PERM]
+    out[:, 33:54], out[:, 54:75] = pts[:, 54:75], pts[:, 33:54]
+    return out.reshape(len(x), 225)
 
 
 # ------------------------------------------------------------------ metrics
@@ -144,6 +169,10 @@ def main() -> None:
     ap.add_argument("--tasks-dir", type=Path, default=D.TASKS_DEFAULT)
     ap.add_argument("--ckpt", type=Path, default=DEFAULT_CKPT)
     ap.add_argument("--out", type=Path, default=D.TRAINING / "runs" / "baseline")
+    ap.add_argument("--tta", choices=["none", "mirror"], default="none",
+                    help="live regime: also run each window mirrored and average")
+    ap.add_argument("--dump-scores", type=Path, default=None,
+                    help="save live max-logits + labels (.npz) for calibrate_thresholds.py")
     args = ap.parse_args()
     regimes = args.regimes.split(",")
 
@@ -187,16 +216,18 @@ def main() -> None:
     nb_best = np.full((len(items), V), -np.inf, np.float32)
     live_best = np.full((len(items), V), -np.inf, np.float32)
     nb_seqs, nb_owner, live_seqs, live_owner, short = [], [], [], [], 0
+    live_mirror = []
 
     def flush(force=False):
-        nonlocal nb_seqs, nb_owner, live_seqs, live_owner
+        nonlocal nb_seqs, nb_owner, live_seqs, live_owner, live_mirror
         if nb_seqs and (force or len(nb_seqs) >= 256):
             nb_best[np.array(nb_owner)] = forward_max(model, nb_seqs, device)
             nb_seqs, nb_owner = [], []
         if live_seqs and (force or len(live_seqs) >= 1024):
             np.maximum.at(live_best, np.array(live_owner),
-                          forward_max(model, live_seqs, device))
-            live_seqs, live_owner = [], []
+                          forward_max(model, live_seqs, device,
+                                      mirrored=live_mirror if args.tta == "mirror" else None))
+            live_seqs, live_owner, live_mirror = [], [], []
 
     if args.source == "h5":
         feats = D.h5_features(args.h5, np.array([it["row"] for it in items]))
@@ -225,6 +256,8 @@ def main() -> None:
             short += not wins
             live_seqs.extend(wins)
             live_owner.extend([ci] * len(wins))
+            if args.tta == "mirror":
+                live_mirror.extend(live_windows(normalise(mirror_raw(stream_raw))))
         flush()
         if (ci + 1) % 1000 == 0:
             print(f"[eval] {ci + 1}/{len(items)} clips "
@@ -259,6 +292,14 @@ def main() -> None:
         print(f"   app decode (thr {a['threshold']}, top_k {a['top_k']}): "
               f"P {a['precision']:.4f} R {a['recall']:.4f} words/clip {a['words_per_clip']:.2f}")
     print(f"\n[eval] wrote {path}")
+    if args.dump_scores and "live" in regimes:
+        args.dump_scores.parent.mkdir(parents=True, exist_ok=True)
+        y = np.zeros(live_best.shape, bool)
+        for i, ls in enumerate(labels):
+            y[i, ls] = True
+        np.savez_compressed(args.dump_scores, live_logits=live_best, labels=y,
+                            words=np.array(vocab["words"]))
+        print(f"[eval] scores -> {args.dump_scores}")
     if args.details and "live" in regimes:
         with np.errstate(over="ignore"):
             write_details(1 / (1 + np.exp(-live_best)), labels, vocab,

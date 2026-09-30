@@ -83,6 +83,41 @@ export const CLASSES = {
     scared: { en: 'I am scared.', hi: 'मुझे डर लग रहा है।', hinglish: 'Mujhe darr lag raha hai.' },
   },
   want: { want: {}, need: {} },
+  // en: "where is ___"; to: after "go"; hi / hinglish: the place.
+  place: {
+    hospital: { en: 'the hospital', to: 'to the hospital', hi: 'अस्पताल', hinglish: 'hospital' },
+    home: { en: 'home', to: 'home', hi: 'घर', hinglish: 'ghar' },
+    school: { en: 'the school', to: 'to school', hi: 'स्कूल', hinglish: 'school' },
+    college: { en: 'the college', to: 'to college', hi: 'कॉलेज', hinglish: 'college' },
+    market: { en: 'the market', to: 'to the market', hi: 'बाज़ार', hinglish: 'market' },
+    office: { en: 'the office', to: 'to the office', hi: 'ऑफ़िस', hinglish: 'office' },
+    bank: { en: 'the bank', to: 'to the bank', hi: 'बैंक', hinglish: 'bank' },
+    station: { en: 'the station', to: 'to the station', hi: 'स्टेशन', hinglish: 'station' },
+    temple: { en: 'the temple', to: 'to the temple', hi: 'मंदिर', hinglish: 'mandir' },
+    shop: { en: 'the shop', to: 'to the shop', hi: 'दुकान', hinglish: 'dukaan' },
+    pharmacy: { en: 'the pharmacy', to: 'to the pharmacy', hi: 'दवाई की दुकान', hinglish: 'medical store' },
+    washroom: { en: 'the washroom', to: 'to the washroom', hi: 'शौचालय', hinglish: 'washroom' },
+    toilet: { en: 'the toilet', to: 'to the toilet', hi: 'शौचालय', hinglish: 'washroom' },
+  },
+  // People you might ask someone to call.
+  person: {
+    doctor: { en: 'a doctor', hi: 'डॉक्टर', hinglish: 'doctor' },
+    police: { en: 'the police', hi: 'पुलिस', hinglish: 'police' },
+    ambulance: { en: 'an ambulance', hi: 'एम्बुलेंस', hinglish: 'ambulance' },
+    mother: { en: 'my mother', hi: 'मेरी माँ', hinglish: 'meri mummy' },
+    father: { en: 'my father', hi: 'मेरे पापा', hinglish: 'mere papa' },
+    friend: { en: 'my friend', hi: 'मेरे दोस्त', hinglish: 'mere dost' },
+    family: { en: 'my family', hi: 'मेरे परिवार', hinglish: 'meri family' },
+  },
+  // (not "went": past tense is the general grammar's job)
+  go: { go: {}, going: {} },
+  where: { where: {} },
+  what: { what: {} },
+  how: { how: {} },
+  you: { you: {}, your: {} },
+  call: { call: {}, phone: {} },
+  not: { not: {}, no: {}, dont: {} },
+  understand: { understand: {} },
 };
 
 /** What a token means as a word: {word, name?} (lower-case word). */
@@ -182,6 +217,61 @@ export const BUILTIN_RULES = [
     id: 'self-feel', pattern: ['@self?', '@feel'], example: 'I HUNGRY',
     render: (c, l) => c.feel[l === 'hinglish' ? 'hinglish' : l === 'hi-IN' ? 'hi' : 'en'],
     requires: ['self'],
+  },
+  // ── Everyday questions and requests (Hindi and Hinglish offline) ─────────
+  {
+    id: 'where-place', pattern: ['@place', '@where'], example: 'HOSPITAL WHERE',
+    render: (c, l) => ({ 'en-IN': `Where is ${c.place.en}?`, 'hi-IN': `${c.place.hi} कहाँ है?`, hinglish: `${cap(c.place.hinglish)} kahan hai?` })[l],
+  },
+  {
+    id: 'where-place-2', pattern: ['@where', '@place'], example: 'WHERE HOSPITAL',
+    render: (c, l) => ({ 'en-IN': `Where is ${c.place.en}?`, 'hi-IN': `${c.place.hi} कहाँ है?`, hinglish: `${cap(c.place.hinglish)} kahan hai?` })[l],
+  },
+  {
+    // ISL: I HOSPITAL GO WANT. Needs WANT/NEED: plain "I GO SCHOOL" may mean
+    // "I go to school", so it is left to the general grammar. "मुझे … जाना
+    // है" is also gender-neutral, unlike "जा रहा/रही हूँ".
+    id: 'go-place', pattern: ['@self?', '@want?', '@place', '@go', '@want?'], example: 'I HOSPITAL GO WANT',
+    render: (c, l) => ({ 'en-IN': `I want to go ${c.place.to}.`, 'hi-IN': `मुझे ${c.place.hi} जाना है।`, hinglish: `Mujhe ${c.place.hinglish} jaana hai.` })[l],
+    requires: ['want'],
+  },
+  {
+    id: 'go-place-2', pattern: ['@self?', '@want?', '@go', '@place', '@want?'], example: 'WANT GO HOME',
+    render: (c, l) => ({ 'en-IN': `I want to go ${c.place.to}.`, 'hi-IN': `मुझे ${c.place.hi} जाना है।`, hinglish: `Mujhe ${c.place.hinglish} jaana hai.` })[l],
+    requires: ['want'],
+  },
+  {
+    id: 'your-name', pattern: ['@you?', 'NAME', '@what'], example: 'YOU NAME WHAT',
+    render: (c, l) => ({ 'en-IN': 'What is your name?', 'hi-IN': 'आपका नाम क्या है?', hinglish: 'Aapka naam kya hai?' })[l],
+  },
+  {
+    id: 'how-are-you', pattern: ['@you', '@how'], example: 'YOU HOW',
+    render: (c, l) => ({ 'en-IN': 'How are you?', 'hi-IN': 'आप कैसे हैं?', hinglish: 'Aap kaise ho?' })[l],
+  },
+  {
+    id: 'how-are-you-2', pattern: ['@how', '@you'], example: 'HOW YOU',
+    render: (c, l) => ({ 'en-IN': 'How are you?', 'hi-IN': 'आप कैसे हैं?', hinglish: 'Aap kaise ho?' })[l],
+  },
+  {
+    id: 'call-person', pattern: ['@person', '@call', 'PLEASE?'], example: 'DOCTOR CALL',
+    render: (c, l) => ({ 'en-IN': `Please call ${c.person.en}.`, 'hi-IN': `कृपया ${c.person.hi} को बुलाइए।`, hinglish: `Please ${c.person.hinglish} ko bulao.` })[l],
+  },
+  {
+    id: 'call-person-2', pattern: ['PLEASE?', '@call', '@person'], example: 'CALL DOCTOR',
+    render: (c, l) => ({ 'en-IN': `Please call ${c.person.en}.`, 'hi-IN': `कृपया ${c.person.hi} को बुलाइए।`, hinglish: `Please ${c.person.hinglish} ko bulao.` })[l],
+  },
+  {
+    id: 'not-understand', pattern: ['@self?', '@understand', '@not'], example: 'I UNDERSTAND NOT',
+    render: (c, l) => ({ 'en-IN': 'I do not understand.', 'hi-IN': 'मुझे समझ नहीं आया।', hinglish: 'Mujhe samajh nahi aaya.' })[l],
+  },
+  {
+    id: 'not-understand-2', pattern: ['@self?', '@not', '@understand'], example: 'I NOT UNDERSTAND',
+    render: (c, l) => ({ 'en-IN': 'I do not understand.', 'hi-IN': 'मुझे समझ नहीं आया।', hinglish: 'Mujhe samajh nahi aaya.' })[l],
+  },
+  {
+    id: 'please-wait', pattern: ['PLEASE?', 'WAIT', 'PLEASE?'], example: 'PLEASE WAIT',
+    render: (c, l) => ({ 'en-IN': 'Please wait.', 'hi-IN': 'कृपया रुकिए।', hinglish: 'Ek minute ruko, please.' })[l],
+    requires: ['please'],
   },
 ];
 
