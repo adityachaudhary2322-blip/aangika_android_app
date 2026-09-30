@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import BrandMark from './BrandMark.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
+import AccountButton from './AccountButton.jsx';
 
 /**
  * Desktop navigation. On a wide screen every destination is one click away,
@@ -98,7 +99,10 @@ export default function SideNav({ view, onNavigate, unread = 0 }) {
         ))}
       </nav>
 
-      <div className="mt-4 flex items-center gap-2 border-t border-subtle px-1 pt-4">
+      <div className="mt-4 border-t border-subtle px-1 pt-4">
+        <AccountButton variant="row" active={view === 'account'} onClick={() => onNavigate('account')} />
+      </div>
+      <div className="mt-1 flex items-center gap-2 px-1">
         <button
           type="button"
           onClick={() => onNavigate('settings')}

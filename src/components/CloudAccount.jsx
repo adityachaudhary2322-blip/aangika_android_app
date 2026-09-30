@@ -14,7 +14,7 @@ export default function CloudAccount() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const googleRef = useRef(null);
-  const googleOn = Boolean(session.googleClientId()) && !isNativeApp();   // web: Google's own button
+  const googleOn = Boolean(session.googleClientId()) && !isNativeApp() && session.googleWebAllowed();   // web: Google's own button
   const nativeOn = isNativeApp() && session.hasNativeGoogle();              // Android app: native sign-in
   const nativeGoogle = () => run(async () => {
     const idToken = await session.nativeGoogleToken();

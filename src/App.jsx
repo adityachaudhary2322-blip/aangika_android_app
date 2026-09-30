@@ -6,6 +6,7 @@ import AslTranslator from './views/AslTranslator.jsx';
 import HearingMode from './views/HearingMode.jsx';
 import VideoCall from './views/VideoCall.jsx';
 import Settings from './views/Settings.jsx';
+import Account from './views/Account.jsx';
 import RecordedVideoTranslator from './views/RecordedVideoTranslator.jsx';
 import MySigns from './views/MySigns.jsx';
 import DemoMode from './views/DemoMode.jsx';
@@ -208,7 +209,7 @@ export default function App() {
 
   // The tab bar shows on the top-level screens only. Camera views need the
   // height, and an open chat needs the composer at the bottom edge.
-  const showNav = view === 'dashboard' || view === 'settings'
+  const showNav = view === 'dashboard' || view === 'settings' || view === 'account'
     || (view === 'messenger' && !chatOpen) || (view === 'meet' && !meetLive);
 
   const shared = {
@@ -262,6 +263,7 @@ export default function App() {
             {view === 'hearing' && <HearingMode {...shared} />}
             {view === 'recorded' && <RecordedVideoTranslator {...shared} />}
             {view === 'settings' && <Settings {...shared} onNavigate={go} />}
+            {view === 'account' && <Account onBack={() => go('dashboard')} />}
             {view === 'words' && <WordList {...shared} onNavigate={go} />}
             {view === 'phrases' && <Phrases {...shared} cameraError={cameraError} />}
         {view === 'review' && <ReviewContributions onBack={() => go('settings')} />}

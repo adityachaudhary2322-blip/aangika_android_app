@@ -68,7 +68,7 @@ test('my dictionary: change a team sign for me, undo, and sync it through an acc
   await page2.getByRole('button', { name: 'Settings' }).first().click();
   await page2.getByLabel('Username').fill(username);
   await page2.getByLabel('PIN').fill('581937');
-  await page2.getByRole('button', { name: 'Sign in' }).click();
+  await page2.locator('form').getByRole('button', { name: 'Sign in' }).click();
   await expect(page2.getByText(/Signed in as Test User/)).toBeVisible();
   await openDictionary(page2);
   await expect(page2.locator('li', { hasText: 'GO · word' }).getByText('Hidden for me')).toBeVisible();
@@ -76,7 +76,7 @@ test('my dictionary: change a team sign for me, undo, and sync it through an acc
   // Sign out: this device keeps its copy; the account keeps its own.
   await page2.getByRole('button', { name: 'Settings' }).first().click();
   await page2.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page2.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  await expect(page2.locator('form').getByRole('button', { name: 'Sign in' })).toBeVisible();
   await ctx2.close();
 
   await request.post(`${API}/isl/remove`, { headers: HEAD, data: { code: DEV_CODE, ids: ['pe-21', 'pe-22'] } });
