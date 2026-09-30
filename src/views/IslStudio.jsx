@@ -795,6 +795,8 @@ function RulesTab({ signs, unlocked }) {
   const [draft, setDraft] = useState(null);
   const [msg, setMsg] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [conflicts, setConflicts] = useState([]);           // drafts the server refused: same signs as a published rule
+  const [busy, setBusy] = useState(false);
   useEffect(() => isl.subscribe(() => setRules(isl.getRules())), []);
   // Teammates add rules too: always start from the server's latest list.
   const refresh = () => { setRefreshing(true); isl.sync({ force: true }).catch(() => {}).finally(() => setRefreshing(false)); };
@@ -819,12 +821,34 @@ function RulesTab({ signs, unlocked }) {
     try { await fn(); setMsg({ tone: 'primary', text }); } catch (err) { setMsg({ tone: 'rose', text: err.message }); }
   };
   const by = session.getUser()?.name || '';
-  const saveRule = (rule, text, { replace = false } = {}) => {
-    // A different rule that happens to get the same id must not replace it.
-    let id = rule.id;
-    const clash = (x) => rules.find((r) => r.id === x && r.pattern.join(' ') !== rule.pattern.join(' '));
-    if (!replace) for (let n = 2; clash(id); n++) id = `${rule.id.slice(0, 36)}-${n}`;
-    return run(() => isl.upsertRule(devSession.getDevCode(), { ...rule, id, ...(by ? { by } : {}) }), text);
+  // New and edited rules are DRAFTS on this device (they already work here, so
+  // they can be tried); Publish sends them to everyone, with a clash check.
+  const saveRule = (rule) => {
+    // A NEW rule always gets its own id: ids come from the signs or the
+    // sentence, so a teammate's rule would otherwise be "edited" (replaced)
+    // without asking. The same signs as a published rule is then a clash,
+    // decided at publishing. Saving again over MY OWN draft with the same
+    // signs just updates that draft.
+    const myDraft = rules.find((r) => r.status === 'draft' && isl.rulePatternKey(r) === isl.rulePatternKey(rule));
+    let id = myDraft ? myDraft.id : rule.id;
+    if (!myDraft) for (let n = 2; rules.some((r) => r.id === id); n++) id = `${rule.id.slice(0, 36)}-${n}`;
+    const same = isl.getPublishedRules().find((r) => r.id !== id && isl.rulePatternKey(r) === isl.rulePatternKey(rule));
+    return run(() => isl.saveRuleDraft({ ...rule, id, ...(by ? { by } : {}) }),
+      `Draft saved on this device: it already works for you. Publish it to share it with the team.${same ? ` Note: the published “${same.english}” uses the same signs; publishing will ask which to keep.` : ''}`);
+  };
+  const drafts = rules.filter((r) => r.status !== 'published');
+  const publish = async (ids, replace = []) => {
+    setBusy(true); setMsg(null);
+    try {
+      const res = await isl.publishRules(devSession.getDevCode(), ids, { replace });
+      setConflicts((c) => [...c.filter((x) => !ids.includes(x.id)), ...res.conflicts]);
+      const bits = [];
+      if (res.published.length) bits.push(`${res.published.length} rule${res.published.length === 1 ? '' : 's'} published for everyone.`);
+      if (res.conflicts.length) bits.push(`${res.conflicts.length} not published: ${res.conflicts.length === 1 ? 'it clashes' : 'they clash'} with a published rule (below).`);
+      if (res.rejected?.length) bits.push(res.rejected.join('; '));
+      setMsg({ tone: res.conflicts.length || res.rejected?.length ? 'rose' : 'primary', text: bits.join(' ') });
+    } catch (err) { setMsg({ tone: 'rose', text: err.message }); }
+    setBusy(false);
   };
 
   return (
@@ -833,7 +857,7 @@ function RulesTab({ signs, unlocked }) {
       {unlocked && (
         <SignsToSentence
           signs={signs}
-          onSave={(rule) => saveRule(rule, `Saved for everyone: signing ${rule.pattern.join(' + ')} now says “${rule.english}”.`)}
+          onSave={(rule) => saveRule(rule)}
         />
       )}
       <section className="surface-card p-3">
@@ -852,17 +876,38 @@ function RulesTab({ signs, unlocked }) {
         <button type="button" onClick={() => setDraft(draft ? null : { pattern: '', english: '', hi: '', hinglish: '' })} className="btn-quiet w-full py-2 text-xs"><Plus size={12} /> New advanced rule</button>
       )}
       {draft && (
-        <form className="surface-card space-y-2 p-3" onSubmit={(e) => { e.preventDefault(); const r = toRule(draft); saveRule(r, `Rule “${r.english}” saved for everyone.`); setDraft(null); }}>
+        <form className="surface-card space-y-2 p-3" onSubmit={(e) => { e.preventDefault(); const r = toRule(draft); saveRule(r); setDraft(null); }}>
           <input value={draft.pattern} onChange={(e) => setDraft({ ...draft, pattern: e.target.value })} placeholder="@pronoun @place GO" aria-label="Rule pattern" className="field py-2 text-sm" />
           <input value={draft.english} onChange={(e) => setDraft({ ...draft, english: e.target.value })} placeholder="I am going to the {place}." aria-label="Rule English" className="field py-2 text-sm" />
           <input value={draft.hi} onChange={(e) => setDraft({ ...draft, hi: e.target.value })} placeholder="मुझे {place} जाना है।" aria-label="Rule Hindi" className="field py-2 text-sm" />
           <input value={draft.hinglish} onChange={(e) => setDraft({ ...draft, hinglish: e.target.value })} placeholder="Mujhe {place} jaana hai." aria-label="Rule Hinglish" className="field py-2 text-sm" />
-          <button type="submit" disabled={!draft.pattern.trim() || !draft.english.trim()} className="btn-primary w-full py-2 text-sm">Save rule for everyone</button>
+          <button type="submit" disabled={!draft.pattern.trim() || !draft.english.trim()} className="btn-primary w-full py-2 text-sm">Save as draft</button>
         </form>
       )}
       {msg && <p className={'text-[11px] ' + (msg.tone === 'rose' ? 'text-rose' : 'text-primary')}>{msg.text}</p>}
+      {unlocked && drafts.length > 0 && (
+        <section className="surface-card space-y-2 border-amber/40 p-3" aria-label="Draft rules">
+          <div className="flex items-center gap-2">
+            <p className="flex-1 text-xs font-semibold">{drafts.length} draft rule{drafts.length === 1 ? '' : 's'} (only on this device)</p>
+            <button type="button" disabled={busy} onClick={() => publish(drafts.map((r) => r.id))} className="btn-primary px-3 py-1.5 text-xs"><Upload size={12} /> Publish {drafts.length === 1 ? '' : 'all '}for everyone</button>
+          </div>
+          <p className="text-[10px] text-ink-dim">Drafts work in your translator now. Publishing checks for clashes with the team's rules first.</p>
+          {drafts.some((r) => r.recovered) && (
+            <p className="text-[11px] text-amber">{drafts.filter((r) => r.recovered).length} rule(s) were found on this device that the server lost (an earlier version replaced the whole list on every save). Publish the ones you want back; discard the rest.</p>
+          )}
+        </section>
+      )}
+      {conflicts.map((c) => (
+        <section key={c.id} className="surface-card space-y-2 border-rose/40 p-3 text-[12px]" aria-label="Rule clash">
+          <p><b>Clash:</b> your “{rules.find((r) => r.id === c.id)?.english || c.id}” uses the same signs ({c.existing.pattern.join(' + ')}) as the published “{c.existing.english}”{c.existing.by ? ` by ${c.existing.by}` : ''}. Only one can be used.</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={busy} onClick={() => publish([c.id], [c.id])} className="btn-quiet px-3 py-1.5 text-xs text-rose">Replace theirs with mine</button>
+            <button type="button" disabled={busy} onClick={() => { isl.discardRuleDraft(c.id); setConflicts((x) => x.filter((y) => y.id !== c.id)); setMsg({ tone: 'primary', text: 'Kept the published rule; your draft was discarded.' }); }} className="btn-quiet px-3 py-1.5 text-xs">Keep theirs (discard mine)</button>
+          </div>
+        </section>
+      ))}
       <div className="flex items-center gap-2 text-[11px] text-ink-dim">
-        <span className="flex-1">{rules.length} rule{rules.length === 1 ? '' : 's'} for everyone, from the whole team</span>
+        <span className="flex-1">{rules.length - drafts.length} published rule{rules.length - drafts.length === 1 ? '' : 's'} from the whole team{drafts.length ? ` + ${drafts.length} draft${drafts.length === 1 ? '' : 's'} of yours` : ''}</span>
         <button type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh rules" className="btn-icon h-7 w-7">{refreshing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}</button>
       </div>
       <ul className="space-y-1.5">
@@ -870,13 +915,20 @@ function RulesTab({ signs, unlocked }) {
         {rules.map((r) => (
           <li key={r.id} className="flex items-start gap-2 rounded-2xl border border-subtle bg-card px-3 py-2 text-[12px]">
             <div className="min-w-0 flex-1">
-              <p className="font-mono text-[11px] text-primary">{r.pattern.join(' + ')} <span className="font-sans text-ink-dim">· {isSayRule(r) ? 'signs anywhere in the sentence' : 'whole sentence, in order'}</span></p>
+              <p className="font-mono text-[11px] text-primary">{r.pattern.join(' + ')} <span className="font-sans text-ink-dim">· {isSayRule(r) ? 'signs anywhere in the sentence' : 'whole sentence, in order'}</span>
+                {r.status !== 'published' && <span className="ml-1 rounded-full bg-amber/15 px-1.5 py-0.5 font-sans text-[10px] text-amber">{r.recovered ? 'recovered from this device · not published' : r.status === 'edited' ? 'edited · not published' : 'draft · only you'}</span>}</p>
               <p>{r.english}</p>
               {r.texts?.['hi-IN'] && <p className="text-ink-dim">{r.texts['hi-IN']}</p>}
               {r.texts?.hinglish && <p className="text-ink-dim">{r.texts.hinglish}</p>}
               {(r.by || r.updatedAt) && <p className="text-[10px] text-ink-dim">{r.by ? `by ${r.by}` : ''}{r.by && r.updatedAt ? ' · ' : ''}{r.updatedAt ? new Date(r.updatedAt).toLocaleString() : ''}</p>}
             </div>
-            {unlocked && <button type="button" onClick={() => run(() => isl.deleteRule(devSession.getDevCode(), r.id), 'Rule deleted for everyone.')} aria-label="Delete rule" className="text-rose"><Trash2 size={14} /></button>}
+            {unlocked && r.status !== 'published' && (
+              <span className="flex shrink-0 flex-col items-end gap-1">
+                <button type="button" disabled={busy} onClick={() => publish([r.id])} className="text-[11px] font-semibold text-primary">Publish</button>
+                <button type="button" onClick={() => run(() => isl.discardRuleDraft(r.id), r.status === 'edited' ? 'Edit discarded: the published version is used again.' : 'Draft discarded.')} className="text-[11px] text-ink-dim">Discard</button>
+              </span>
+            )}
+            {unlocked && r.status === 'published' && <button type="button" onClick={() => run(() => isl.deleteRule(devSession.getDevCode(), r.id), 'Rule deleted for everyone.')} aria-label="Delete rule" className="text-rose"><Trash2 size={14} /></button>}
           </li>
         ))}
       </ul>
