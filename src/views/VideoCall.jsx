@@ -45,7 +45,7 @@ import {
  * signing; the FULL STOP sign sends the finished sentence to be spoken).
  */
 const SOURCE_KEY = 'aangika-call-sign-source';
-const readSource = () => { try { return localStorage.getItem(SOURCE_KEY) === 'studio' ? 'studio' : 'models'; } catch { return 'models'; } };
+const readSource = () => { try { return localStorage.getItem(SOURCE_KEY) === 'models' ? 'models' : 'studio'; } catch { return 'studio'; } };
 export default function VideoCall({
   language, setLanguage, mode, visionEngine, chooseVision,
 }) {

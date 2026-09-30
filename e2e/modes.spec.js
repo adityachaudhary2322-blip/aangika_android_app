@@ -31,7 +31,7 @@ test('Record mode: record, stop, then read and play the translation', async ({ p
   const errors = watch(page);
   await page.goto('/');
   await page.getByRole('button', { name: /Yes, I sign/ }).click();
-  await page.getByRole('button', { name: /Sign to speech/ }).first().click();
+  await page.getByRole('button', { name: /Built-in signs/ }).first().click();
 
   await page.getByRole('button', { name: /Record sign, stop, then play/ }).click();
   await page.getByRole('button', { name: 'Start translating' }).click();

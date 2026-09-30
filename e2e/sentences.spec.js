@@ -12,7 +12,7 @@ function watch(page) {
 test('Translator shows Auto sentence and Spell controls; Spell warns when no letters are taught', async ({ page }) => {
   const errors = watch(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Sign to speech' }).first().click();
+  await page.getByRole('button', { name: /Built-in signs/ }).first().click();
   await page.getByRole('button', { name: 'Start translating' }).click();
   const auto = page.getByRole('button', { name: /Auto sentence/ });
   await expect(auto).toHaveAttribute('aria-pressed', 'true');

@@ -15,14 +15,20 @@ import { peerServerOptions } from '../services/peerServer.js';
  * mic/camera state travel as small messages through the host, which stamps
  * the sender and forwards them, so nobody needs a data link to everyone.
  *
- * A mesh is fine for the small groups this is for (up to ~6 people); past
- * that each phone uploads its video once per participant and it will strain.
+ * Calls are one to one (MAX_PEOPLE 2): a signer and a speaker, each end
+ * running its own translation (Meet.jsx). The mesh code still works for more,
+ * but captions and voice are designed for a pair.
  * When the host leaves, the meeting ends for everyone, and the UI says so.
+ *
+ * People are CREATED only by a join or the roster. Everything else (media
+ * events, captions, mic/camera state) only UPDATES someone already there: a
+ * late 'close' from a connection that has already left used to re-create a
+ * nameless person stuck on "connecting".
  */
 
 export const ROOM_PREFIX = 'aangika_room_';
 const MEMBER_PREFIX = 'aangika_meet_';
-export const MAX_PEOPLE = 6;
+export const MAX_PEOPLE = 2;
 
 const CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 
@@ -101,8 +107,9 @@ export default function useMeeting(me) {
   const peopleRef = useRef({});
   peopleRef.current = people;
 
-  const patchPerson = useCallback((id, patch) => {
-    setPeople((all) => ({ ...all, [id]: { id, ...all[id], ...patch } }));
+  /** Update someone already in the room; `create` only for a join / roster. */
+  const patchPerson = useCallback((id, patch, create = false) => {
+    setPeople((all) => (all[id] || create ? { ...all, [id]: { id, ...all[id], ...patch } } : all));
   }, []);
   const dropPerson = useCallback((id) => {
     setPeople((all) => {
@@ -119,7 +126,7 @@ export default function useMeeting(me) {
   const apply = useCallback((msg) => {
     switch (msg.t) {
       case 'join':
-        patchPerson(msg.peer.id, { name: msg.peer.name, role: msg.peer.role });
+        patchPerson(msg.peer.id, { name: msg.peer.name, role: msg.peer.role }, true);
         setMessages((m) => [...m, { system: true, text: `${msg.peer.name} joined`, at: Date.now() }]);
         break;
       case 'leave': {
@@ -129,7 +136,7 @@ export default function useMeeting(me) {
         break;
       }
       case 'caption':
-        patchPerson(msg.from, { caption: { text: msg.text, kind: msg.kind, at: Date.now() } });
+        patchPerson(msg.from, { caption: { text: msg.text, kind: msg.kind, final: Boolean(msg.final), lang: msg.lang, at: Date.now() } });
         break;
       case 'chat':
         setMessages((m) => [...m, { from: msg.from, name: msg.name, text: msg.text, at: msg.at }]);
@@ -157,8 +164,9 @@ export default function useMeeting(me) {
   // ── Media ─────────────────────────────────────────────────────────────
   const wireCall = useCallback((call, meta = {}) => {
     callsRef.current.set(call.peer, call);
-    if (meta.name) patchPerson(call.peer, { name: meta.name, role: meta.role });
-    call.on('stream', (stream) => patchPerson(call.peer, { stream }));
+    if (meta.name) patchPerson(call.peer, { name: meta.name, role: meta.role }, true);
+    // The media can arrive before the join message: it may create the person.
+    call.on('stream', (stream) => patchPerson(call.peer, { stream, ...(meta.name ? { name: meta.name, role: meta.role } : {}) }, true));
     call.on('close', () => patchPerson(call.peer, { stream: null }));
     call.on('error', () => patchPerson(call.peer, { stream: null }));
   }, [patchPerson]);
@@ -264,10 +272,24 @@ export default function useMeeting(me) {
       if (asHost) {
         setStatus('live');
         peer.on('connection', (conn) => {
+          let refused = false;
           conn.on('open', () => {
+            // The same person again (a rejoin before their old link timed
+            // out): replace the old link rather than calling the room full.
+            const uid = conn.metadata?.uid;
+            for (const [id, old] of connsRef.current) {
+              if (uid && old.metadata?.uid === uid) {
+                connsRef.current.delete(id);
+                try { old.close(); } catch { /* gone */ }
+                apply({ t: 'leave', id });
+              }
+            }
             if (connsRef.current.size + 1 >= MAX_PEOPLE) {
-              conn.send({ t: 'full' });
-              setTimeout(() => conn.close(), 300);
+              // A message sent the instant the channel opens can be lost, so
+              // keep the link a few seconds and answer every 'hello' with 'full'.
+              refused = true;
+              try { conn.send({ t: 'full' }); } catch { /* not ready */ }
+              setTimeout(() => conn.close(), 4000);
               return;
             }
             const member = { id: conn.peer, name: conn.metadata?.name || 'Guest', role: conn.metadata?.role };
@@ -281,6 +303,7 @@ export default function useMeeting(me) {
           });
           conn.on('data', (msg) => {
             if (!msg || typeof msg !== 'object') return;
+            if (refused) { if (msg.t === 'hello') { try { conn.send({ t: 'full' }); } catch { /* gone */ } } return; }
             // A roster sent the instant the channel opened can be lost before
             // the joiner's side is ready; the joiner asks again with 'hello'.
             if (msg.t === 'hello') { sendRoster(conn); return; }
@@ -304,7 +327,7 @@ export default function useMeeting(me) {
       // Joiner: reach the host.
       const conn = peer.connect(ROOM_PREFIX + codeN, {
         reliable: true,
-        metadata: { name: meRef.current.name, role: meRef.current.role },
+        metadata: { name: meRef.current.name, role: meRef.current.role, uid: meRef.current.uid },
       });
       hostConnRef.current = conn;
       const timeout = setTimeout(() => {
@@ -331,7 +354,7 @@ export default function useMeeting(me) {
           clearInterval(hello);
           setStatus('live');
           for (const p of msg.peers) {
-            patchPerson(p.id, { name: p.name, role: p.role });
+            patchPerson(p.id, { name: p.name, role: p.role }, true);
             const call = peer.call(p.id, localRef.current, {
               metadata: { room: codeN, name: meRef.current.name, role: meRef.current.role },
             });
@@ -340,7 +363,9 @@ export default function useMeeting(me) {
           return;
         }
         if (msg.t === 'full') {
-          setError(`That meeting is full (${MAX_PEOPLE} people).`);
+          leavingRef.current = true;          // the host's hang-up must not read as 'ended'
+          clearInterval(hello);
+          setError('That call already has two people. Calls are one to one.');
           setStatus('error');
           cleanup();
           return;
@@ -381,8 +406,9 @@ export default function useMeeting(me) {
     patchPerson(msg.from, { cam: on });
   }, [send, mic, patchPerson]);
 
-  const sendCaption = useCallback((text, kind) => {
-    const msg = send({ t: 'caption', text, kind });
+  /** kind 'sign' | 'speech'; final: a finished sentence (spoken aloud by the other end). */
+  const sendCaption = useCallback((text, kind, { final = false, lang } = {}) => {
+    const msg = send({ t: 'caption', text, kind, final, lang });
     apply(msg);
   }, [send, apply]);
 

@@ -15,7 +15,7 @@ async function useModel(page, languageButton, cardName) {
 
 /** Average of the pill's "landmarks N ms" over a few seconds of frames. */
 async function landmarkMs(page) {
-  await page.getByRole('button', { name: 'Sign to speech' }).first().click();
+  await page.getByRole('button', { name: /Built-in signs/ }).first().click();
   const start = page.getByRole('button', { name: 'Start translating' });
   if (await start.isVisible().catch(() => false)) await start.click();
   const pill = page.getByText(/\d+ FPS/).first();

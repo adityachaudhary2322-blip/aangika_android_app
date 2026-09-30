@@ -189,14 +189,14 @@ export default function Dashboard({
             {/* Worded for whoever is holding the phone. */}
             <section className="mt-5 grid gap-3 sm:grid-cols-2">
               <HeroCard
-                onClick={() => onNavigate('sign')}
+                onClick={() => onNavigate('isl')}
                 tour="hero-sign"
                 Icon={Hand}
                 eyebrow={signer === 'friend' ? 'Back camera' : 'Camera'}
                 title={signer === 'friend' ? 'Understand their signs' : 'Sign to speech'}
                 detail={signer === 'friend'
                   ? 'Point the camera at the person signing; their signs are read out to you.'
-                  : 'Sign in front of the camera and it is spoken aloud.'}
+                  : 'Sign whole sentences with ISL Studio; each one is spoken aloud.'}
                 fill="from-fill-a to-fill-b"
                 delay="60ms"
               />
@@ -220,17 +220,17 @@ export default function Dashboard({
             </h2>
             <button
               type="button"
-              onClick={() => onNavigate('isl')}
+              onClick={() => onNavigate('sign')}
               className="surface-card group mt-3 flex w-full items-center gap-4 p-4 text-left transition hover:border-strong"
             >
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
                 <Hand size={24} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="display block text-lg">ISL Studio</span>
+                <span className="display block text-lg">Built-in signs</span>
                 <span className="mt-0.5 block text-[12px] leading-snug text-ink-dim">
-                  Sign whole sentences; a FULL STOP sign speaks each one. Signs recorded by our team,
-                  reading both hands, every finger and where they are on the body.
+                  The app's own sign models: single signs, spoken as you hold them. The main translator
+                  above is ISL Studio, with the signs recorded by our team.
                 </span>
               </span>
               <ArrowUpRight size={18} className="shrink-0 text-ink-dim transition group-hover:text-ink" />
