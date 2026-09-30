@@ -3,7 +3,13 @@ import {
   ArrowLeft, Mic, Square, Loader2, Copy, Trash2, Volume2, X, Type, Download,
   Send, Check,
 } from 'lucide-react';
-import { transcribe, sarvamTranslate } from '../services/translator.js';
+import { transcribe, sarvamTranslate, hasSarvam } from '../services/translator.js';
+import offlineStt, { modelFor } from '../services/offlineStt.js';
+import OfflineSpeechPanel from '../components/OfflineSpeechPanel.jsx';
+
+const ON_DEVICE_KEY = 'aangika.sttOnDevice';
+const readOnDevice = () => { try { return localStorage.getItem(ON_DEVICE_KEY) === 'on'; } catch { return false; } };
+const writeOnDevice = (on) => { try { localStorage.setItem(ON_DEVICE_KEY, on ? 'on' : 'off'); } catch { /* private mode */ } };
 import { LANGUAGES, getLanguage } from '../config/languages.js';
 import { speak } from '../services/ttsService.js';
 
@@ -58,6 +64,9 @@ export default function HearingMode({ language, online, onBack }) {
   const [reply, setReply] = useState(null);
   const [error, setError] = useState(null);
   const [latency, setLatency] = useState(0);
+  const [engine, setEngine] = useState('');
+  // Offline recognition on the device (Vosk); used automatically when offline.
+  const [useOnDevice, setUseOnDevice] = useState(readOnDevice);
   // What the other person speaks ('unknown' = let Saaras detect it), and
   // whether each line is also shown in the user's own language.
   const [theirLang, setTheirLang] = useState(() => {
@@ -218,7 +227,24 @@ export default function HearingMode({ language, online, onBack }) {
 
     const started = performance.now();
     try {
-      const text = (await transcribe(blob, theirLang) || '').trim();
+      // On the device (Vosk) when offline, when Sarvam is not available, or
+      // when chosen; otherwise Sarvam, which is more accurate.
+      const onDevice = useOnDevice || !navigator.onLine || !hasSarvam();
+      let text;
+      if (onDevice) {
+        const key = modelFor(theirLang) || modelFor(language) || 'hi';
+        if (!(await offlineStt.isDownloaded(key))) {
+          throw new Error(`Offline recognition needs the ${offlineStt.SPEECH_MODELS[key].label} speech model: download it below (once).`);
+        }
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const buffer = await ctx.decodeAudioData(await blob.arrayBuffer());
+        ctx.close().catch(() => {});
+        text = await offlineStt.transcribeAudioBuffer(buffer, key);
+        setEngine(`on-device · ${offlineStt.SPEECH_MODELS[key].label}`);
+      } else {
+        text = (await transcribe(blob, theirLang) || '').trim();
+        setEngine('Sarvam');
+      }
       if (text) translateLine(append('them', text), text);
       else setError('No speech detected. Try again a little closer.');
       setLatency(Math.round(performance.now() - started));
@@ -339,17 +365,29 @@ export default function HearingMode({ language, online, onBack }) {
           {error && (
             <p className="rounded-2xl border border-rose/30 bg-rose/10 px-3 py-2 text-xs text-rose">
               {error}
-              {!online && ' Speech-to-text needs a network connection; there is no offline transcription.'}
             </p>
           )}
         </div>
 
         {latency > 0 && (
           <div className="border-t border-subtle px-4 py-1.5 text-[10px] text-ink-dim">
-            Last transcription took {(latency / 1000).toFixed(1)} s
+            Last transcription took {(latency / 1000).toFixed(1)} s · {engine}
           </div>
         )}
       </section>
+
+      {/* ── Offline recognition (on the device) ────────────────────── */}
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={() => setUseOnDevice((v) => { writeOnDevice(!v); return !v; })}
+          aria-pressed={useOnDevice}
+          className={'pill py-1.5 text-xs transition ' + (useOnDevice ? 'border-primary/40 bg-primary/10 text-primary' : 'border-subtle bg-card text-ink-dim')}
+        >
+          {useOnDevice ? '✓ ' : ''}Recognise on this device (works offline)
+        </button>
+        {(useOnDevice || !online) && <OfflineSpeechPanel compact />}
+      </div>
 
       {/* ── Quick replies ──────────────────────────────────────────── */}
       <div className="mt-4" data-tour="quick-replies">

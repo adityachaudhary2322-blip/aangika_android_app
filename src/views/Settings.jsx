@@ -14,6 +14,7 @@ import {
 } from '../services/engineState.js';
 import RecognitionSettings from '../components/RecognitionSettings.jsx';
 import GloveSettings from '../components/GloveSettings.jsx';
+import OfflineSpeechPanel from '../components/OfflineSpeechPanel.jsx';
 import AccountSettings from '../components/AccountSettings.jsx';
 import ContributeSettings from '../components/ContributeSettings.jsx';
 import { LANGUAGES, VOICES, getVoice, setVoice } from '../config/languages.js';
@@ -57,6 +58,7 @@ export default function Settings({
       <Appearance />
 
       <AppAndOffline />
+      <OfflineSpeechPanel />
 
       <RecognitionSettings visionEngine={visionEngine} chooseVision={chooseVision} />
 

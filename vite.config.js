@@ -31,7 +31,10 @@ export default defineConfig(async () => {
       manifest: false,               // public/manifest.webmanifest is the manifest
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}', 'brand/*.jpg', 'models/vocab.json'],
-        globIgnores: ['**/*.wasm', '**/*.onnx'],
+        // The offline speech engine (vosk, ~5.8 MB) is not pre-cached for every
+        // visitor: it is cached at runtime (below) when someone downloads an
+        // offline speech model, which loads it once while online.
+        globIgnores: ['**/*.wasm', '**/*.onnx', '**/vosk-*.js'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
@@ -39,6 +42,15 @@ export default defineConfig(async () => {
         // are already cached. (Updates still wait for the user's tap.)
         clientsClaim: true,
         runtimeCaching: [
+          {
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && /\/assets\/vosk-[\w-]+\.js$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'aangika-speech-code',
+              expiration: { maxEntries: 4 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             urlPattern: ({ url, sameOrigin }) => sameOrigin
               && (url.pathname.endsWith('.onnx') || url.pathname.endsWith('.wasm')),
