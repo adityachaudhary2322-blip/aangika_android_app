@@ -564,6 +564,7 @@ function RulesTab({ signs, unlocked }) {
 
   return (
     <div className="space-y-3">
+      {!unlocked && <UnlockCard />}
       {unlocked && (
         <SignsToSentence
           signs={signs}
