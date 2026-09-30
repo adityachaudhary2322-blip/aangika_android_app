@@ -28,6 +28,8 @@ export const FEATURE_DIM = 100;             // islFeatures.js FEATURE_DIM
 export const FEATURE_VERSION = 1;
 const MAX_SIGNS = 400;
 const MAX_RULES = 200;
+/** Same signs in the same order: two such rules clash (only one can fire). */
+const patternKey = (r) => (Array.isArray(r?.pattern) ? r.pattern : []).map((p) => String(p).toUpperCase()).join(' ');
 const MAX_BYTES = 20 * 1024 * 1024;         // KV allows 25 MB per value
 const TYPES = new Set(['word', 'name', 'sentence', 'full-stop']);
 export const CATEGORIES = ['pronoun', 'person', 'action', 'thing', 'place', 'time', 'describing', 'question', 'negation', 'other'];
@@ -180,12 +182,37 @@ export async function handleIsl(request, env, headers) {
       await saveBin(env, bin.filter((b) => !restored.includes(b.id)));
       return json(200, { restored: restored.length, rejected, version: saved.version, total: saved.signs.length }, headers);
     }
+    // Publishing rule drafts (the app's normal path). Each draft is merged
+    // into the SERVER's list; one that uses the same signs as a DIFFERENT
+    // published rule is a clash: it is not published, and the author decides
+    // (replace theirs: its id in `replace`; or keep theirs: discard the draft).
+    if (url.pathname === '/isl/rules/publish') {
+      if (!Array.isArray(data.rules) || !data.rules.length || data.rules.length > MAX_RULES) return json(400, { error: 'No rules to publish.' }, headers);
+      const replace = new Set((Array.isArray(data.replace) ? data.replace : []).map(String));
+      const d = await load(env);
+      const now = new Date().toISOString();
+      const published = []; const conflicts = []; const rejected = [];
+      for (const raw of data.rules) {
+        const { rule, error } = cleanRule({ ...raw, updatedAt: now });
+        if (error) { rejected.push(error); continue; }
+        const clash = d.rules.find((r) => r.id !== rule.id && patternKey(r) === patternKey(rule));
+        if (clash && !replace.has(rule.id)) { conflicts.push({ id: rule.id, existing: clash }); continue; }
+        d.rules = d.rules.filter((r) => r.id !== rule.id && !(clash && r.id === clash.id));
+        if (d.rules.length >= MAX_RULES) { rejected.push(`${rule.id}: at most ${MAX_RULES} rules`); continue; }
+        d.rules.push(rule);
+        published.push(rule.id);
+      }
+      const saved = published.length ? await save(env, d) : d;
+      return json(200, { published, conflicts, rejected, rules: d.rules.length, version: saved.version }, headers);
+    }
     // One rule at a time, merged into the SERVER's list: several teammates can
     // add rules at once without one phone's older copy erasing the others'.
     if (url.pathname === '/isl/rules/upsert') {
       const { rule, error } = cleanRule({ ...data.rule, updatedAt: new Date().toISOString() });
       if (error) return json(400, { error }, headers);
       const d = await load(env);
+      const clash = d.rules.find((r) => r.id !== rule.id && patternKey(r) === patternKey(rule));
+      if (clash) return json(409, { error: `Clashes with the published rule “${clash.english}”${clash.by ? ` by ${clash.by}` : ''} (same signs). Update the app to choose which to keep.` }, headers);
       const exists = d.rules.some((r) => r.id === rule.id);
       if (!exists && d.rules.length >= MAX_RULES) return json(413, { error: `At most ${MAX_RULES} rules.` }, headers);
       d.rules = exists ? d.rules.map((r) => (r.id === rule.id ? rule : r)) : [...d.rules, rule];

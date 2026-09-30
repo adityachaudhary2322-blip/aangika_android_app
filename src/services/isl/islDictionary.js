@@ -22,6 +22,7 @@ const listeners = new Set();
 
 let shared = { version: 0, signs: [], rules: [] };
 let drafts = [];
+let ruleDrafts = [];      // rules made on THIS device, not yet published (same id = an edit)
 let ready = null;
 
 const hasIDB = () => typeof indexedDB !== 'undefined' && indexedDB !== null;
@@ -40,7 +41,7 @@ function idb(mode, fn) {
   });
 }
 const persist = () => (hasIDB()
-  ? idb('readwrite', (s) => { s.put(shared, 'shared'); s.put(drafts, 'drafts'); }).catch(() => {})
+  ? idb('readwrite', (s) => { s.put(shared, 'shared'); s.put(drafts, 'drafts'); s.put(ruleDrafts, 'ruleDrafts'); }).catch(() => {})
   : Promise.resolve());
 
 export function init() {
@@ -48,9 +49,10 @@ export function init() {
   ready = (async () => {
     if (!hasIDB()) return;
     try {
-      const [s, d] = await Promise.all([idb('readonly', (st) => st.get('shared')), idb('readonly', (st) => st.get('drafts'))]);
+      const [s, d, rd] = await Promise.all([idb('readonly', (st) => st.get('shared')), idb('readonly', (st) => st.get('drafts')), idb('readonly', (st) => st.get('ruleDrafts'))]);
       if (s && typeof s === 'object') shared = s;
       if (Array.isArray(d)) drafts = d;
+      if (Array.isArray(rd)) ruleDrafts = rd;
     } catch { /* blocked storage: memory only */ }
     emit();
   })();
@@ -67,7 +69,22 @@ export function listSigns() {
   return [...byId.values()].sort((a, b) => a.word.localeCompare(b.word));
 }
 export const getSign = (id) => listSigns().find((s) => s.id === id) || null;
-export const getRules = () => arr(shared?.rules).filter((r) => r && typeof r.id === 'string' && Array.isArray(r.pattern) && r.pattern.length && typeof r.english === 'string');
+const okRule = (r) => r && typeof r.id === 'string' && Array.isArray(r.pattern) && r.pattern.length && typeof r.english === 'string';
+/** The team's published rules. */
+export const getPublishedRules = () => arr(shared?.rules).filter(okRule);
+/** This device's unpublished rules. */
+export const listRuleDrafts = () => arr(ruleDrafts).filter(okRule);
+/**
+ * The rules this device translates with: published ones, with this device's
+ * drafts on top (so a new rule can be tried before it is published).
+ */
+export function getRules() {
+  const byId = new Map(getPublishedRules().map((r) => [r.id, { ...r, status: 'published' }]));
+  for (const r of listRuleDrafts()) byId.set(r.id, { ...r, status: byId.has(r.id) ? 'edited' : 'draft' });
+  return [...byId.values()];
+}
+/** Same signs in the same order (what makes two rules clash). */
+export const rulePatternKey = (r) => arr(r?.pattern).map((p) => String(p).toUpperCase()).join(' ');
 
 // Stored or downloaded data is never trusted to have every field: one odd
 // sign must not take the whole screen down.
@@ -160,9 +177,10 @@ export async function sync({ force = false } = {}) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
   const headers = !force && shared.version ? { 'If-None-Match': `"i${shared.version}"` } : {};
   const res = await fetch(`${apiBase()}/isl`, { headers, cache: 'no-store' });
-  if (res.status === 304) return 'current';
+  if (res.status === 304) { markRecoveryDone(); return 'current'; }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const d = await res.json();
+  recoverLostRules(d.rules || []);
   shared = { version: d.version || 0, signs: d.signs || [], rules: d.rules || [] };
   // A draft identical to what is now published is done.
   drafts = drafts.filter((dr) => {
@@ -172,6 +190,62 @@ export async function sync({ force = false } = {}) {
   await persist();
   emit();
   return 'updated';
+}
+
+// ── One-time rescue of rules lost to the old whole-list saves ──────────────
+//
+// Until 1.9.2 every rule save replaced the server's whole list with the
+// saving phone's copy, so rules teammates added in between were erased. A
+// phone that has not refreshed since may still hold them: on the first sync
+// of this version, rules this device knows that the server no longer has
+// (and whose signs no live rule uses) become drafts marked "recovered", for
+// their owner to publish (with the clash check) or discard. Once per device.
+const RECOVERY_KEY = 'aangika-isl-rule-recovery-1';
+function recoveryDone() { try { return localStorage.getItem(RECOVERY_KEY) === 'done'; } catch { return true; } }
+function markRecoveryDone() { try { localStorage.setItem(RECOVERY_KEY, 'done'); } catch { /* no storage */ } }
+function recoverLostRules(serverRules) {
+  if (recoveryDone()) return;
+  markRecoveryDone();
+  if (!shared.version) return;                                   // nothing stored on this device yet
+  const ids = new Set(serverRules.map((r) => r.id));
+  const pats = new Set(serverRules.map(rulePatternKey));
+  const lost = getPublishedRules().filter((r) => !ids.has(r.id) && !pats.has(rulePatternKey(r)) && !ruleDrafts.some((x) => x.id === r.id));
+  if (lost.length) ruleDrafts = [...ruleDrafts, ...lost.map((r) => ({ ...r, recovered: true, updatedAt: new Date().toISOString() }))];
+}
+export const recoveredRuleCount = () => ruleDrafts.filter((r) => r.recovered).length;
+
+// ── Rule drafts ─────────────────────────────────────────────────────────────
+
+/** Save a rule on this device only (a draft), until it is published. */
+export async function saveRuleDraft(rule) {
+  await init();
+  ruleDrafts = [...ruleDrafts.filter((r) => r.id !== rule.id), { ...rule, updatedAt: new Date().toISOString() }];
+  await persist();
+  emit();
+  return rule;
+}
+
+export async function discardRuleDraft(id) {
+  await init();
+  ruleDrafts = ruleDrafts.filter((r) => r.id !== id);
+  await persist();
+  emit();
+}
+
+/**
+ * Publish rule drafts (by id) for everyone. The server refuses a draft that
+ * uses the same signs as a different published rule (a clash), unless its id
+ * is in `replace` ("replace theirs"). -> { published: [ids], conflicts: [{ id, existing }] }
+ */
+export async function publishRules(code, ids, { replace = [] } = {}) {
+  const chosen = listRuleDrafts().filter((r) => ids.includes(r.id)).map(({ status, ...r }) => r);
+  if (!chosen.length) throw new Error('No draft rules to publish.');
+  const result = await post('/isl/rules/publish', { code, rules: chosen, replace });
+  ruleDrafts = ruleDrafts.filter((r) => !result.published.includes(r.id));
+  await persist();
+  await sync({ force: true });
+  emit();
+  return result;
 }
 
 /** Publish drafts (by id) for everyone. */
@@ -222,10 +296,10 @@ export async function saveRules(code, rules) {
 
 /** Test hook. */
 /** Tests only: load exactly this data, as if read from storage. */
-export function _loadForTests(sharedData, draftData) { shared = sharedData; drafts = draftData; ready = Promise.resolve(); }
-export function _resetForTests() { shared = { version: 0, signs: [], rules: [] }; drafts = []; ready = Promise.resolve(); }
+export function _loadForTests(sharedData, draftData) { shared = sharedData; drafts = draftData; ruleDrafts = []; ready = Promise.resolve(); }
+export function _resetForTests() { shared = { version: 0, signs: [], rules: [] }; drafts = []; ruleDrafts = []; ready = Promise.resolve(); }
 
 export default {
   init, subscribe, listSigns, getSign, getRules, saveDraft, discardDraft, sync, publish, removeSigns,
-  saveRules, upsertRule, deleteRule, listDeleted, restoreSigns, isAvailable, tokenFor, version, listDrafts,
+  saveRules, upsertRule, deleteRule, listDeleted, getPublishedRules, listRuleDrafts, saveRuleDraft, discardRuleDraft, publishRules, rulePatternKey, restoreSigns, isAvailable, tokenFor, version, listDrafts,
 };

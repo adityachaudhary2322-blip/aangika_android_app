@@ -74,7 +74,9 @@ test('ISL Studio: team dictionary, rules for everyone, continuous translate scre
   await page.getByRole('button', { name: '+ hospital', exact: true }).click();
   await page.getByLabel('Sentence to say').fill('Take me to the hospital');
   await page.getByRole('button', { name: /Save: I \+ hospital/ }).click();
-  await expect(page.getByText(/signing I \+ HOSPITAL now says “Take me to the hospital\.”/)).toBeVisible();
+  // A draft: it already works on this device; nobody else has it yet.
+  await expect(page.getByText(/Draft saved on this device/)).toBeVisible();
+  await expect(page.getByText('draft · only you')).toBeVisible();
   await page.getByLabel('Signs to try').fill('I hospital');
   await expect(page.getByText('Take me to the hospital.').first()).toBeVisible();
 
@@ -84,9 +86,24 @@ test('ISL Studio: team dictionary, rules for everyone, continuous translate scre
   await page.getByLabel('Rule English').fill('I am going to the {place}.');
   await page.getByLabel('Rule Hindi').fill('मैं {place} जा रहा हूँ।');
   await expect(page.getByText('I am going to the hospital.')).toBeVisible();          // preview before saving
-  await page.getByRole('button', { name: 'Save rule for everyone' }).click();
-  await expect(page.getByText(/saved for everyone/)).toBeVisible();
+  await page.getByRole('button', { name: 'Save as draft' }).click();
+  await expect(page.getByText('2 draft rules (only on this device)')).toBeVisible();
   await expect(page.getByText('मैं अस्पताल जा रहा हूँ।')).toBeVisible();
+  // Publish: both go to everyone.
+  await page.getByRole('button', { name: /Publish all for everyone/ }).click();
+  await expect(page.getByText('2 rules published for everyone.')).toBeVisible();
+  await expect(page.getByText('draft · only you')).toHaveCount(0);
+  // The same signs as a published rule: a clash, never published silently.
+  await page.getByRole('button', { name: '+ I', exact: true }).click();
+  await page.getByRole('button', { name: '+ hospital', exact: true }).click();
+  await page.getByLabel('Sentence to say').fill('Hospital please');
+  await page.getByRole('button', { name: /Save: I \+ hospital/ }).click();
+  await expect(page.getByText(/uses the same signs; publishing will ask which to keep/)).toBeVisible();
+  await page.getByRole('button', { name: /Publish for everyone/ }).click();
+  await expect(page.getByRole('region', { name: 'Rule clash' })).toBeVisible();
+  await page.getByRole('button', { name: 'Keep theirs (discard mine)' }).click();
+  await expect(page.getByText(/Kept the published rule/)).toBeVisible();
+  await expect(page.getByText('Take me to the hospital.').first()).toBeVisible();
 
   // Learn: pick a sign, read how it is made, sign it and get a result. The
   // fake camera shows no hands, so the result must say so (no made-up score).

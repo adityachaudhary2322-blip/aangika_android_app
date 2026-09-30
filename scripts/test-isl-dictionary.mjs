@@ -247,5 +247,49 @@ console.log('\n10. Teammates adding rules at the same time never erase each othe
   check(bad.status === 403, 'saving a rule still needs the developer code');
 }
 
+console.log('\n11. Rules are drafts until published; publishing refuses a clash\n' + '-'.repeat(74));
+{
+  const serverRules = async () => (await (await fetch('https://api.example/isl')).json()).rules;
+  await isl.saveRuleDraft({ id: 'say-draft-one', pattern: ['WELCOME', 'SEGUE'], english: 'Welcome to our Segue.', by: 'Chitra' });
+  check(isl.getRules().find((r) => r.id === 'say-draft-one')?.status === 'draft', 'a new rule is a draft on this device, and already used here');
+  check(!(await serverRules()).some((r) => r.id === 'say-draft-one'), 'nobody else has it yet');
+  // WELCOME + SEGUE is already published (section 5): the same signs = a clash.
+  let res = await isl.publishRules(CODE, ['say-draft-one']);
+  check(res.published.length === 0 && res.conflicts.length === 1 && res.conflicts[0].existing.id === 'say-welcome-segue',
+    'publishing a rule with the same signs as a published one is refused and names it', JSON.stringify(res.conflicts.map((c) => c.existing.english)));
+  check((await serverRules()).find((r) => r.id === 'say-welcome-segue')?.english === 'Welcome to Segue.', 'the published rule is untouched');
+  check(isl.listRuleDrafts().some((r) => r.id === 'say-draft-one'), 'the draft stays on this device, for the author to decide');
+  res = await isl.publishRules(CODE, ['say-draft-one'], { replace: ['say-draft-one'] });
+  const after = await serverRules();
+  check(res.published[0] === 'say-draft-one' && !after.some((r) => r.id === 'say-welcome-segue') && after.find((r) => r.id === 'say-draft-one')?.by === 'Chitra',
+    '"Replace theirs": mine is published, theirs removed (only one rule for those signs)');
+  check(!isl.listRuleDrafts().length && isl.getRules().find((r) => r.id === 'say-draft-one')?.status === 'published', 'published: no longer a draft');
+  await isl.saveRuleDraft({ id: 'say-go-only', pattern: ['I', 'HOSPITAL'], english: 'Take me to the hospital, please.' });
+  await isl.saveRuleDraft({ id: 'say-new-thing', pattern: ['RAHUL'], english: 'This is Rahul.' });
+  res = await isl.publishRules(CODE, ['say-go-only', 'say-new-thing']);
+  check(res.published.includes('say-new-thing'), 'a draft without a clash publishes', JSON.stringify(res));
+  const up = await fetch('https://api.example/isl/rules/upsert', { method: 'POST', body: JSON.stringify({ code: CODE, rule: { id: 'sneaky', pattern: ['RAHUL'], english: 'Other.' } }) });
+  check(up.status === 409, 'the one-rule save of 1.9.2 phones also refuses a clash', String(up.status));
+}
+
+console.log('\n12. Rules the old whole-list saves erased come back from a phone that still has them\n' + '-'.repeat(74));
+{
+  const server = await (await fetch('https://api.example/isl')).json();
+  const lost = { id: 'say-lost-one', pattern: ['WATER', 'GO'], english: 'A rule the server lost.' };
+  const replaced = { id: 'say-old-id', pattern: [...server.rules[0].pattern], english: 'Old wording of a live rule.' };
+  // This phone last synced before the loss: its copy still has both.
+  isl._loadForTests({ version: server.version - 1, signs: server.signs, rules: [...server.rules, lost, replaced] }, []);
+  localStorage.removeItem('aangika-isl-rule-recovery-1');
+  await isl.sync({ force: true });
+  const rec = isl.listRuleDrafts().filter((r) => r.recovered);
+  check(rec.length === 1 && rec[0].id === 'say-lost-one', 'the lost rule becomes a "recovered" draft on this phone', rec.map((r) => r.id).join(','));
+  check(!rec.some((r) => r.id === 'say-old-id'), 'a rule whose signs a live rule already uses is not brought back');
+  check(!(await (await fetch('https://api.example/isl')).json()).rules.some((r) => r.id === 'say-lost-one'), 'nothing is published without the owner choosing to');
+  await isl.discardRuleDraft('say-lost-one');
+  isl._loadForTests({ version: 1, signs: server.signs, rules: [...server.rules, lost] }, []);
+  await isl.sync({ force: true });
+  check(!isl.listRuleDrafts().length, 'it runs once per device: a later sync does not bring rules back');
+}
+
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));
 process.exit(fail ? 1 : 0);
