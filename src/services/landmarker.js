@@ -176,6 +176,9 @@ export function detect(video, timestampMs) {
       hands = handResult.landmarks.map((landmarks, i) => ({
         landmarks,
         handedness: handResult.handedness?.[i]?.[0]?.categoryName || null,
+        // Real 3-D hand (metres, camera-aligned): true joint angles for the
+        // ISL Studio features (islFeatures.js). Existing engines ignore it.
+        world: handResult.worldLandmarks?.[i] || null,
       }));
     }
   } catch {
