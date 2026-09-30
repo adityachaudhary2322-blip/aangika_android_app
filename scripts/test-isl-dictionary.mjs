@@ -129,6 +129,18 @@ console.log('\n5. "When I sign these, say this": WELCOME + SEGUE -> "Welcome to 
   check(hg.translated === 'Segue mein aapka swagat hai.', 'and the typed Hinglish', hg.translated);
   const only = await translateStudio([before[0]], 'en-IN', { mode: 'offline' });
   check(only.english === 'Welcome.', 'WELCOME alone does not trigger it, and just says its word', only.english);
+
+  // The camera rarely gives exactly the rule's signs: extras and order vary.
+  const [w, s] = before;
+  const extra = all.find((x) => x.word === 'I') || { ...w, id: 'x', token: 'HELLO', word: 'HELLO', category: 'other' };
+  const noisy = await translateStudio([extra, w, extra, s], 'en-IN', { mode: 'offline' });
+  check(noisy.english === 'Welcome to Segue.', 'still says it with other signs around', noisy.english);
+  const flipped = await translateStudio([s, w], 'en-IN', { mode: 'offline' });
+  check(flipped.english === 'Welcome to Segue.', 'and in the other order', flipped.english);
+  const rules = [{ id: 'say-welcome', pattern: ['WELCOME'], english: 'Hi there.' }, { id: 'say-welcome-segue', pattern: ['WELCOME', 'SEGUE'], english: 'Welcome to Segue.' }];
+  check(matchStudioRules([w, s], rules)?.english === 'Welcome to Segue.', 'the rule with more signs wins');
+  check(matchStudioRules([w, extra], rules)?.english === 'Hi there.', 'a one-sign rule fires when only that sign is present');
+  check(matchStudioRules([w, extra], [{ id: 'welcome-only', pattern: ['WELCOME'], english: 'Hi there.' }]) === null, 'advanced rules still match the whole sentence only');
 }
 
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));

@@ -9,7 +9,7 @@ import useLandmarkLoop from '../hooks/useLandmarkLoop.js';
 import { frameFeatures, describeFeatures } from '../services/isl/islFeatures.js';
 import { createSpotter, calibrate, toTemplate, dtwCost, SAMPLE_MS } from '../services/isl/islSpotter.js';
 import isl, { tokenFor } from '../services/isl/islDictionary.js';
-import { translateStudio, matchStudioRules } from '../services/isl/islTranslate.js';
+import { translateStudio, matchStudioRules, isSayRule } from '../services/isl/islTranslate.js';
 import devSession from '../services/sharedDictionary.js';
 import { speak, unlockAudio } from '../services/ttsService.js';
 
@@ -507,8 +507,8 @@ function SignsToSentence({ signs, onSave }) {
 
   return (
     <form onSubmit={submit} className="surface-card space-y-2 border-primary/40 p-3">
-      <p className="text-sm font-semibold">When I sign these… say this sentence</p>
-      <p className="text-[11px] text-ink-dim">Tap your signs in the order you sign them. Then FULL STOP speaks your sentence.</p>
+      <p className="text-sm font-semibold">When these signs are in my sentence… say this</p>
+      <p className="text-[11px] text-ink-dim">Tap the signs. Whenever all of them are in a sentence (any order, other signs allowed), FULL STOP speaks your sentence instead. If two rules fit, the one with more signs wins.</p>
       <div className="flex min-h-[2.25rem] flex-wrap items-center gap-1.5 rounded-2xl border border-subtle p-2">
         {!picked.length && <span className="text-[11px] text-ink-dim">No signs chosen yet</span>}
         {picked.map((t, i) => (
@@ -601,7 +601,7 @@ function RulesTab({ signs, unlocked }) {
         {rules.map((r) => (
           <li key={r.id} className="flex items-start gap-2 rounded-2xl border border-subtle bg-card px-3 py-2 text-[12px]">
             <div className="min-w-0 flex-1">
-              <p className="font-mono text-[11px] text-primary">{r.pattern.join(' + ')}</p>
+              <p className="font-mono text-[11px] text-primary">{r.pattern.join(' + ')} <span className="font-sans text-ink-dim">· {isSayRule(r) ? 'signs anywhere in the sentence' : 'whole sentence, in order'}</span></p>
               <p>{r.english}</p>
               {r.texts?.['hi-IN'] && <p className="text-ink-dim">{r.texts['hi-IN']}</p>}
               {r.texts?.hinglish && <p className="text-ink-dim">{r.texts.hinglish}</p>}

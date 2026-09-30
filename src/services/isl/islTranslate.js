@@ -64,17 +64,53 @@ function fill(template, caps, lang) {
   return missing ? null : out.replace(/\s+/g, ' ').replace(/\s+([.,!?।])/g, '$1').trim();
 }
 
-/** This dictionary's own rules. -> {english, texts, rule} | null */
+/** A "when I sign these, say this" rule (the Rules tab's quick form). */
+export const isSayRule = (r) => r.id.startsWith('say-');
+
+/**
+ * Say-rule match: every sign of the pattern appears somewhere in the
+ * sentence, in any order, with other signs allowed around them. -> captures | null
+ */
+export function matchStudioSigns(pattern, signs) {
+  const used = new Set();
+  const caps = {};
+  for (const raw of pattern) {
+    const item = raw.replace(/\?$/, '');
+    const i = signs.findIndex((s, j) => !used.has(j) && fits(item, s));
+    if (i < 0) {
+      if (raw.endsWith('?')) continue;
+      return null;
+    }
+    used.add(i);
+    caps[item.startsWith('@') ? item.slice(1) : item.toLowerCase()] = capture(signs[i]);
+  }
+  return caps;
+}
+
+function apply(r, caps) {
+  const texts = {};
+  for (const [lang, tpl] of Object.entries(r.texts || {})) {
+    const t = fill(tpl, caps, lang);
+    if (t) texts[lang] = t;
+  }
+  return { english: cap(fill(r.english, caps, 'en-IN') || ''), texts, rule: `isl-rule:${r.id}` };
+}
+
+/**
+ * This dictionary's own rules. -> {english, texts, rule} | null
+ *  1. any rule matching the whole sentence exactly, in order;
+ *  2. else the say-rule whose signs are all in the sentence, most signs first
+ *     (so WELCOME + SEGUE beats WELCOME alone).
+ */
 export function matchStudioRules(signs, rules = getRules()) {
   for (const r of rules) {
     const caps = matchStudioPattern(r.pattern, signs);
-    if (!caps) continue;
-    const texts = {};
-    for (const [lang, tpl] of Object.entries(r.texts || {})) {
-      const t = fill(tpl, caps, lang);
-      if (t) texts[lang] = t;
-    }
-    return { english: cap(fill(r.english, caps, 'en-IN') || ''), texts, rule: `isl-rule:${r.id}` };
+    if (caps) return apply(r, caps);
+  }
+  const say = rules.filter(isSayRule).sort((a, b) => b.pattern.length - a.pattern.length);
+  for (const r of say) {
+    const caps = matchStudioSigns(r.pattern, signs);
+    if (caps) return apply(r, caps);
   }
   return null;
 }
@@ -91,7 +127,7 @@ export async function translateStudio(signs, language, { mode } = {}) {
   const words = signs.filter((s) => s.type !== 'full-stop');
   if (!words.length) return { english: '', translated: '', engine: 'none' };
 
-  // A rule for exactly these signs wins; otherwise one sign alone says its own
+  // A rule for these signs wins; otherwise one sign alone says its own
   // word ("Welcome.") rather than a grammar guess ("I am a welcome.").
   const one = words.length === 1 ? words[0] : null;
   const fixed = matchStudioRules(words) || (one ? {
@@ -111,4 +147,4 @@ export async function translateStudio(signs, language, { mode } = {}) {
   return translate(words.map(tagFor), language, mode ? { mode } : {});
 }
 
-export default { translateStudio, matchStudioRules, matchStudioPattern };
+export default { translateStudio, matchStudioRules, matchStudioPattern, matchStudioSigns };
