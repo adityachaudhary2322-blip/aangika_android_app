@@ -12,6 +12,8 @@ import DemoMode from './views/DemoMode.jsx';
 import ReviewContributions from './views/ReviewContributions.jsx';
 import DeveloperDictionary from './views/DeveloperDictionary.jsx';
 import IslStudio from './views/IslStudio.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { resetLocal as resetIslStudio } from './services/isl/islDictionary.js';
 import { checkForUpdates } from './services/modelUpdates.js';
 import { flush as flushContributions } from './services/contributions.js';
 import { checkForUpdates as checkDictionary } from './services/sharedDictionary.js';
@@ -248,7 +250,9 @@ export default function App() {
               <MySigns {...shared} cameraError={cameraError} onBack={() => go(returnTo)} onNavigate={go} />
             )}
             {view === 'isl' && (
-              <IslStudio onBack={() => go('dashboard')} language={language} mode={mode} />
+              <ErrorBoundary name="ISL Studio" onReset={resetIslStudio} resetLabel="Clear this device's ISL Studio copy and reload the team dictionary">
+                <IslStudio onBack={() => go('dashboard')} language={language} mode={mode} />
+              </ErrorBoundary>
             )}
             {view === 'developer' && (
               <DeveloperDictionary onBack={() => go('settings')} onNavigate={go} />
