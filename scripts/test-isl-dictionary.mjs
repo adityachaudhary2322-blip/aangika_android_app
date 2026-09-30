@@ -221,5 +221,31 @@ console.log('\n9. Learn: a description and a reference video travel with the sig
   check(!isl.getSign(one.id).videoUrl, 'a link that is not https is dropped by the server');
 }
 
+console.log('\n10. Teammates adding rules at the same time never erase each other\'s\n' + '-'.repeat(74));
+{
+  const post = (path, body) => fetch(`https://api.example${path}`, { method: 'POST', body: JSON.stringify({ code: CODE, ...body }) }).then((r) => r.json().then((d) => ({ status: r.status, d })));
+  const count0 = isl.getRules().length;
+  const stale = isl.getRules();                                  // phone B's copy, before A adds anything
+  await post('/isl/rules/upsert', { rule: { id: 'team-a', pattern: ['HOSPITAL'], english: 'Rule from A.', by: 'Asha' } });
+  await post('/isl/rules/upsert', { rule: { id: 'team-b', pattern: ['GO'], english: 'Rule from B.', by: 'Bala' } });
+  await isl.sync({ force: true });
+  let ids = isl.getRules().map((r) => r.id);
+  check(ids.includes('team-a') && ids.includes('team-b') && ids.length === count0 + 2, 'two teammates adding rules at once: both are kept', `${ids.length} rules`);
+  check(isl.getRules().find((r) => r.id === 'team-a').by === 'Asha' && isl.getRules().find((r) => r.id === 'team-a').updatedAt, 'each rule records who added it and when');
+  // An older app version sends its whole (stale) list: it must not delete A's and B's rules.
+  await post('/isl/rules', { rules: [...stale, { id: 'team-c', pattern: ['I'], english: 'Rule from an old phone.' }] });
+  await isl.sync({ force: true });
+  ids = isl.getRules().map((r) => r.id);
+  check(ids.includes('team-a') && ids.includes('team-b') && ids.includes('team-c'), 'an old phone saving its stale list adds its rule and removes nobody else\'s', `${ids.length} rules`);
+  await post('/isl/rules/upsert', { rule: { id: 'team-a', pattern: ['HOSPITAL'], english: 'Rule from A, edited.' } });
+  await isl.sync({ force: true });
+  check(isl.getRules().find((r) => r.id === 'team-a').english === 'Rule from A, edited.' && isl.getRules().length === ids.length, 'editing a rule updates it in place');
+  const del = await post('/isl/rules/delete', { id: 'team-b' });
+  await isl.sync({ force: true });
+  check(del.status === 200 && !isl.getRules().some((r) => r.id === 'team-b') && isl.getRules().some((r) => r.id === 'team-a'), 'deleting removes only that rule');
+  const bad = await fetch('https://api.example/isl/rules/upsert', { method: 'POST', body: JSON.stringify({ code: 'wrong', rule: { id: 'x', pattern: ['GO'], english: 'x' } }) });
+  check(bad.status === 403, 'saving a rule still needs the developer code');
+}
+
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));
 process.exit(fail ? 1 : 0);

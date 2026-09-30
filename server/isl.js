@@ -27,6 +27,7 @@ export const ISL_FORMAT = 'aangika-isl/1';
 export const FEATURE_DIM = 100;             // islFeatures.js FEATURE_DIM
 export const FEATURE_VERSION = 1;
 const MAX_SIGNS = 400;
+const MAX_RULES = 200;
 const MAX_BYTES = 20 * 1024 * 1024;         // KV allows 25 MB per value
 const TYPES = new Set(['word', 'name', 'sentence', 'full-stop']);
 export const CATEGORIES = ['pronoun', 'person', 'action', 'thing', 'place', 'time', 'describing', 'question', 'negation', 'other'];
@@ -179,8 +180,32 @@ export async function handleIsl(request, env, headers) {
       await saveBin(env, bin.filter((b) => !restored.includes(b.id)));
       return json(200, { restored: restored.length, rejected, version: saved.version, total: saved.signs.length }, headers);
     }
+    // One rule at a time, merged into the SERVER's list: several teammates can
+    // add rules at once without one phone's older copy erasing the others'.
+    if (url.pathname === '/isl/rules/upsert') {
+      const { rule, error } = cleanRule({ ...data.rule, updatedAt: new Date().toISOString() });
+      if (error) return json(400, { error }, headers);
+      const d = await load(env);
+      const exists = d.rules.some((r) => r.id === rule.id);
+      if (!exists && d.rules.length >= MAX_RULES) return json(413, { error: `At most ${MAX_RULES} rules.` }, headers);
+      d.rules = exists ? d.rules.map((r) => (r.id === rule.id ? rule : r)) : [...d.rules, rule];
+      const saved = await save(env, d);
+      return json(200, { rules: d.rules.length, version: saved.version, updated: exists }, headers);
+    }
+    if (url.pathname === '/isl/rules/delete') {
+      const id = String(data.id || '');
+      const d = await load(env);
+      const before = d.rules.length;
+      d.rules = d.rules.filter((r) => r.id !== id);
+      if (d.rules.length === before) return json(404, { error: 'No such rule (already deleted?).' }, headers);
+      const saved = await save(env, d);
+      return json(200, { rules: d.rules.length, version: saved.version }, headers);
+    }
+    // Older app versions send their whole list. It is MERGED (added / updated),
+    // never used to remove rules: an out-of-date phone must not erase the
+    // rules teammates added since it last synced. Deleting needs /rules/delete.
     if (url.pathname === '/isl/rules') {
-      if (!Array.isArray(data.rules) || data.rules.length > 100) return json(400, { error: 'rules must be a list (max 100).' }, headers);
+      if (!Array.isArray(data.rules) || data.rules.length > MAX_RULES) return json(400, { error: `rules must be a list (max ${MAX_RULES}).` }, headers);
       const rules = [];
       const rejected = [];
       for (const raw of data.rules) {
@@ -189,9 +214,11 @@ export async function handleIsl(request, env, headers) {
       }
       if (rejected.length) return json(400, { error: 'Some rules are invalid.', rejected }, headers);
       const d = await load(env);
-      d.rules = rules;
+      const byId = new Map(d.rules.map((r) => [r.id, r]));
+      for (const r of rules) byId.set(r.id, { ...byId.get(r.id), ...r });
+      d.rules = [...byId.values()].slice(0, MAX_RULES);
       const saved = await save(env, d);
-      return json(200, { rules: rules.length, version: saved.version }, headers);
+      return json(200, { rules: d.rules.length, version: saved.version }, headers);
     }
     return json(404, { error: 'Unknown endpoint.' }, headers);
   } catch (err) {

@@ -89,6 +89,9 @@ export function cleanRule(r) {
       id, pattern, english,
       texts: texts(r.texts),
       ...(r.note ? { note: String(r.note).slice(0, 200) } : {}),
+      // Who added it and when (shown in the rules list).
+      ...(r.by ? { by: String(r.by).trim().slice(0, 40) } : {}),
+      ...(r.updatedAt && !Number.isNaN(Date.parse(r.updatedAt)) ? { updatedAt: new Date(r.updatedAt).toISOString() } : {}),
     },
   };
 }

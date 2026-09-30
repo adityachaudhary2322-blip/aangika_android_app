@@ -794,7 +794,11 @@ function RulesTab({ signs, unlocked }) {
   const [test, setTest] = useState('');
   const [draft, setDraft] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   useEffect(() => isl.subscribe(() => setRules(isl.getRules())), []);
+  // Teammates add rules too: always start from the server's latest list.
+  const refresh = () => { setRefreshing(true); isl.sync({ force: true }).catch(() => {}).finally(() => setRefreshing(false)); };
+  useEffect(refresh, []);
 
   const find = (w) => signs.find((s) => s.token === tokenFor(w) || s.word.toLowerCase() === w.toLowerCase());
   const testSigns = test.trim() ? test.trim().split(/[\s,+]+/).map(find) : [];
@@ -808,9 +812,19 @@ function RulesTab({ signs, unlocked }) {
   const preview = testSigns.length && !unknown.length
     ? matchStudioRules(testSigns, draft?.pattern && draft?.english ? [toRule(draft), ...rules] : rules)
     : null;
-  const save = async (next, text) => {
+  // One rule at a time: the server merges it into ITS list, so teammates'
+  // rules are never overwritten by this device's copy.
+  const run = async (fn, text) => {
     setMsg(null);
-    try { await isl.saveRules(devSession.getDevCode(), next); setMsg({ tone: 'primary', text }); } catch (err) { setMsg({ tone: 'rose', text: err.message }); }
+    try { await fn(); setMsg({ tone: 'primary', text }); } catch (err) { setMsg({ tone: 'rose', text: err.message }); }
+  };
+  const by = session.getUser()?.name || '';
+  const saveRule = (rule, text, { replace = false } = {}) => {
+    // A different rule that happens to get the same id must not replace it.
+    let id = rule.id;
+    const clash = (x) => rules.find((r) => r.id === x && r.pattern.join(' ') !== rule.pattern.join(' '));
+    if (!replace) for (let n = 2; clash(id); n++) id = `${rule.id.slice(0, 36)}-${n}`;
+    return run(() => isl.upsertRule(devSession.getDevCode(), { ...rule, id, ...(by ? { by } : {}) }), text);
   };
 
   return (
@@ -819,7 +833,7 @@ function RulesTab({ signs, unlocked }) {
       {unlocked && (
         <SignsToSentence
           signs={signs}
-          onSave={(rule) => save([...rules.filter((x) => x.id !== rule.id), rule], `Saved: signing ${rule.pattern.join(' + ')} now says “${rule.english}”.`)}
+          onSave={(rule) => saveRule(rule, `Saved for everyone: signing ${rule.pattern.join(' + ')} now says “${rule.english}”.`)}
         />
       )}
       <section className="surface-card p-3">
@@ -838,7 +852,7 @@ function RulesTab({ signs, unlocked }) {
         <button type="button" onClick={() => setDraft(draft ? null : { pattern: '', english: '', hi: '', hinglish: '' })} className="btn-quiet w-full py-2 text-xs"><Plus size={12} /> New advanced rule</button>
       )}
       {draft && (
-        <form className="surface-card space-y-2 p-3" onSubmit={(e) => { e.preventDefault(); const r = toRule(draft); save([...rules.filter((x) => x.id !== r.id), r], `Rule “${r.english}” saved for everyone.`); setDraft(null); }}>
+        <form className="surface-card space-y-2 p-3" onSubmit={(e) => { e.preventDefault(); const r = toRule(draft); saveRule(r, `Rule “${r.english}” saved for everyone.`); setDraft(null); }}>
           <input value={draft.pattern} onChange={(e) => setDraft({ ...draft, pattern: e.target.value })} placeholder="@pronoun @place GO" aria-label="Rule pattern" className="field py-2 text-sm" />
           <input value={draft.english} onChange={(e) => setDraft({ ...draft, english: e.target.value })} placeholder="I am going to the {place}." aria-label="Rule English" className="field py-2 text-sm" />
           <input value={draft.hi} onChange={(e) => setDraft({ ...draft, hi: e.target.value })} placeholder="मुझे {place} जाना है।" aria-label="Rule Hindi" className="field py-2 text-sm" />
@@ -847,6 +861,10 @@ function RulesTab({ signs, unlocked }) {
         </form>
       )}
       {msg && <p className={'text-[11px] ' + (msg.tone === 'rose' ? 'text-rose' : 'text-primary')}>{msg.text}</p>}
+      <div className="flex items-center gap-2 text-[11px] text-ink-dim">
+        <span className="flex-1">{rules.length} rule{rules.length === 1 ? '' : 's'} for everyone, from the whole team</span>
+        <button type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh rules" className="btn-icon h-7 w-7">{refreshing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}</button>
+      </div>
       <ul className="space-y-1.5">
         {!rules.length && <li className="text-[11px] text-ink-dim">No rules yet. Without rules, the app's built-in phrase rules and grammar are used.</li>}
         {rules.map((r) => (
@@ -856,8 +874,9 @@ function RulesTab({ signs, unlocked }) {
               <p>{r.english}</p>
               {r.texts?.['hi-IN'] && <p className="text-ink-dim">{r.texts['hi-IN']}</p>}
               {r.texts?.hinglish && <p className="text-ink-dim">{r.texts.hinglish}</p>}
+              {(r.by || r.updatedAt) && <p className="text-[10px] text-ink-dim">{r.by ? `by ${r.by}` : ''}{r.by && r.updatedAt ? ' · ' : ''}{r.updatedAt ? new Date(r.updatedAt).toLocaleString() : ''}</p>}
             </div>
-            {unlocked && <button type="button" onClick={() => save(rules.filter((x) => x.id !== r.id), 'Rule deleted for everyone.')} aria-label="Delete rule" className="text-rose"><Trash2 size={14} /></button>}
+            {unlocked && <button type="button" onClick={() => run(() => isl.deleteRule(devSession.getDevCode(), r.id), 'Rule deleted for everyone.')} aria-label="Delete rule" className="text-rose"><Trash2 size={14} /></button>}
           </li>
         ))}
       </ul>
