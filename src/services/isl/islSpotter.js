@@ -103,12 +103,18 @@ export function calibrate(takes) {
 export function createSpotter(signs, { minLen = 5 } = {}) {
   const templates = [];
   for (const s of signs) {
-    const takes = (s.takes || []).map((t) => toTemplate(t)).filter((t) => t.length);
-    if (!takes.length) continue;
-    const tau = s.tau || calibrate(takes);
-    for (const t of takes) {
-      templates.push(state(s, t, tau, false));
-      if (s.eitherHand) templates.push(state(s, t.map(mirrorFeatures), tau, true));
+    // One bad recording skips that sign; it never stops the others.
+    try {
+      const takes = (s.takes || []).map((t) => toTemplate(t)).filter((t) => t.length);
+      if (!takes.length) continue;
+      const tau = s.tau || calibrate(takes);
+      const built = takes.flatMap((t) => [
+        state(s, t, tau, false),
+        ...(s.eitherHand ? [state(s, t.map(mirrorFeatures), tau, true)] : []),
+      ]);
+      templates.push(...built);
+    } catch (err) {
+      console.warn(`[isl] sign ${s.token || s.id} skipped:`, err);
     }
   }
 

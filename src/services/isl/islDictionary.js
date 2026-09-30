@@ -49,7 +49,7 @@ export function init() {
     if (!hasIDB()) return;
     try {
       const [s, d] = await Promise.all([idb('readonly', (st) => st.get('shared')), idb('readonly', (st) => st.get('drafts'))]);
-      if (s) shared = s;
+      if (s && typeof s === 'object') shared = s;
       if (Array.isArray(d)) drafts = d;
     } catch { /* blocked storage: memory only */ }
     emit();
@@ -196,6 +196,8 @@ export async function saveRules(code, rules) {
 }
 
 /** Test hook. */
+/** Tests only: load exactly this data, as if read from storage. */
+export function _loadForTests(sharedData, draftData) { shared = sharedData; drafts = draftData; ready = Promise.resolve(); }
 export function _resetForTests() { shared = { version: 0, signs: [], rules: [] }; drafts = []; ready = Promise.resolve(); }
 
 export default {

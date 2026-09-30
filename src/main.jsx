@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import { CallProvider } from './context/CallContext.jsx';
 import './index.css';
@@ -19,7 +20,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       {/* CallProvider sits above the router so the Peer registration outlives
           every view and a call can arrive while the user is anywhere. */}
       <CallProvider>
-        <App />
+        {/* Last line of defence: never a blank page. */}
+        <ErrorBoundary name="Aangika" onReset={() => window.location.reload()} resetLabel="Reload the app">
+          <App />
+        </ErrorBoundary>
       </CallProvider>
     </ThemeProvider>
   </React.StrictMode>
