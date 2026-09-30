@@ -181,5 +181,29 @@ console.log('\n7. An "either hand" sign downloaded from the server (e.subarray i
   check(bad.size() === 3, 'a broken sign is skipped, the others still work', `${bad.size()} templates`);
 }
 
+console.log('\n8. Nothing is lost: deleted signs can be restored, every change is backed up\n' + '-'.repeat(74));
+{
+  isl._resetForTests();
+  await isl.sync({ force: true });                     // the server's dictionary again
+  const one = isl.listSigns().find((s) => s.word === 'go');
+  const takesBefore = JSON.stringify(one.takes);
+  const count = isl.listSigns().length;
+  await isl.removeSigns(CODE, [one.id]);
+  check(!isl.getSign(one.id) && isl.listSigns().length === count - 1, 'a sign is deleted for everyone');
+  let bin = await isl.listDeleted(CODE);
+  check(bin.some((b) => b.id === one.id && b.takes === 3), 'it is kept in "Recently deleted"', bin.map((b) => b.word).join(', '));
+  let denied = false;
+  try { await isl.listDeleted('wrong'); } catch { denied = true; }
+  check(denied, 'the deleted list needs the developer code');
+  await isl.restoreSigns(CODE, [one.id]);
+  check(isl.getSign(one.id) && JSON.stringify(isl.getSign(one.id).takes) === takesBefore, 'restore brings it back with its recordings unchanged');
+  bin = await isl.listDeleted(CODE);
+  check(!bin.some((b) => b.id === one.id), 'and removes it from the bin');
+  const backups = [...kv.keys()].filter((k) => k.startsWith('isl:backup:'));
+  const newest = JSON.parse(kv.get(`isl:backup:${(JSON.parse(kv.get('isl')).version - 1) % 10}`));
+  check(backups.length >= 5 && backups.length <= 10 && newest.version === JSON.parse(kv.get('isl')).version - 1,
+    'the previous dictionary is kept in rotating backups (at most 10)', `${backups.length} backups, newest v${newest.version}`);
+}
+
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));
 process.exit(fail ? 1 : 0);

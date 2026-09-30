@@ -189,6 +189,15 @@ export async function removeSigns(code, ids) {
   return result;
 }
 
+/** Recently deleted signs (the server keeps them so a delete can be undone). */
+export const listDeleted = (code) => post('/isl/deleted', { code }).then((r) => r.deleted || []);
+
+export async function restoreSigns(code, ids) {
+  const result = await post('/isl/restore', { code, ids });
+  await sync({ force: true });
+  return result;
+}
+
 export async function saveRules(code, rules) {
   const result = await post('/isl/rules', { code, rules });
   await sync({ force: true });
@@ -202,5 +211,5 @@ export function _resetForTests() { shared = { version: 0, signs: [], rules: [] }
 
 export default {
   init, subscribe, listSigns, getSign, getRules, saveDraft, discardDraft, sync, publish, removeSigns,
-  saveRules, isAvailable, tokenFor, version, listDrafts,
+  saveRules, listDeleted, restoreSigns, isAvailable, tokenFor, version, listDrafts,
 };

@@ -51,6 +51,19 @@ test('ISL Studio: team dictionary, rules for everyone, continuous translate scre
   await page.getByRole('button', { name: 'Unlock' }).click();
   await expect(page.getByRole('button', { name: /Record a new sign/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Edit \/ reassign/ }).first()).toBeVisible();
+  // Health check and the delete safety net.
+  await page.getByRole('button', { name: /Check dictionary/ }).click();
+  await expect(page.getByText(/to re-record|All signs look distinct/)).toBeVisible();
+  await page.getByRole('button', { name: /Recently deleted/ }).click();
+  await expect(page.getByText('Nothing deleted.')).toBeVisible();
+  const goCard = page.locator('li', { hasText: 'GO · word' });
+  await goCard.getByRole('button', { name: 'Delete for everyone' }).click();
+  await goCard.getByRole('button', { name: /Tap again to delete/ }).click();
+  await expect(page.getByText(/deleted for everyone\. Undo it/)).toBeVisible();
+  await page.getByRole('button', { name: /Recently deleted/ }).click();
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByText(/“go” restored for everyone/)).toBeVisible();
+  await expect(page.locator('li', { hasText: 'GO · word' })).toBeVisible();
 
   // Rules: this dictionary's own grammar, tried live, saved for everyone.
   await page.getByRole('tab', { name: 'Rules' }).click();

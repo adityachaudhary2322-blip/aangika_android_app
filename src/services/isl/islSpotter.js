@@ -27,6 +27,15 @@ const HOLD_W = 0.3;                    // weight of a live frame spent holding o
 const LOOKAHEAD = 4;                   // frames to wait for a better overlapping match
 const DEFAULT_TAU = 0.12;              // per-frame threshold for single-take signs
 const MIN_PRESENCE = 0.6;
+// Every sign's threshold is kept inside this band. Takes recorded one after
+// another agree more than live signing does, so a very tight threshold missed
+// real signs (FULL STOP never ended the sentence); a very loose one let that
+// sign match everything.
+export const TAU_MIN = 0.075;
+export const TAU_MAX = 0.12;
+export const clampTau = (tau) => Math.max(TAU_MIN, Math.min(TAU_MAX, tau));
+const GAP_FLUSH = 3;                   // hands out of view this many frames: signing paused, decide now
+const STILL_MAX = 0.03;                // frame change below this: hands held still
 
 // ── Weighted frame distance ─────────────────────────────────────────────────
 const W = new Float32Array(FEATURE_DIM);
@@ -107,7 +116,7 @@ export function createSpotter(signs, { minLen = 5 } = {}) {
     try {
       const takes = (s.takes || []).map((t) => toTemplate(t)).filter((t) => t.length);
       if (!takes.length) continue;
-      const tau = s.tau || calibrate(takes);
+      const tau = clampTau(s.tau || calibrate(takes));
       const built = takes.flatMap((t) => [
         state(s, t, tau, false),
         ...(s.eitherHand ? [state(s, t.map(mirrorFeatures), tau, true)] : []),
@@ -134,6 +143,14 @@ export function createSpotter(signs, { minLen = 5 } = {}) {
   let pending = [];                     // candidates waiting for LOOKAHEAD
   let blockedUntil = -1;                // frames <= this are already used
   let lastEmitted = null;
+  const RING = 512;
+  const recent = new Array(RING);       // last frames, for "was there movement?"
+  // Hands held still (and in view) between two frames: no new sign started.
+  const stillBetween = (a, b) => {
+    if (b - a >= RING || !recent[a % RING]) return false;
+    for (let k = a + 1; k <= b; k++) if (!presence[k] || frameDistance(recent[k % RING], recent[a % RING]) > STILL_MAX) return false;
+    return true;
+  };
 
   function report(tp) {
     const len = tp.te - tp.ts + 1;
@@ -144,13 +161,18 @@ export function createSpotter(signs, { minLen = 5 } = {}) {
     for (let k = tp.ts; k <= tp.te; k++) present += presence[k] ? 1 : 0;
     if (present / len < MIN_PRESENCE) return;
     const cost = tp.dmin / tp.m;
-    pending.push({ sign: tp.sign, cost, score: cost / tp.tau, ts: tp.ts, te: tp.te, mirrored: tp.mirrored, tp });
+    // Ranked by how well it matched, NOT by cost / own threshold: that ratio
+    // made the sign with the loosest threshold win against every other sign.
+    pending.push({ sign: tp.sign, cost, score: cost / TAU_MAX, ts: tp.ts, te: tp.te, mirrored: tp.mirrored, tp });
   }
 
 
+  let gap = 0;
   function push(f) {
     t += 1;
     presence[t] = handsIn(f);
+    recent[t % RING] = f;
+    gap = presence[t] ? 0 : gap + 1;
     for (const tp of templates) {
       const { m, frames } = tp;
       const d = new Float64Array(m + 1);
@@ -176,7 +198,10 @@ export function createSpotter(signs, { minLen = 5 } = {}) {
       const eps = tp.tau * m;
       if (tp.dmin <= eps) {
         let done = true;
-        for (let i = 1; i <= m; i++) if (d[i] < tp.dmin && s[i] <= tp.te) { done = false; break; }
+        // Compared per template frame: a partial path's TOTAL is almost
+        // always below a full match's, so comparing totals kept every sign
+        // waiting (about a whole sign late, and the last sign never came).
+        for (let i = 1; i <= m; i++) if (d[i] / i < tp.dmin / m && s[i] <= tp.te) { done = false; break; }
         if (done) {
           report(tp);
           tp.dmin = Infinity;
@@ -185,6 +210,12 @@ export function createSpotter(signs, { minLen = 5 } = {}) {
       }
       if (d[m] <= eps && d[m] < tp.dmin) { tp.dmin = d[m]; tp.ts = s[m]; tp.te = t; }
       tp.d = d; tp.s = s;
+    }
+    if (gap === GAP_FLUSH) {                   // hands dropped: finish what was signed
+      for (const tp of templates) if (tp.dmin < Infinity) { report(tp); tp.dmin = Infinity; }
+      const out = arbitrate(true);
+      for (const tp of templates) { tp.d.fill(Infinity); tp.d[0] = 0; }
+      return out;
     }
     return arbitrate(false);
   }
@@ -204,7 +235,8 @@ export function createSpotter(signs, { minLen = 5 } = {}) {
       if (!flush && templates.some((tp) => {
         if (tp.dmin < Infinity && tp.ts <= first.te) return true;          // found, not yet reported
         for (let i = 1; i <= tp.m; i++) {
-          if (tp.d[i] <= tp.tau * tp.m && tp.s[i] <= first.te && tp.s[i] > blockedUntil) return true;
+          // Viable: on track so far (cost per frame covered within threshold).
+          if (tp.d[i] <= tp.tau * i && tp.s[i] <= first.te && tp.s[i] > blockedUntil) return true;
         }
         return false;
       })) break;
@@ -216,10 +248,11 @@ export function createSpotter(signs, { minLen = 5 } = {}) {
       const rank = (c) => c.score * (longest / (c.te - c.ts + 1));
       const win = rivals.reduce((a, b) => (rank(b) < rank(a) ? b : a));
       if (!flush && win.te > t - LOOKAHEAD) break;         // winner still settling
-      // The same sign again with no gap is the tail of the first, not a
-      // repeat: a real repeat has a movement in between.
+      // The same sign again with no gap, or with only still hands in
+      // between, is the tail of the first, not a repeat: a real repeat has a
+      // movement in between.
       const prev = lastEmitted;
-      if (!(prev && prev.id === win.sign.id && win.ts - prev.te <= 1)) {
+      if (!(prev && prev.id === win.sign.id && (win.ts - prev.te <= 1 || stillBetween(prev.te, win.ts)))) {
         out.push({ id: win.sign.id, token: win.sign.token, confidence: Math.max(0, Math.min(1, 1 - win.score / 2)), ts: win.ts, te: win.te, cost: win.cost });
         lastEmitted = { id: win.sign.id, te: win.te };
       } else {

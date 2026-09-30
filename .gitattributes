@@ -1,0 +1,2 @@
+# Model files are checked byte-for-byte (sizes in the manifest): never convert line endings.
+public/models/** -text

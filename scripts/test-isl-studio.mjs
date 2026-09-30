@@ -165,6 +165,27 @@ console.log('\n2. Continuous signing: 200 random sentences, 20 similar signs + F
   for (let i = 0; i < 300; i++) noise.push(i % 50 < 25 ? rest() : handOn(Float32Array.from({ length: FEATURE_DIM }, () => rand())));
   const junk = [...noise.flatMap((f) => spotter.push(f)), ...spotter.flush()];
   check(junk.length <= 1, 'rest and random movement produce (almost) no signs', `${junk.length} false signs in 300 frames`);
+
+  // Regression (team dictionary, Sept 2026): one sign whose takes differ a lot
+  // got a loose threshold and, ranked by cost / threshold, beat every other
+  // sign; deleting it moved the problem to the next loosest sign.
+  const sloppy = { id: 'sloppy', token: 'SLOPPY', takes: [perform(protos[1], 0.08), perform(protos[2], 0.08), perform(protos[3], 0.08)] };
+  const withSloppy = createSpotter([...signs, sloppy]);
+  let stolen = 0; let total = 0;
+  for (let n = 0; n < 40; n++) {
+    withSloppy.reset();
+    const k = [1, 2, 3][n % 3];
+    const got = [...[rest(), rest(), ...perform(protos[k], 0.02), ...Array.from({ length: 8 }, rest)].flatMap((f) => withSloppy.push(f)), ...withSloppy.flush()];
+    total++; if (got.some((h) => h.id === 'sloppy')) stolen++;
+  }
+  check(stolen / total < 0.25, 'a sign recorded inconsistently does not take over the signs it resembles', `${stolen}/${total} taken`);
+
+  // The last sign is said once the hands drop, without waiting for more signing.
+  const live = createSpotter(signs);
+  const seq = [...perform(protos[5], 0.02), ...between(protos[5].keys[0], protos[N].keys[0], 3), ...perform(protos[N], 0.02)];
+  let at = -1;
+  [...seq, ...Array.from({ length: 12 }, rest)].forEach((f, i) => { for (const h of live.push(f)) if (h.id === 'fullstop') at = i - seq.length; });
+  check(at >= 0 && at <= 6, 'FULL STOP is decided within a few frames of the hands dropping', `after ${at} frames`);
 }
 
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));
