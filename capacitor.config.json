@@ -23,6 +23,14 @@
         "availableDevices": "Gloves nearby",
         "noDeviceFound": "No glove found. Is it switched on and awake?"
       }
+    },
+    "SocialLogin": {
+      "providers": {
+        "google": true,
+        "facebook": false,
+        "apple": false,
+        "twitter": false
+      }
     }
   }
 }
