@@ -11,6 +11,7 @@ import { describeBuiltinSigns } from '../services/signbridgeEngine.js';
 import { sentenceFor } from '../config/gestureSentences.js';
 import { getOverrides, subscribe as subscribeOverrides } from '../services/builtinOverrides.js';
 import { setIntent } from '../services/navIntent.js';
+import { BUILTIN_RULES, CLASSES, matchRules, setSharedRules, getSharedRules } from '../services/phraseRules.js';
 
 /**
  * Developer section: the whole SignBridge dictionary in one place.
@@ -89,6 +90,7 @@ const TABS = [
   { id: 'builtin', label: 'Built-in' },
   { id: 'community', label: 'Community' },
   { id: 'yours', label: 'Your signs' },
+  { id: 'grammar', label: 'Grammar' },
 ];
 
 function Manager({ onNavigate }) {
@@ -124,7 +126,10 @@ function Manager({ onNavigate }) {
   const q = query.trim().toLowerCase();
   const match = (...fields) => !q || fields.some((f) => String(f || '').toLowerCase().includes(q));
   const serverSigns = dict?.signs || [];
-  const counts = { builtin: 20, community: serverSigns.length, yours: own.length };
+  const counts = {
+    builtin: 20, community: serverSigns.length, yours: own.length,
+    grammar: BUILTIN_RULES.length + (dict?.rules?.length || 0),
+  };
 
   return (
     <div>
@@ -170,6 +175,12 @@ function Manager({ onNavigate }) {
             open({ action: 'record', signId: sign.id });
           })}
           onDelete={(sign) => run(() => dictionary.removeShared(code, [sign.id]), `${sign.token} deleted for everyone.`)}
+        />
+      )}
+      {tab === 'grammar' && (
+        <GrammarRules
+          rules={dict?.rules || []} busy={busy}
+          onSave={(rules, text) => run(() => dictionary.saveRules(code, rules), text)}
         />
       )}
       {tab === 'yours' && (
@@ -349,6 +360,129 @@ function YourList({ own, serverSigns, match, busy, onNew, onEdit, onRecord, onPu
         })}
       </ul>
       {!own.length && <p className="mt-4 text-center text-sm text-ink-dim">No signs taught on this device yet.</p>}
+    </div>
+  );
+}
+
+// ── Grammar rules ───────────────────────────────────────────────────────────
+
+const splitSigns = (s) => String(s || '').toUpperCase().split(/[\s,+]+/).filter(Boolean);
+
+/** Run matchRules as if `draft` were already shared (for previews). */
+function tryRules(tokens, draft) {
+  if (!draft) return matchRules(tokens);
+  const saved = getSharedRules();
+  setSharedRules([draft, ...saved]);
+  try { return matchRules(tokens); } finally { setSharedRules(saved); }
+}
+
+function RuleOutput({ result }) {
+  if (!result) return <p className="text-[11px] text-ink-dim">No phrase rule covers these signs; the normal grammar makes the sentence.</p>;
+  return (
+    <div className="text-[12px]">
+      <p><b>{result.english}</b> <span className="text-[10px] text-ink-dim">({result.rule})</span></p>
+      {result.texts['hi-IN'] && <p>{result.texts['hi-IN']}</p>}
+      {result.texts.hinglish && <p className="text-ink-dim">{result.texts.hinglish}</p>}
+    </div>
+  );
+}
+
+function GrammarRules({ rules, busy, onSave }) {
+  const [test, setTest] = useState('I LOWER BACK');
+  const [draft, setDraft] = useState(null);
+  const blank = { id: '', pattern: '', english: '', hi: '', hinglish: '' };
+  const toRule = (d) => ({
+    id: (d.id || d.english).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'rule',
+    pattern: splitSigns(d.pattern).map((p) => (p.startsWith('@') ? p.toLowerCase() : p)),
+    english: d.english.trim(),
+    texts: { ...(d.hi ? { 'hi-IN': d.hi.trim() } : {}), ...(d.hinglish ? { hinglish: d.hinglish.trim() } : {}) },
+  });
+  const draftRule = draft && draft.pattern && draft.english ? toRule(draft) : null;
+
+  return (
+    <div className="mt-3 space-y-4">
+      <section className="rounded-2xl border border-subtle bg-card p-3">
+        <p className="text-xs font-semibold">Try signs</p>
+        <input value={test} onChange={(e) => setTest(e.target.value)} placeholder="e.g. ME WATER" aria-label="Signs to try" className="field mt-1 py-2 text-sm" />
+        <div className="mt-2"><RuleOutput result={tryRules(splitSigns(test), draftRule)} /></div>
+      </section>
+
+      <section>
+        <div className="flex items-center">
+          <p className="eyebrow">Developer rules (everyone) · {rules.length}</p>
+          <button type="button" onClick={() => setDraft(draft ? null : blank)} className="btn-quiet ml-auto px-3 py-1.5 text-xs"><Plus size={12} /> New rule</button>
+        </div>
+        {draft && (
+          <form
+            className="mt-2 space-y-2 rounded-2xl border border-primary/40 p-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!draftRule) return;
+              onSave([...rules.filter((r) => r.id !== draftRule.id), draftRule], `Rule “${draftRule.english}” saved for everyone.`);
+              setDraft(null);
+            }}
+          >
+            <label className="block text-[11px] text-ink-dim">Signs pattern (tokens or @classes; ? = optional)
+              <input value={draft.pattern} onChange={(e) => setDraft({ ...draft, pattern: e.target.value })} placeholder="@self @side? @body PAIN?" className="field mt-1 py-2 text-sm" />
+            </label>
+            <label className="block text-[11px] text-ink-dim">English (use {'{'}class{'}'} for the matched word, e.g. {'{'}need{'}'}, {'{'}name{'}'})
+              <input value={draft.english} onChange={(e) => setDraft({ ...draft, english: e.target.value })} placeholder="I need {need}." className="field mt-1 py-2 text-sm" />
+            </label>
+            <label className="block text-[11px] text-ink-dim">Hindi (optional)
+              <input value={draft.hi} onChange={(e) => setDraft({ ...draft, hi: e.target.value })} placeholder="मुझे {need} चाहिए।" className="field mt-1 py-2 text-sm" />
+            </label>
+            <label className="block text-[11px] text-ink-dim">Hinglish (optional)
+              <input value={draft.hinglish} onChange={(e) => setDraft({ ...draft, hinglish: e.target.value })} placeholder="Mujhe {need} chahiye." className="field mt-1 py-2 text-sm" />
+            </label>
+            <p className="text-[10px] text-ink-dim">Type an example in “Try signs” above to preview this rule before saving.</p>
+            <div className="flex gap-2">
+              <button type="submit" disabled={busy || !draftRule} className="btn-primary flex-1 py-2 text-sm">Save for everyone</button>
+              <button type="button" onClick={() => setDraft(null)} className="btn-quiet px-4 py-2 text-sm">Cancel</button>
+            </div>
+          </form>
+        )}
+        <ul className="mt-2 space-y-1.5">
+          {!rules.length && <li className="text-[11px] text-ink-dim">None yet. Developer rules are tried before the built-in ones.</li>}
+          {rules.map((r) => (
+            <li key={r.id} className="flex items-start gap-2 rounded-2xl border border-subtle bg-card px-3 py-2 text-[12px]">
+              <div className="min-w-0 flex-1">
+                <p className="font-mono text-[11px] text-primary">{r.pattern.join(' + ')}</p>
+                <p>{r.english}</p>
+                {r.texts?.['hi-IN'] && <p className="text-ink-dim">{r.texts['hi-IN']}</p>}
+                {r.texts?.hinglish && <p className="text-ink-dim">{r.texts.hinglish}</p>}
+              </div>
+              <button type="button" disabled={busy} onClick={() => onSave(rules.filter((x) => x.id !== r.id), 'Rule deleted for everyone.')} aria-label="Delete rule" className="text-rose"><Trash2 size={14} /></button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section>
+        <p className="eyebrow">Built-in rules · {BUILTIN_RULES.length}</p>
+        <ul className="mt-2 space-y-1.5">
+          {BUILTIN_RULES.map((r) => (
+            <li key={r.id} className="rounded-2xl border border-subtle bg-card px-3 py-2 text-[12px]">
+              <p className="font-mono text-[11px] text-primary">{r.pattern.join(' + ')}</p>
+              <p className="text-[11px] text-ink-dim">e.g. {r.example}</p>
+              <RuleOutput result={matchRules(splitSigns(r.example))} />
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section>
+        <p className="eyebrow">Word classes</p>
+        <p className="mt-1 text-[11px] text-ink-dim">
+          A sign joins a class through its meaning: teach a sign meaning “lower” and it counts as @side.
+          @name is any taught name sign or fingerspelled name.
+        </p>
+        <ul className="mt-2 space-y-1">
+          {Object.entries(CLASSES).map(([cls, words]) => (
+            <li key={cls} className="text-[11px]"><b className="font-mono text-primary">@{cls}</b> {Object.keys(words).join(', ')}</li>
+          ))}
+          <li className="text-[11px]"><b className="font-mono text-primary">@name</b> taught name signs, fingerspelled names</li>
+        </ul>
+      </section>
     </div>
   );
 }

@@ -17,6 +17,11 @@
 import { apiBase } from './apiBase.js';
 import { applyShared, listSharedSigns, listOwnSigns, init as initSigns } from './customSigns.js';
 import { getOverrides, setOverrides } from './builtinOverrides.js';
+import { getSharedRules, setSharedRules } from './phraseRules.js';
+
+// Shared grammar rules persist for offline use, and load at start-up.
+const RULES_KEY = 'aangika.sharedRules';
+try { setSharedRules(JSON.parse(localStorage.getItem(RULES_KEY) || '[]')); } catch { /* none yet */ }
 
 /** The last full dictionary downloaded (for the developer section). */
 let lastDict = null;
@@ -86,9 +91,11 @@ export function checkForUpdates({ force = false } = {}) {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
       const dict = await res.json();
       const report = await applyShared(dict.signs || []);
-      const before = JSON.stringify(getOverrides());
+      const before = JSON.stringify([getOverrides(), getSharedRules()]);
       setOverrides(dict.overrides || {});
-      const overridesChanged = JSON.stringify(getOverrides()) !== before;
+      setSharedRules(dict.rules || []);
+      try { localStorage.setItem(RULES_KEY, JSON.stringify(dict.rules || [])); } catch { /* private mode */ }
+      const overridesChanged = JSON.stringify([getOverrides(), getSharedRules()]) !== before;
       write(VERSION_KEY, dict.version || 0);
       lastDict = dict;
       const changed = report.added + report.updated + report.removed > 0 || overridesChanged;
@@ -171,6 +178,13 @@ export async function setOverride(code, token, override) {
   return result;
 }
 
+/** Replace the shared grammar rules for everyone. */
+export async function saveRules(code, rules) {
+  const result = await post('/dictionary/rules', { code, rules });
+  await checkForUpdates({ force: true });
+  return result;
+}
+
 /** Remove shared signs (by their server id) for everyone. */
 export async function removeShared(code, sharedIds) {
   const result = await post('/dictionary/remove', { code, ids: sharedIds });
@@ -180,6 +194,6 @@ export async function removeShared(code, sharedIds) {
 
 export default {
   isAvailable, checkForUpdates, verifyCode, publish, publishable, removeShared, fetchSummary,
-  fetchFull, getLastDict, setOverride, unlock, lock, isUnlocked, getDevCode, onDevChange,
+  fetchFull, getLastDict, setOverride, saveRules, unlock, lock, isUnlocked, getDevCode, onDevChange,
   getState, subscribe,
 };

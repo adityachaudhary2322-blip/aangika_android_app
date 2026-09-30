@@ -84,6 +84,37 @@ test('developer section: whole dictionary, reassign/disable built-ins, publish a
   expect(errors).toEqual([]);
 });
 
+test('developer section: grammar rules can be tried, added for everyone, and deleted', async ({ browser }) => {
+  const page = await (await browser.newContext()).newPage();
+  const errors = watch(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await page.getByRole('button', { name: 'Open developer section' }).click();
+  await page.getByLabel('Developer code').fill(DEV_CODE);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  await page.getByRole('tab', { name: /Grammar/ }).click();
+
+  const tryBox = page.getByLabel('Signs to try');
+  await tryBox.fill('ME WATER');
+  await expect(page.getByText('I need water.').first()).toBeVisible();
+  await expect(page.getByText('मुझे पानी चाहिए।').first()).toBeVisible();
+
+  await page.getByRole('button', { name: /New rule/ }).click();
+  await page.getByPlaceholder('@self @side? @body PAIN?').fill('@self @need PLEASE');
+  await page.getByPlaceholder('I need {need}.').fill('May I have some {need}, please?');
+  await page.getByPlaceholder('Mujhe {need} chahiye.').fill('Thoda {need} milega please?');
+  await tryBox.fill('ME WATER PLEASE');
+  await expect(page.getByText('May I have some water, please?').first()).toBeVisible();   // preview before saving
+  await page.getByRole('button', { name: 'Save for everyone' }).click();
+  await expect(page.getByText(/saved for everyone/)).toBeVisible();
+  await expect(page.getByText('@self + @need + PLEASE')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Delete rule' }).click();
+  await expect(page.getByText('Rule deleted for everyone.')).toBeVisible();
+  await expect(page.getByText('@self + @need + PLEASE')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('developer publishes a sign; another device receives it; removal reaches it too', async ({ browser }) => {
   // ── Developer's device ─────────────────────────────────────────────────
   const dev = await (await browser.newContext()).newPage();

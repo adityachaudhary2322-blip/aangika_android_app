@@ -25,6 +25,7 @@ import {
 } from './translator.js';
 import { hasSarvam, isHosted } from './sarvamClient.js';
 import { overrideFor } from './builtinOverrides.js';
+import { matchRules } from './phraseRules.js';
 import { getLanguage } from '../config/languages.js';
 import { findByToken, textFor } from './customSigns.js';
 import { expandAsl } from './aslGrammar.js';
@@ -62,6 +63,9 @@ function fixedMeaning(tags, languageCode) {
       return { english: ov.text_en, translated: ov.texts?.[languageCode] || '', engine: 'developer-meaning' };
     }
   }
+  // Phrase rules (phraseRules.js): I + name, ME + WATER, I + LOWER + BACK ...
+  const phrase = matchRules(tags);
+  if (phrase) return { english: phrase.english, translated: phrase.texts[languageCode] || '', engine: phrase.rule };
   return null;
 }
 
