@@ -74,5 +74,36 @@ check(t.english === 'I have pain in my lower back.' && t.translated === 'मे�
 t = await translate(['ME', 'WATER'], 'en-IN', { mode: MODE_OFFLINE });
 check(t.english === 'I need water.' && t.engine.startsWith('phrase:'), 'offline English for a phrase', t.engine);
 
+console.log('\n6. Hinglish (casual)\n' + '-'.repeat(74));
+{
+  const { getLanguage, sarvamCode, sttCode, browserSpeechLocale, sarvamTtsPayload } = await import('../src/config/languages.js');
+  const { GESTURE_TOKENS, sentenceFor } = await import('../src/config/gestureSentences.js');
+  check(getLanguage('hinglish').name === 'Hinglish (casual)', 'Hinglish is an output language');
+  check(sarvamCode('hinglish') === 'hi-IN' && sttCode('hinglish') === 'hi-IN' && browserSpeechLocale('hinglish') === 'en-IN',
+    'engines get Hindi for Sarvam and speech input, an Indian-English device voice offline');
+  check(sarvamTtsPayload('Mujhe paani chahiye.', 'hinglish').target_language_code === 'hi-IN', 'Sarvam voice is asked for Hindi');
+  check(GESTURE_TOKENS.every((t) => sentenceFor(t, 'hinglish') && sentenceFor(t, 'hinglish') !== sentenceFor(t, 'en-IN') || ['PLEASE'].includes(t)),
+    'all 20 built-in signs have casual Hinglish');
+  let h = await translate(['WATER'], 'hinglish', { mode: MODE_OFFLINE });
+  check(h.translated === 'Mujhe paani chahiye.', 'offline: WATER -> Mujhe paani chahiye.', h.translated);
+  h = await translate(['I', 'LOWER', 'BACK'], 'hinglish', { mode: MODE_OFFLINE });
+  check(h.translated === 'Meri lower back mein dard ho raha hai.', 'offline: phrase rule in Hinglish', h.translated);
+  h = await translate(['NAMASTE', 'NAME', 'ADITYA'], 'hinglish', { mode: MODE_OFFLINE });
+  check(h.translated === 'Hello, mera naam Aditya hai.', 'offline: introduction in Hinglish', h.translated);
+
+  // Online: the request Mayura receives for Hinglish (fetch stubbed, no network).
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+  store.set('isl.sarvamKey', 'test-key');
+  let sent = null;
+  globalThis.fetch = async (url, init) => { sent = { url, body: JSON.parse(init.body) }; return new Response(JSON.stringify({ translated_text: 'Mujhe paani chahiye.' }), { status: 200 }); };
+  const { sarvamTranslate } = await import('../src/services/translator.js');
+  const out = await sarvamTranslate('I need water.', 'hinglish');
+  check(out === 'Mujhe paani chahiye.' && sent.body.target_language_code === 'hi-IN' && sent.body.mode === 'code-mixed' && sent.body.output_script === 'roman' && sent.body.model === 'mayura:v1',
+    'online: Mayura code-mixed mode, Roman script', JSON.stringify({ t: sent.body.target_language_code, m: sent.body.mode, s: sent.body.output_script }));
+  await sarvamTranslate('I need water.', 'ta-IN');
+  check(sent.body.target_language_code === 'ta-IN' && !('output_script' in sent.body) && sent.body.mode === 'modern-colloquial', 'other languages unchanged');
+}
+
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));
 process.exit(fail ? 1 : 0);

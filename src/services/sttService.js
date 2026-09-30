@@ -19,6 +19,8 @@
 const STT_LOCALE_OVERRIDES = {
   // Sarvam wants 'od-IN' for Odia; the ISO tag every browser knows is 'or-IN'.
   'od-IN': 'or-IN',
+  // Hinglish speech is recognised as Hindi.
+  hinglish: 'hi-IN',
 };
 
 /**

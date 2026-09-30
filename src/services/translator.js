@@ -15,7 +15,7 @@ import { buildAslRequest } from './aslRules.js';
 
 /** The prompt builder for the sign language being read (ISL or ASL). */
 const requestFor = (signLanguage) => (signLanguage === 'ASL' ? buildAslRequest : buildGeminiRequest);
-import { getLanguage, sarvamTtsPayload } from '../config/languages.js';
+import { getLanguage, sarvamTtsPayload, browserSpeechLocale, sarvamCode, sttCode } from '../config/languages.js';
 
 import { hasSarvam, sarvamFetch } from './sarvamClient.js';
 
@@ -284,7 +284,7 @@ export async function speak(text, languageCode) {
     // Indic voice coverage in browsers is thin and device-dependent, so report
     // whether a matching voice actually existed instead of silently mispronouncing.
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = getLanguage(languageCode).code;
+    utterance.lang = browserSpeechLocale(languageCode);
     const voices = speechSynthesis.getVoices();
     const base = utterance.lang.split('-')[0];
     const match =
@@ -315,8 +315,12 @@ export async function sarvamTranslate(
   if (targetCode === source) return input;
   if (input.length > TRANSLATE_CHAR_LIMIT) throw new Error('Text too long to translate.');
 
+  // Hinglish: Mayura's code-mixed mode, Roman script ("Mujhe paani chahiye.").
+  // Only Mayura has that mode, so the fallback model is not tried for it.
+  const hinglish = targetCode === 'hinglish';
+  const models = hinglish ? ['mayura:v1'] : TRANSLATE_MODELS;
   const errors = [];
-  for (const model of TRANSLATE_MODELS) {
+  for (const model of models) {
     try {
       const response = await sarvamFetch(SARVAM_TRANSLATE_PATH, {
         method: 'POST',
@@ -325,9 +329,13 @@ export async function sarvamTranslate(
           input,
           // 'auto' lets Mayura detect the language, for transcripts.
           source_language_code: source,
-          target_language_code: targetCode,
+          target_language_code: sarvamCode(targetCode),
           model,
-          ...(model === 'mayura:v1' ? { mode, numerals_format: 'international' } : {}),
+          ...(model === 'mayura:v1' ? {
+            mode: hinglish ? 'code-mixed' : mode,
+            numerals_format: 'international',
+            ...(hinglish ? { output_script: 'roman' } : {}),
+          } : {}),
         }),
       });
       if (!response.ok) { errors.push(`${model}: HTTP ${response.status}`); continue; }
@@ -351,7 +359,7 @@ export async function transcribe(blob, languageCode = 'unknown') {
     const form = new FormData();
     form.append('file', blob, 'input.wav');
     form.append('model', model);
-    form.append('language_code', languageCode);
+    form.append('language_code', languageCode === 'unknown' ? languageCode : sttCode(languageCode));
 
     try {
       const response = await sarvamFetch(SARVAM_STT_PATH, { method: 'POST', body: form });

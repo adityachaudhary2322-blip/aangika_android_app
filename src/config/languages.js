@@ -22,7 +22,25 @@ export const LANGUAGES = [
   { code: 'ml-IN', name: 'Malayalam', script: 'മലയാളം',   speaker: 'ritu',   dir: 'ltr' },
   { code: 'pa-IN', name: 'Punjabi',   script: 'ਪੰਜਾਬੀ',    speaker: 'ritu',   dir: 'ltr' },
   { code: 'od-IN', name: 'Odia',      script: 'ଓଡ଼ିଆ',     speaker: 'ritu',   dir: 'ltr' },
+  /**
+   * Hinglish: everyday Hindi-English in Roman script ("Mujhe paani chahiye").
+   * Not a BCP-47 language, so each engine is told what to use instead:
+   *   sarvam  Sarvam's language (Mayura translates in code-mixed mode to Roman
+   *           script; Bulbul's Hindi voice reads it)
+   *   speech  the device voice offline (an Indian-English voice reads Roman
+   *           Hinglish far better than a Hindi one reads Latin letters)
+   *   stt     speech recognition language
+   */
+  {
+    code: 'hinglish', name: 'Hinglish (casual)', script: 'Hinglish', speaker: 'ritu', dir: 'ltr',
+    sarvam: 'hi-IN', speech: 'en-IN', stt: 'hi-IN',
+  },
 ];
+
+/** The language code Sarvam should be sent for this app language. */
+export const sarvamCode = (code) => getLanguage(code).sarvam || getLanguage(code).code;
+/** The language code for speech recognition (Sarvam STT / browser). */
+export const sttCode = (code) => getLanguage(code).stt || getLanguage(code).code;
 
 export const DEFAULT_LANGUAGE_CODE = 'hi-IN';
 
@@ -30,7 +48,7 @@ export function getLanguage(code) {
   return LANGUAGES.find((l) => l.code === code) || LANGUAGES[0];
 }
 
-/** Bulbul v3 speakers offered in Settings; both speak all 11 languages. */
+/** Bulbul v3 speakers offered in Settings; both speak every language here. */
 export const VOICES = [
   { id: 'ritu', label: 'Female · Ritu' },
   { id: 'shubh', label: 'Male · Shubh' },
@@ -56,7 +74,7 @@ export function sarvamTtsPayload(text, code) {
   const lang = getLanguage(code);
   return {
     text,
-    target_language_code: lang.code,
+    target_language_code: lang.sarvam || lang.code,
     speaker: getVoice() || lang.speaker,
     model: 'bulbul:v3',
     output_audio_codec: 'wav',
@@ -71,7 +89,7 @@ export function sarvamTtsPayload(text, code) {
  * silently speaking nothing.
  */
 export function browserSpeechLocale(code) {
-  return getLanguage(code).code;
+  return getLanguage(code).speech || getLanguage(code).code;
 }
 
 export default LANGUAGES;

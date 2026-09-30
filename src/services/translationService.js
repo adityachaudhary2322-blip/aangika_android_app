@@ -304,7 +304,9 @@ export async function translate(tags, languageCode, {
     const glossary = glossaryFor(tags);
     const r = await sarvamReconstruct(tags, languageCode, { glossary, signLanguage });
     if (r.source === 'sarvam') {
-      let translated = r.translated;
+      // Hinglish always comes from Mayura's code-mixed mode (consistent,
+      // casual, Roman script); the chat model's attempt is not used.
+      let translated = language.code === 'hinglish' ? '' : r.translated;
       // The chat model occasionally skips the translation; Mayura fills it.
       if (!translated && language.code !== 'en-IN') {
         translated = await sarvamTranslate(r.english, language.code).catch(() => '');
