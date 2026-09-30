@@ -143,6 +143,12 @@ export function resume() { if (isSignedIn()) startSync(); }
 const GOOGLE_WEB_CLIENT_ID = '580018307108-ra5vrfv8oi7tejr90fr8f8qock11t6o8.apps.googleusercontent.com';
 export const googleClientId = () => import.meta.env?.VITE_GOOGLE_CLIENT_ID || GOOGLE_WEB_CLIENT_ID;
 
+// Google only allows its web button on the JavaScript origins registered for
+// the client id; elsewhere (local builds, tests) it would show a broken button.
+const GOOGLE_WEB_ORIGINS = ['https://aangika-pwa02.onrender.com',
+  ...String(import.meta.env?.VITE_GOOGLE_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean)];
+export const googleWebAllowed = () => typeof window !== 'undefined' && GOOGLE_WEB_ORIGINS.includes(window.location.origin);
+
 // The Android app registers its native Google sign-in here (Google blocks
 // its web sign-in inside app WebViews). -> async () => idToken
 let nativeGoogle = null;
@@ -172,5 +178,5 @@ export function renderGoogleButton(el, onToken) {
 
 export default {
   getSession, getUser, isSignedIn, subscribe, register, login, googleLogin, linkGoogle, logout,
-  flush, startSync, resume, googleClientId, renderGoogleButton, registerNativeGoogle, hasNativeGoogle, nativeGoogleToken,
+  flush, startSync, resume, googleClientId, googleWebAllowed, renderGoogleButton, registerNativeGoogle, hasNativeGoogle, nativeGoogleToken,
 };

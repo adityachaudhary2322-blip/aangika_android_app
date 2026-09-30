@@ -12,6 +12,8 @@ import { useCall } from '../context/CallContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import BrandMark from '../components/BrandMark.jsx';
+import AccountButton from '../components/AccountButton.jsx';
+import useSession from '../hooks/useSession.js';
 import {
   getSigner, setSigner, subscribe as subscribeSigner,
 } from '../services/signerPrefs.js';
@@ -68,7 +70,10 @@ export default function Dashboard({
   });
   const offlineSelected = mode === MODE_OFFLINE;
   // A generated ID is not a name; only greet by name once one is set.
-  const firstName = profile && !profile.auto ? profile.name?.split(/\s+/)[0] : null;
+  const account = useSession();
+  const firstName = account?.name
+    ? account.name.split(/\s+/)[0]
+    : profile && !profile.auto ? profile.name?.split(/\s+/)[0] : null;
 
   const handleTile = (id) => {
     if (id === 'offline') {
@@ -101,6 +106,8 @@ export default function Dashboard({
             {online ? <Wifi size={12} className="text-secondary" /> : <WifiOff size={12} />}
             {online ? 'Online' : 'Offline'}
           </span>
+          {/* Phones and the Android app: sign in from the top (the desktop rail has it above Settings). */}
+          <span className="lg:hidden"><AccountButton onClick={() => onNavigate('account')} /></span>
           <span className="lg:hidden"><ThemeToggle /></span>
         </div>
       </header>
