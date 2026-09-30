@@ -22,7 +22,7 @@ jobs:
       - name: Unit tests
         run: |
           for t in signbridge signbridge-tracker isl-studio isl-dictionary grammar phrases models \
-                   sentences glove account contributions proxy dictionary; do
+                   sentences glove account contributions proxy dictionary stt-audio; do
             echo "::group::test-$t"; node scripts/test-$t.mjs; echo "::endgroup::"
           done
       - run: npx vite build

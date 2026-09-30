@@ -350,14 +350,31 @@ export async function sarvamTranslate(
   throw new Error('Sarvam translate failed - ' + errors.join(' | '));
 }
 
-/** Transcribe a recorded Blob with Sarvam STT. Throws on failure. */
-export async function transcribe(blob, languageCode = 'unknown') {
+/**
+ * Transcribe audio with Sarvam STT. Throws on failure.
+ * @param audio  a WAV Blob, or several (wav.toWavChunks: <= 25 s each, Sarvam
+ *               takes at most 30 s per request); the texts are joined.
+ */
+export async function transcribe(audio, languageCode = 'unknown') {
   if (!hasSarvam()) throw new Error('No Sarvam key set.');
+  const chunks = Array.isArray(audio) ? audio : [audio];
+  const texts = [];
+  let model = null;                               // once one works, keep it
+  for (const chunk of chunks) {
+    const r = await transcribeOne(chunk, languageCode, model);
+    model = r.model;
+    if (r.text) texts.push(r.text);
+  }
+  return texts.join(' ').trim();
+}
 
+async function transcribeOne(blob, languageCode, preferred) {
   const errors = [];
-  for (const model of STT_MODELS) {
+  const models = preferred ? [preferred, ...STT_MODELS.filter((m) => m !== preferred)] : STT_MODELS;
+  const name = /wav/.test(blob.type) ? 'input.wav' : /mp4|m4a|aac/.test(blob.type) ? 'input.m4a' : /ogg/.test(blob.type) ? 'input.ogg' : 'input.webm';
+  for (const model of models) {
     const form = new FormData();
-    form.append('file', blob, 'input.wav');
+    form.append('file', blob, name);
     form.append('model', model);
     form.append('language_code', languageCode === 'unknown' ? languageCode : sttCode(languageCode));
 
@@ -365,11 +382,17 @@ export async function transcribe(blob, languageCode = 'unknown') {
       const response = await sarvamFetch(SARVAM_STT_PATH, { method: 'POST', body: form });
       if (response.ok) {
         const body = await response.json();
-        return (body.transcript || '').trim();
+        return { text: (body.transcript || '').trim(), model };
       }
-      errors.push(model + ': HTTP ' + response.status);
+      // Sarvam says why (bad format, too long, bad language): keep it.
+      const detail = await response.text().then((t) => {
+        try { const j = JSON.parse(t); return j.error?.message || j.message || j.detail || t; } catch { return t; }
+      }).catch(() => '');
+      errors.push(`${model}: HTTP ${response.status}${detail ? ` (${String(detail).slice(0, 120)})` : ''}`);
+      if (response.status === 401 || response.status === 403 || response.status === 429) break;   // same for every model
     } catch (err) {
       errors.push(model + ': ' + err.message);
+      break;                                        // network: the other models are no better
     }
   }
   throw new Error('All STT models failed - ' + errors.join(' | '));
