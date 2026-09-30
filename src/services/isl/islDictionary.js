@@ -200,6 +200,20 @@ export async function restoreSigns(code, ids) {
   return result;
 }
 
+/** Add or update ONE rule on the server (merged there; never overwrites others'). */
+export async function upsertRule(code, rule) {
+  const result = await post('/isl/rules/upsert', { code, rule });
+  await sync({ force: true });
+  return result;
+}
+
+export async function deleteRule(code, id) {
+  const result = await post('/isl/rules/delete', { code, id });
+  await sync({ force: true });
+  return result;
+}
+
+/** Older API: the whole list, now merged on the server (never removes). */
 export async function saveRules(code, rules) {
   const result = await post('/isl/rules', { code, rules });
   await sync({ force: true });
@@ -213,5 +227,5 @@ export function _resetForTests() { shared = { version: 0, signs: [], rules: [] }
 
 export default {
   init, subscribe, listSigns, getSign, getRules, saveDraft, discardDraft, sync, publish, removeSigns,
-  saveRules, listDeleted, restoreSigns, isAvailable, tokenFor, version, listDrafts,
+  saveRules, upsertRule, deleteRule, listDeleted, restoreSigns, isAvailable, tokenFor, version, listDrafts,
 };
