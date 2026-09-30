@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "dev:https": "node scripts/dev-https.mjs",
-    "test": "node scripts/test-signbridge.mjs && node scripts/test-signbridge-tracker.mjs && node scripts/test-isl-studio.mjs && node scripts/test-isl-dictionary.mjs && node scripts/test-grammar.mjs && node scripts/test-phrases.mjs && node scripts/test-models.mjs && node scripts/test-asl.mjs && node scripts/test-sentences.mjs && node scripts/test-glove.mjs && node scripts/test-account.mjs && node scripts/test-contributions.mjs && node scripts/test-proxy.mjs && node scripts/test-dictionary.mjs && node scripts/test-stt-audio.mjs",
+    "test": "node scripts/test-signbridge.mjs && node scripts/test-signbridge-tracker.mjs && node scripts/test-isl-studio.mjs && node scripts/test-isl-dictionary.mjs && node scripts/test-personal.mjs && node scripts/test-auth.mjs && node scripts/test-grammar.mjs && node scripts/test-phrases.mjs && node scripts/test-models.mjs && node scripts/test-asl.mjs && node scripts/test-sentences.mjs && node scripts/test-glove.mjs && node scripts/test-account.mjs && node scripts/test-contributions.mjs && node scripts/test-proxy.mjs && node scripts/test-dictionary.mjs && node scripts/test-stt-audio.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {
