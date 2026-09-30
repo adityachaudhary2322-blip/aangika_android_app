@@ -64,19 +64,76 @@ function fill(template, caps, lang) {
   return missing ? null : out.replace(/\s+/g, ' ').replace(/\s+([.,!?।])/g, '$1').trim();
 }
 
-/** This dictionary's own rules. -> {english, texts, rule} | null */
+/**
+ * A "when these signs are in my sentence, say this" rule: made by the Rules
+ * tab's quick form, or any rule made only of sign words (no @category, no ?).
+ */
+export const isSayRule = (r) => r.id.startsWith('say-') || r.pattern.every((p) => !/^@|\?$/.test(p));
+
+/**
+ * Say-rule match: every sign of the pattern appears somewhere in the
+ * sentence, in any order, with other signs allowed around them. Signs in
+ * `used` are already taken by another rule. -> {caps, at: sign indexes} | null
+ */
+export function matchStudioSigns(pattern, signs, used = new Set()) {
+  const at = [];
+  const caps = {};
+  for (const raw of pattern) {
+    const item = raw.replace(/\?$/, '');
+    const i = signs.findIndex((s, j) => !used.has(j) && !at.includes(j) && fits(item, s));
+    if (i < 0) {
+      if (raw.endsWith('?')) continue;
+      return null;
+    }
+    at.push(i);
+    caps[item.startsWith('@') ? item.slice(1) : item.toLowerCase()] = capture(signs[i]);
+  }
+  return at.length ? { caps, at } : null;
+}
+
+function apply(r, caps) {
+  const texts = {};
+  for (const [lang, tpl] of Object.entries(r.texts || {})) {
+    const t = fill(tpl, caps, lang);
+    if (t) texts[lang] = t;
+  }
+  return { english: cap(fill(r.english, caps, 'en-IN') || ''), texts, rule: `isl-rule:${r.id}` };
+}
+
+const endStop = (t) => (/[.!?।]$/.test(t) ? t : `${t}.`);
+
+/**
+ * This dictionary's own rules. -> {english, texts, rule} | null
+ *  1. any rule matching the whole sentence exactly, in order;
+ *  2. else every say-rule whose signs are in the sentence, bigger rules first
+ *     (WELCOME + SEGUE beats WELCOME alone), each sign used once, spoken in
+ *     the order they were signed: WELCOME -> "Welcome to Segue.", SEGUE ->
+ *     "We are team HealX." gives "Welcome to Segue. We are team HealX."
+ */
 export function matchStudioRules(signs, rules = getRules()) {
   for (const r of rules) {
     const caps = matchStudioPattern(r.pattern, signs);
-    if (!caps) continue;
-    const texts = {};
-    for (const [lang, tpl] of Object.entries(r.texts || {})) {
-      const t = fill(tpl, caps, lang);
-      if (t) texts[lang] = t;
-    }
-    return { english: cap(fill(r.english, caps, 'en-IN') || ''), texts, rule: `isl-rule:${r.id}` };
+    if (caps) return apply(r, caps);
   }
-  return null;
+  const say = rules.filter(isSayRule).sort((a, b) => b.pattern.length - a.pattern.length);
+  const used = new Set();
+  const hits = [];
+  for (const r of say) {
+    const m = matchStudioSigns(r.pattern, signs, used);
+    if (!m) continue;
+    m.at.forEach((i) => used.add(i));
+    hits.push({ ...apply(r, m.caps), first: Math.min(...m.at) });
+  }
+  if (!hits.length) return null;
+  if (hits.length === 1) return { english: hits[0].english, texts: hits[0].texts, rule: hits[0].rule };
+  hits.sort((a, b) => a.first - b.first);
+  // A language joins only when every piece has it; otherwise it is translated.
+  const langs = Object.keys(hits[0].texts).filter((l) => hits.every((h) => h.texts[l]));
+  return {
+    english: hits.map((h) => endStop(h.english)).join(' '),
+    texts: Object.fromEntries(langs.map((l) => [l, hits.map((h) => endStop(h.texts[l])).join(' ')])),
+    rule: hits.map((h) => h.rule).join(' + '),
+  };
 }
 
 /** Sign -> the token the rest of the app understands. */
@@ -91,7 +148,7 @@ export async function translateStudio(signs, language, { mode } = {}) {
   const words = signs.filter((s) => s.type !== 'full-stop');
   if (!words.length) return { english: '', translated: '', engine: 'none' };
 
-  // A rule for exactly these signs wins; otherwise one sign alone says its own
+  // A rule for these signs wins; otherwise one sign alone says its own
   // word ("Welcome.") rather than a grammar guess ("I am a welcome.").
   const one = words.length === 1 ? words[0] : null;
   const fixed = matchStudioRules(words) || (one ? {
@@ -111,4 +168,4 @@ export async function translateStudio(signs, language, { mode } = {}) {
   return translate(words.map(tagFor), language, mode ? { mode } : {});
 }
 
-export default { translateStudio, matchStudioRules, matchStudioPattern };
+export default { translateStudio, matchStudioRules, matchStudioPattern, matchStudioSigns };
