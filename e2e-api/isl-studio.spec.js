@@ -56,7 +56,17 @@ test('ISL Studio: team dictionary, rules for everyone, continuous translate scre
   await page.getByRole('tab', { name: 'Rules' }).click();
   await page.getByLabel('Signs to try').fill('I hospital go');
   await expect(page.getByText(/No rule of this dictionary matches/)).toBeVisible();
-  await page.getByRole('button', { name: /New rule/ }).click();
+  // The simple way: tap the signs in order, type the sentence.
+  await page.getByRole('button', { name: '+ I', exact: true }).click();
+  await page.getByRole('button', { name: '+ hospital', exact: true }).click();
+  await page.getByLabel('Sentence to say').fill('Take me to the hospital');
+  await page.getByRole('button', { name: /Save: I \+ hospital/ }).click();
+  await expect(page.getByText(/signing I \+ HOSPITAL now says “Take me to the hospital\.”/)).toBeVisible();
+  await page.getByLabel('Signs to try').fill('I hospital');
+  await expect(page.getByText('Take me to the hospital.').first()).toBeVisible();
+
+  await page.getByLabel('Signs to try').fill('I hospital go');
+  await page.getByRole('button', { name: /New advanced rule/ }).click();
   await page.getByLabel('Rule pattern').fill('@pronoun @place GO');
   await page.getByLabel('Rule English').fill('I am going to the {place}.');
   await page.getByLabel('Rule Hindi').fill('मैं {place} जा रहा हूँ।');
