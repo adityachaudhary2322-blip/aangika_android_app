@@ -190,7 +190,9 @@ export function frameFeatures({ hands, pose, mirrored = false }) {
  * The same sign made with the other hand: swap the hand blocks and reflect
  * left-right quantities (placement x, orientation x). For "either hand" signs.
  */
-export function mirrorFeatures(f) {
+export function mirrorFeatures(frame) {
+  // Stored / downloaded takes are plain arrays, live frames are Float32Array.
+  const f = frame instanceof Float32Array ? frame : Float32Array.from(frame);
   const out = new Float32Array(FEATURE_DIM);
   out.set(f.subarray(HAND_DIM, 2 * HAND_DIM), 0);
   out.set(f.subarray(0, HAND_DIM), HAND_DIM);

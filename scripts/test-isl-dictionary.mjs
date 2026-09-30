@@ -150,5 +150,36 @@ console.log('\n5. "When I sign these, say this": WELCOME + SEGUE -> "Welcome to 
   check(matchStudioRules([w, s, w], team)?.english === 'Welcome to segue. We are team healx.', 'a sign spotted twice does not repeat its sentence');
 }
 
+console.log('\n6. Broken stored data never crashes ISL Studio (the blank page)\n' + '-'.repeat(74));
+{
+  const ok = (label, fn) => { try { const out = fn(); check(true, label, out); } catch (err) { check(false, label, err.message); } };
+  const cases = [
+    ['a sign without a word', { version: 1, signs: [{ id: 'a', token: 'X' }, { id: 'b', word: 'SEGUE' }], rules: [] }, []],
+    ['signs / rules / drafts not arrays', { version: 1, signs: null, rules: 'x' }, null],
+    ['no stored copy at all', undefined, undefined],
+    ['junk entries', { signs: [null, 42, 'x', { id: 7, word: 'NUM' }, { id: 'c', word: 'OK', takes: 'bad', texts: 5 }], rules: [null, { id: 'r' }, { id: 's', pattern: [], english: 'x' }] }, [null, { id: 'd' }]],
+  ];
+  for (const [label, sh, dr] of cases) {
+    isl._loadForTests(sh, dr);
+    ok(`listSigns survives ${label}`, () => isl.listSigns().map((x) => x.word).join(',') || '(none)');
+    ok(`getRules survives ${label}`, () => `${isl.getRules().length} rules`);
+    ok(`sentence rules survive ${label}`, () => String(matchStudioRules(isl.listSigns())));
+  }
+  isl._loadForTests({ signs: [{ id: 'c', word: 'OK', takes: 'bad', texts: 5 }], rules: [] }, []);
+  const [c] = isl.listSigns();
+  check(c.token === 'OK' && Array.isArray(c.takes) && typeof c.texts === 'object', 'missing fields are filled in', JSON.stringify({ token: c.token, takes: c.takes, texts: c.texts }));
+}
+
+console.log('\n7. An "either hand" sign downloaded from the server (e.subarray is not a function)\n' + '-'.repeat(74));
+{
+  const p = proto();
+  const plain = [perform(p), perform(p, 15), perform(p, 13)].map((t) => t.map((f) => Array.from(f)));
+  let sp = null;
+  try { sp = createSpotter([{ id: 'e', token: 'EITHER', takes: plain, eitherHand: true }]); } catch (err) { check(false, 'spotter builds with plain-array takes', err.message); }
+  check(sp && sp.size() === 6, 'spotter builds with plain-array takes, own + mirrored', sp ? `${sp.size()} templates` : 'crashed');
+  const bad = createSpotter([{ id: 'x', token: 'BAD', takes: [[[1, 2], 'junk', null]], eitherHand: true }, { id: 'e', token: 'EITHER', takes: plain }]);
+  check(bad.size() === 3, 'a broken sign is skipped, the others still work', `${bad.size()} templates`);
+}
+
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));
 process.exit(fail ? 1 : 0);

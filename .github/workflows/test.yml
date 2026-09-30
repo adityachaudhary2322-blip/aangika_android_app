@@ -1,0 +1,31 @@
+# Every push and pull request: the unit tests, a production build, and the
+# ISL Studio browser checks (it once went blank on real dictionary data).
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # npm test minus test-asl.mjs, which needs the Windows training venv.
+      - name: Unit tests
+        run: |
+          for t in signbridge signbridge-tracker isl-studio isl-dictionary grammar phrases models \
+                   sentences glove account contributions proxy dictionary; do
+            echo "::group::test-$t"; node scripts/test-$t.mjs; echo "::endgroup::"
+          done
+      - run: npx vite build
+      - run: npx playwright install --with-deps chromium
+      - name: ISL Studio never goes blank
+        run: npx playwright test -c playwright.api.config.js e2e-api/isl-studio-bad-data.spec.js

@@ -236,6 +236,8 @@ export default function App() {
         <SideNav view={view} onNavigate={go} unread={unread} />
         <div className={'mx-auto flex h-full w-full min-w-0 flex-col ' + width}>
           <div key={view} className="flex min-h-0 flex-1 animate-fade-up flex-col">
+            {/* Any screen that crashes shows its error here; the rest of the app keeps working. */}
+            <ErrorBoundary name="This screen" onReset={() => go('dashboard')} resetLabel="Go home">
             {view === 'messenger' && (
               <MessengerView onNavigate={go} onChatOpenChange={setChatOpen} />
             )}
@@ -269,6 +271,7 @@ export default function App() {
             {view === 'meet' && (
               <Meet {...shared} initialCode={initialRoom} onLiveChange={setMeetLive} />
             )}
+            </ErrorBoundary>
           </div>
           {showNav && (
             <div className="lg:hidden">
