@@ -35,7 +35,7 @@ test('simulated glove: DOCTOR HELP NEED -> "I need a doctor\'s help."', async ({
   await page.reload();
   await page.waitForFunction(() => Boolean(window.__aangikaGloveSim));
 
-  await page.getByRole('button', { name: 'Sign to speech' }).first().click();
+  await page.getByRole('button', { name: /Built-in signs/ }).first().click();
   await page.getByRole('button', { name: 'Start translating' }).click();
   await expect(page.getByRole('button', { name: /Auto sentence on/ })).toBeVisible();
 

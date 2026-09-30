@@ -78,7 +78,7 @@ test('Using a model downloads it with progress, and it then loads offline', asyn
 test('Sign to speech runs the camera loop with the registry engine', async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Sign to speech' }).first().click();
+  await page.getByRole('button', { name: /Built-in signs/ }).first().click();
   await page.getByRole('button', { name: 'Start translating' }).click();
   // Frames flowing = the FPS pill counts up (fake camera, no real hands).
   await expect(page.getByText(/[1-9]\d* FPS/)).toBeVisible({ timeout: 90_000 });

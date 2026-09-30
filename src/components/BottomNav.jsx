@@ -10,7 +10,7 @@ import { Home, Hand, MessageCircle, Settings as SettingsIcon } from 'lucide-reac
  */
 const ITEMS = [
   { id: 'dashboard', label: 'Home', Icon: Home },
-  { id: 'sign', label: 'Translate', Icon: Hand },
+  { id: 'isl', label: 'Translate', Icon: Hand },
   { id: 'messenger', label: 'Messages', Icon: MessageCircle },
   { id: 'settings', label: 'Settings', Icon: SettingsIcon },
 ];

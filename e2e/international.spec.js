@@ -28,7 +28,7 @@ test('ASL Translator has its own international entry, runs ASL, and leaves ISL a
 
   // Leaving restores the Indian translator's model.
   await page.getByRole('button', { name: 'Back', exact: true }).click();
-  await page.getByRole('button', { name: /Sign to speech/ }).first().click();
+  await page.getByRole('button', { name: /Built-in signs/ }).first().click();
   await expect(page.getByRole('button', { name: /Recognition model: Aangika ISL tagger v2/ })).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -36,7 +36,7 @@ test('ASL Translator has its own international entry, runs ASL, and leaves ISL a
 test('Model picker lists ISL and ASL models and switches between them', async ({ page }) => {
   const errors = watch(page);
   await page.goto('/');
-  await page.getByRole('button', { name: /Sign to speech/ }).first().click();
+  await page.getByRole('button', { name: /Built-in signs/ }).first().click();
 
   await page.getByRole('button', { name: /Recognition model:/ }).click();
   const options = page.getByRole('option');

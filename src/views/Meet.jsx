@@ -6,14 +6,14 @@ import {
 } from 'lucide-react';
 import { useCall } from '../context/CallContext.jsx';
 import useMeeting, {
-  newRoomCode, normaliseCode, formatCode, inviteLink, MAX_PEOPLE,
+  newRoomCode, normaliseCode, formatCode, inviteLink,
 } from '../hooks/useMeeting.js';
-import useSignPipeline from '../hooks/useSignPipeline.js';
-import useTokenStream, { tokenLabel } from '../hooks/useTokenStream.js';
+import useIslSigns from '../hooks/useIslSigns.js';
+import useIslSentence from '../hooks/useIslSentence.js';
+import useLiveSpeech from '../hooks/useLiveSpeech.js';
 import cameraManager from '../services/cameraManager.js';
 import { speak, unlockAudio } from '../services/ttsService.js';
-import { ROLE_SPEAKER } from '../services/chatStorage.js';
-import { getLanguage } from '../config/languages.js';
+import { ROLE_SIGNER, ROLE_SPEAKER } from '../services/chatStorage.js';
 
 /** How long a caption stays on a tile after the person stops. */
 const CAPTION_MS = 7000;
@@ -23,19 +23,31 @@ async function copyText(text) {
 }
 
 /**
- * Group meetings: create a room (with your own ID as the code, or a fresh
- * one), share the code or link, or join someone else's by typing theirs.
- * In the room every tile carries live captions: a signer's recognised signs,
- * or a speaker's words from the browser's speech recogniser.
+ * One-to-one video calls with translation both ways. Before starting or
+ * joining, each person says whether they SIGN or SPEAK in this call; that
+ * decides what their device runs:
+ *   signer  -> ISL Studio (the team's dictionary) reads the signs; the words
+ *              appear as they are signed, and the finished sentence (FULL STOP,
+ *              or a pause) is sent and SPOKEN on the other phone;
+ *   speaker -> live speech recognition; the words appear as captions on the
+ *              signer's screen.
  */
+const ROLE_KEY = 'aangika-meet-role';
+const PAUSE_SEND_MS = 3000;     // no new sign for this long: send the sentence
+
 export default function Meet({
-  onBack, language, visionEngine, initialCode = '', onLiveChange,
+  onBack, language, mode, initialCode = '', onLiveChange,
 }) {
   const { profile } = useCall();
+  const [role, setRoleState] = useState(() => {
+    try { return localStorage.getItem(ROLE_KEY) || profile?.role || ROLE_SIGNER; } catch { return ROLE_SIGNER; }
+  });
+  const setRole = (r) => { setRoleState(r); try { localStorage.setItem(ROLE_KEY, r); } catch { /* not remembered */ } };
   const me = useMemo(() => ({
     name: profile?.auto ? `Guest ${profile.handle.slice(0, 3).toUpperCase()}` : (profile?.name || 'Guest'),
-    role: profile?.role,
-  }), [profile]);
+    role,
+    uid: profile?.handle,
+  }), [profile, role]);
   const meeting = useMeeting(me);
   const live = meeting.status === 'live' || meeting.status === 'starting';
 
@@ -43,7 +55,7 @@ export default function Meet({
   useEffect(() => () => onLiveChange?.(false), [onLiveChange]);
 
   if (live) {
-    return <Room meeting={meeting} me={me} language={language} visionEngine={visionEngine} />;
+    return <Room meeting={meeting} me={me} language={language} mode={mode} />;
   }
   return (
     <Lobby
@@ -51,19 +63,27 @@ export default function Meet({
       profile={profile}
       onBack={onBack}
       initialCode={initialCode}
+      role={role}
+      setRole={setRole}
     />
   );
 }
 
 // ── Lobby ───────────────────────────────────────────────────────────────────
 
-function Lobby({ meeting, profile, onBack, initialCode }) {
+function Lobby({ meeting, profile, onBack, initialCode, role, setRole }) {
   const [joinCode, setJoinCode] = useState(initialCode);
   const [copied, setCopied] = useState(false);
+  const [asking, setAsking] = useState(null);             // { fn, code } waiting for "sign or speak?"
 
-  const start = async (fn, code) => {
+  // Every call starts with the question: it decides what this device runs.
+  const start = (fn, code) => setAsking({ fn, code });
+  const go = async (r) => {
+    setRole(r);
+    const { fn, code } = asking;
+    setAsking(null);
     await unlockAudio();
-    fn(code);
+    setTimeout(() => fn(code), 0);                        // once the role is applied
   };
 
   return (
@@ -75,9 +95,30 @@ function Lobby({ meeting, profile, onBack, initialCode }) {
         <h1 className="display text-3xl">Meet</h1>
       </header>
       <p className="max-w-prose text-sm text-ink-dim">
-        Talk in a group, with live captions of everyone’s signing and speech.
-        Up to {MAX_PEOPLE} people, connected directly to each other.
+        A one-to-one video call that translates both ways: signs are spoken to
+        the other person, and speech appears as captions for the signer.
       </p>
+
+      {asking && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Do you sign or speak?">
+          <div className="surface-card w-full max-w-md space-y-3 p-5">
+            <p className="display text-xl">In this call, do you…</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => go(ROLE_SIGNER)} className={'rounded-3xl border p-4 text-left ' + (role === ROLE_SIGNER ? 'border-primary bg-primary/10' : 'border-subtle bg-card')}>
+                <Hand size={22} className="text-primary" />
+                <p className="mt-2 font-semibold">Sign</p>
+                <p className="text-[11px] text-ink-dim">ISL Studio reads your signs; they are spoken to the other person.</p>
+              </button>
+              <button type="button" onClick={() => go(ROLE_SPEAKER)} className={'rounded-3xl border p-4 text-left ' + (role === ROLE_SPEAKER ? 'border-primary bg-primary/10' : 'border-subtle bg-card')}>
+                <AudioLines size={22} className="text-primary" />
+                <p className="mt-2 font-semibold">Speak</p>
+                <p className="text-[11px] text-ink-dim">Your speech becomes their captions; their signs are read aloud to you.</p>
+              </button>
+            </div>
+            <button type="button" onClick={() => setAsking(null)} className="btn-quiet w-full py-2 text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
 
       {meeting.status === 'ended' && (
         <p className="mt-4 rounded-2xl border border-subtle bg-card-high px-4 py-3 text-sm">
@@ -158,67 +199,83 @@ function Lobby({ meeting, profile, onBack, initialCode }) {
 
 // ── Room ────────────────────────────────────────────────────────────────────
 
-function Room({ meeting, me, language, visionEngine }) {
+function Room({ meeting, me, language, mode }) {
   const {
     status, code, isHost, people, messages, mic, cam, selfId,
     setMic, setCam, sendCaption, sendChat, leave,
   } = meeting;
   const signer = me.role !== ROLE_SPEAKER;
   const [captionsOn, setCaptionsOn] = useState(true);
-  const [readAloud, setReadAloud] = useState(!signer);
+  const [readAloud, setReadAloud] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [copied, setCopied] = useState(null);
   const [seenChat, setSeenChat] = useState(0);
-  const lang = getLanguage(language);
+  const [mine, setMine] = useState('');                 // what I am sending, shown on my screen
+  const live = status === 'live';
 
-  // ── My captions: signs (signer) or speech (speaker) ──────────────────
-  const signing = captionsOn && signer && status === 'live';
-  const { words } = useSignPipeline({
-    enabled: signing,
-    mirrored: cameraManager.isFrontCamera(),
-    visionEngine,
-    autoSpeak: false,
+  // ── Signer: ISL Studio reads the signs ────────────────────────────────
+  const { signs } = useIslSigns();
+  const studio = useIslSentence({
+    signs,
+    active: signer && captionsOn && live,
     language,
+    mode,
+    onSentence: (r) => {
+      const text = r.translated || r.english;
+      if (!text) return;
+      setMine(text);
+      sendCaption(text, 'sign', { final: true, lang: language });
+    },
   });
-  const { stream: signStream } = useTokenStream(words, { enabled: signing });
+  // The words so far travel as they are signed (shown there, not spoken).
+  const partial = studio.sentence.map((x) => x.word).join(' ');
   useEffect(() => {
-    if (!signStream.length) return;
-    const text = signStream.slice(-6).map((e) => tokenLabel(e.token)).join(' ');
-    sendCaption(text, 'sign');
-  }, [signStream, sendCaption]);
+    if (!signer || !partial) return undefined;
+    setMine(`${partial} …`);
+    sendCaption(`${partial} …`, 'sign');
+    // No new sign for a moment: send the sentence without waiting for FULL STOP.
+    const id = setTimeout(() => studio.finish(), PAUSE_SEND_MS);
+    return () => clearTimeout(id);
+  }, [partial]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const speechSupported = typeof window !== 'undefined'
-    && (window.SpeechRecognition || window.webkitSpeechRecognition);
-  useSpeechCaptions({
-    enabled: captionsOn && !signer && status === 'live' && Boolean(speechSupported),
-    lang: lang.code,
-    onText: (text) => sendCaption(text, 'speech'),
+  // ── Speaker: live speech -> captions on the signer's screen ───────────
+  const speech = useLiveSpeech({
+    enabled: !signer && captionsOn && live,
+    lang: language,
+    onPartial: (t) => { setMine(t); sendCaption(t, 'speech'); },
+    onFinal: (t) => { setMine(t); sendCaption(t, 'speech', { final: true, lang: language }); },
   });
 
-  // ── Others' sign captions, read aloud for hearing people ──────────────
+  // ── The other person's finished SIGN sentences, spoken aloud here ─────
   const spokenRef = useRef(new Map());
   useEffect(() => {
     if (!readAloud) return;
     for (const p of Object.values(people)) {
-      if (p.self || !p.caption || p.caption.kind !== 'sign') continue;
-      if (spokenRef.current.get(p.id) === p.caption.at) continue;
-      spokenRef.current.set(p.id, p.caption.at);
-      const newest = p.caption.text.split(' ').slice(-1)[0];
-      if (newest) speak(newest, 'en-IN');
+      const c = p.caption;
+      if (p.self || !c || c.kind !== 'sign' || !c.final) continue;
+      if (spokenRef.current.get(p.id) === c.at) continue;
+      spokenRef.current.set(p.id, c.at);
+      speak(c.text, c.lang || language);
     }
-  }, [people, readAloud]);
+  }, [people, readAloud, language]);
 
-  const list = Object.values(people).sort((a, b) => (a.self ? -1 : b.self ? 1 : 0));
+  const list = Object.values(people);
+  const self = list.find((p) => p.self);
+  const other = list.find((p) => !p.self);
   const unreadChat = messages.filter((m) => !m.system).length - seenChat;
-  const cols = list.length <= 1 ? 'grid-cols-1' : list.length <= 4 ? 'grid-cols-2' : 'grid-cols-2 lg:grid-cols-3';
 
   const share = async () => {
     const url = inviteLink(code);
     if (navigator.share) {
-      try { await navigator.share({ title: 'Join my Aangika meeting', text: `Room ${formatCode(code)}`, url }); return; } catch { /* cancelled */ }
+      try { await navigator.share({ title: 'Join my Aangika call', text: `Room ${formatCode(code)}`, url }); return; } catch { /* cancelled */ }
     }
     if (await copyText(url)) { setCopied('link'); setTimeout(() => setCopied(null), 1500); }
   };
+
+  const notice = signer
+    ? (!signs.length ? 'ISL Studio has no signs yet: record them in ISL Studio → Dictionary.'
+      : studio.error || (!studio.ready && captionsOn ? 'Loading hand and body tracking…' : null))
+    : speech.error;
 
   return (
     <div className="flex h-full flex-col lg:flex-row lg:gap-4 lg:p-4">
@@ -230,7 +287,9 @@ function Room({ meeting, me, language, visionEngine }) {
           </span>
           {isHost && <span className="pill border-primary/30 bg-primary/10 text-primary">Host</span>}
           <span className="pill border-subtle bg-card text-ink-dim">
-            <Users size={12} /> {list.length}/{MAX_PEOPLE}
+            {signer
+              ? <><Hand size={12} /> You sign · ISL Studio</>
+              : <><AudioLines size={12} /> You speak{speech.engine ? ` · ${speech.engine}` : ''}</>}
           </span>
           <div className="ml-auto flex items-center gap-2">
             <button
@@ -249,17 +308,31 @@ function Room({ meeting, me, language, visionEngine }) {
         {status === 'starting' ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-ink-dim">
             <Loader2 size={24} className="animate-spin text-primary" />
-            {isHost ? 'Opening the room…' : `Joining ${formatCode(code)}…`}
+            {isHost ? 'Opening the call…' : `Joining ${formatCode(code)}…`}
           </div>
         ) : (
-          <div className={'grid min-h-0 flex-1 auto-rows-fr gap-2 overflow-y-auto px-2 lg:px-0 ' + cols}>
-            {list.map((p) => <Tile key={p.id} person={p} />)}
+          <div className="relative mx-2 min-h-0 flex-1 lg:mx-0">
+            {/* The other person fills the stage; you are the small picture. */}
+            {other ? <Tile person={other} main /> : self && <Tile person={self} main />}
+            {!other && live && (
+              <p className="chrome-plate pointer-events-none absolute inset-x-4 top-4 rounded-2xl px-3 py-2 text-center text-xs text-ink">
+                Waiting for the other person. Share the code <b className="font-mono">{formatCode(code)}</b> or tap Invite.
+              </p>
+            )}
+            {other && self && (
+              <div className="absolute right-3 top-3 z-10 aspect-[3/4] w-28 overflow-hidden rounded-2xl border border-subtle shadow-card sm:w-40">
+                <Tile person={self} />
+              </div>
+            )}
           </div>
         )}
 
-        {list.length === 1 && status === 'live' && (
-          <p className="px-4 py-2 text-center text-xs text-ink-dim">
-            Waiting for others. Share the code <b className="font-mono">{formatCode(code)}</b> or tap Invite.
+        {/* What I am sending */}
+        {captionsOn && live && (
+          <p className="mx-4 mt-2 min-h-[1.25rem] text-center text-xs text-ink-dim" aria-live="polite">
+            {notice || (mine
+              ? <><span className="font-semibold text-ink">You {signer ? 'signed' : 'said'}:</span> {mine}</>
+              : signer ? 'Sign, then FULL STOP (or pause) to send the sentence.' : 'Speak: your words appear on their screen.')}
           </p>
         )}
 
@@ -270,11 +343,11 @@ function Room({ meeting, me, language, visionEngine }) {
           <Ctl
             on={captionsOn}
             onClick={() => setCaptionsOn((v) => !v)}
-            label={signer ? 'Caption my signing' : speechSupported ? 'Caption my speech' : 'Speech captions need Chrome or Edge'}
+            label={signer ? 'Translate my signing' : 'Caption my speech'}
             OnIcon={Captions}
             OffIcon={CaptionsOff}
           />
-          <Ctl on={readAloud} onClick={() => setReadAloud((v) => !v)} label="Read sign captions aloud" OnIcon={Volume2} OffIcon={VolumeX} />
+          <Ctl on={readAloud} onClick={() => setReadAloud((v) => !v)} label="Speak their signs aloud" OnIcon={Volume2} OffIcon={VolumeX} />
           <button
             type="button"
             onClick={() => { setChatOpen((v) => !v); setSeenChat(messages.filter((m) => !m.system).length); }}
@@ -291,7 +364,7 @@ function Room({ meeting, me, language, visionEngine }) {
           <button
             type="button"
             onClick={leave}
-            aria-label={isHost ? 'End meeting' : 'Leave meeting'}
+            aria-label={isHost ? 'End call' : 'Leave call'}
             className="flex h-12 items-center gap-2 rounded-full bg-rose px-5 text-sm font-semibold text-white transition hover:brightness-110 active:scale-95"
           >
             <PhoneOff size={18} /> {isHost ? 'End' : 'Leave'}
@@ -329,7 +402,7 @@ function Ctl({ on, onClick, label, OnIcon, OffIcon }) {
   );
 }
 
-function Tile({ person }) {
+function Tile({ person, main = false }) {
   const ref = useRef(null);
   const [, tick] = useState(0);
 
@@ -352,7 +425,7 @@ function Tile({ person }) {
   const initials = String(person.name || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
   return (
-    <div className="relative min-h-[140px] overflow-hidden rounded-3xl border border-subtle bg-surface-low">
+    <div data-testid="call-tile" data-name={person.name} className={'relative h-full w-full overflow-hidden bg-surface-low ' + (main ? 'rounded-3xl border border-subtle' : '')}>
       <video
         ref={ref}
         autoPlay
@@ -367,17 +440,17 @@ function Tile({ person }) {
           </span>
         </div>
       )}
-      {!person.stream && !person.self && (
+      {!person.stream && !person.self && main && (
         <span className="pill chrome-plate absolute right-2 top-2 text-[10px] text-ink-dim">
           <Loader2 size={10} className="animate-spin" /> connecting
         </span>
       )}
-      {caption && (
-        <p className="chrome-plate absolute inset-x-2 bottom-10 animate-fade-up rounded-2xl px-3 py-2 text-center text-sm font-semibold leading-snug text-ink">
+      {caption && main && !person.self && (
+        <p className="chrome-plate absolute inset-x-3 bottom-12 animate-fade-up rounded-2xl px-4 py-3 text-center text-lg font-semibold leading-snug text-ink lg:text-2xl">
           {caption.text}
         </p>
       )}
-      <span className="pill chrome-plate absolute bottom-2 left-2 text-[11px] font-semibold text-ink">
+      <span className={'pill chrome-plate absolute bottom-2 left-2 font-semibold text-ink ' + (main ? 'text-[11px]' : 'text-[9px]')}>
         {person.role === ROLE_SPEAKER ? <AudioLines size={11} /> : <Hand size={11} />}
         {person.self ? `${person.name} (you)` : person.name}
         {person.mic === false && <MicOff size={11} className="text-rose" />}
@@ -432,39 +505,4 @@ function Chat({ messages, selfId, onSend, onClose }) {
       </form>
     </aside>
   );
-}
-
-/**
- * Live speech captions from the browser's recogniser (Chrome, Edge, Safari),
- * in the user's language. Restarts itself: the recogniser stops after a
- * pause, and a meeting should not need the button pressed again.
- */
-function useSpeechCaptions({ enabled, lang, onText }) {
-  const cb = useRef(onText);
-  cb.current = onText;
-  useEffect(() => {
-    const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
-    if (!enabled || !SR) return undefined;
-    let stopped = false;
-    let rec = null;
-    let last = 0;
-    const begin = () => {
-      rec = new SR();
-      rec.lang = lang;
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.onresult = (e) => {
-        const r = e.results[e.results.length - 1];
-        const text = r[0].transcript.trim();
-        const now = Date.now();
-        // Final results always go out; interim ones at most every 400 ms.
-        if (text && (r.isFinal || now - last > 400)) { last = now; cb.current(text); }
-      };
-      rec.onend = () => { if (!stopped) setTimeout(() => { try { begin(); } catch { /* gave up */ } }, 300); };
-      rec.onerror = (e) => { if (e.error === 'not-allowed') stopped = true; };
-      try { rec.start(); } catch { /* already running */ }
-    };
-    begin();
-    return () => { stopped = true; try { rec?.stop(); } catch { /* ignore */ } };
-  }, [enabled, lang]);
 }

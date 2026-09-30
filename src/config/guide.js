@@ -14,7 +14,7 @@ export const TOPICS = [
     keys: ['sign to speech', 'translate sign', 'camera', 'recognis', 'recogniz', 'signing', 'start translating', 'how do i sign'],
     answer:
       'Open Sign to speech and tap Start. Stand where your hands and shoulders are in view, then hold each sign for a moment: it is spoken automatically. Several signs in a row build a sentence you can translate as a whole.',
-    actions: [{ label: 'Open Sign to speech', go: 'sign' }],
+    actions: [{ label: 'Open Sign to speech', go: 'isl' }],
   },
   {
     id: 'hearing',
@@ -160,7 +160,7 @@ TOPICS.push({
  */
 export const TOURS = {
   dashboard: [
-    { target: 'hero-sign', title: 'Sign to speech', text: 'Point the camera at a signer. Each sign held for a moment is spoken aloud, and several in a row become a sentence.', go: 'sign' },
+    { target: 'hero-sign', title: 'Sign to speech', text: 'Point the camera at a signer and sign whole sentences; a FULL STOP sign speaks each one.', go: 'isl' },
     { target: 'hero-hearing', title: 'Speech to text', text: 'For the other direction: whatever is said becomes large captions, and your typed replies are read aloud.', go: 'hearing' },
     { target: 'lang', title: 'Your language', text: 'Everything is spoken and translated into this language. There are 11 to choose from.' },
     { target: 'engine', title: 'Online or offline', text: 'Tap to switch between the AI engine (Sarvam or Gemini) and the offline grammar rules, which need no internet.' },
