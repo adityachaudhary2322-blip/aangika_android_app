@@ -138,7 +138,21 @@ export function resume() { if (isSignedIn()) startSync(); }
 
 // ── Google (web) ────────────────────────────────────────────────────────────
 
-export const googleClientId = () => import.meta.env?.VITE_GOOGLE_CLIENT_ID || '';
+// The OAuth WEB client id (not a secret; the Worker accepts tokens for it).
+// The Android app signs in natively with the same id (src/native in aangika-android).
+const GOOGLE_WEB_CLIENT_ID = '580018307108-ra5vrfv8oi7tejr90fr8f8qock11t6o8.apps.googleusercontent.com';
+export const googleClientId = () => import.meta.env?.VITE_GOOGLE_CLIENT_ID || GOOGLE_WEB_CLIENT_ID;
+
+// The Android app registers its native Google sign-in here (Google blocks
+// its web sign-in inside app WebViews). -> async () => idToken
+let nativeGoogle = null;
+export function registerNativeGoogle(fn) { nativeGoogle = fn; listeners.forEach((l) => { try { l(state); } catch { /* listener bug */ } }); }
+export const hasNativeGoogle = () => Boolean(nativeGoogle);
+/** Native (Android app) Google sign-in -> ID token. */
+export async function nativeGoogleToken() {
+  if (!nativeGoogle) throw new Error('Google sign-in is not available here.');
+  return nativeGoogle(googleClientId());
+}
 
 /** Load Google Identity Services and draw its button into `el`. */
 export function renderGoogleButton(el, onToken) {
@@ -158,5 +172,5 @@ export function renderGoogleButton(el, onToken) {
 
 export default {
   getSession, getUser, isSignedIn, subscribe, register, login, googleLogin, linkGoogle, logout,
-  flush, startSync, resume, googleClientId, renderGoogleButton,
+  flush, startSync, resume, googleClientId, renderGoogleButton, registerNativeGoogle, hasNativeGoogle, nativeGoogleToken,
 };
