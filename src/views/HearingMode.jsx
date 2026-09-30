@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { decodeRecording, toWavChunks } from '../services/wav.js';
 import {
   ArrowLeft, Mic, Square, Loader2, Copy, Trash2, Volume2, X, Type, Download,
   Send, Check,
@@ -227,23 +228,35 @@ export default function HearingMode({ language, online, onBack }) {
 
     const started = performance.now();
     try {
-      // On the device (Vosk) when offline, when Sarvam is not available, or
-      // when chosen; otherwise Sarvam, which is more accurate.
-      const onDevice = useOnDevice || !navigator.onLine || !hasSarvam();
-      let text;
-      if (onDevice) {
-        const key = modelFor(theirLang) || modelFor(language) || 'hi';
+      // Decoded once: the on-device recogniser takes it as is, Sarvam as WAV
+      // (the browser's own WebM / MP4 recording is rejected with HTTP 400).
+      const audio = await decodeRecording(blob).catch(() => {
+        throw new Error('Nothing was recorded. Tap the microphone, speak, then tap again.');
+      });
+      const key = modelFor(theirLang) || modelFor(language) || 'hi';
+      const onDevice = async (why) => {
         if (!(await offlineStt.isDownloaded(key))) {
-          throw new Error(`Offline recognition needs the ${offlineStt.SPEECH_MODELS[key].label} speech model: download it below (once).`);
+          throw new Error(why
+            ? `${why} To keep working without internet, download the ${offlineStt.SPEECH_MODELS[key].label} speech model below (once).`
+            : `Offline recognition needs the ${offlineStt.SPEECH_MODELS[key].label} speech model: download it below (once).`);
         }
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const buffer = await ctx.decodeAudioData(await blob.arrayBuffer());
-        ctx.close().catch(() => {});
-        text = await offlineStt.transcribeAudioBuffer(buffer, key);
-        setEngine(`on-device · ${offlineStt.SPEECH_MODELS[key].label}`);
+        const t = await offlineStt.transcribeAudioBuffer(audio, key);
+        setEngine(`on-device · ${offlineStt.SPEECH_MODELS[key].label}${why ? ' (online failed)' : ''}`);
+        return t;
+      };
+      // On the device when offline, when Sarvam is not available, or when
+      // chosen; otherwise Sarvam (more accurate), falling back to the device.
+      let text;
+      if (useOnDevice || !navigator.onLine || !hasSarvam()) {
+        text = await onDevice();
       } else {
-        text = (await transcribe(blob, theirLang) || '').trim();
-        setEngine('Sarvam');
+        try {
+          text = (await transcribe(toWavChunks(audio), theirLang) || '').trim();
+          setEngine('Sarvam');
+        } catch (err) {
+          console.warn('[stt] Sarvam failed, trying on-device:', err);
+          text = await onDevice(`Online recognition failed (${err.message.replace(/^All STT models failed - /, '')}).`);
+        }
       }
       if (text) translateLine(append('them', text), text);
       else setError('No speech detected. Try again a little closer.');
