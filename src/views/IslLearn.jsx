@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Search, Video, RotateCcw, Check, X, ExternalLink, GraduationCap } from 'lucide-react';
 import CameraStage from '../components/CameraStage.jsx';
 import cameraManager from '../services/cameraManager.js';
+import { isNativeApp } from '../services/platform.js';
 import useLandmarkLoop from '../hooks/useLandmarkLoop.js';
 import { frameFeatures } from '../services/isl/islFeatures.js';
 import { SAMPLE_MS } from '../services/isl/islSpotter.js';
@@ -127,7 +128,7 @@ function LearnSign({ sign, signs, onBack }) {
         {sign.description && <p className="text-ink">{sign.description}</p>}
         <p className="text-[11px] text-ink-dim">{sign.description ? 'From our recording: ' : ''}{auto.join(' ')}</p>
         {sign.videoUrl && (
-          <a href={sign.videoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary underline">
+          <a href={sign.videoUrl} target={isNativeApp() ? undefined : '_blank'} rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary underline">
             <ExternalLink size={11} /> Watch the reference video
           </a>
         )}
