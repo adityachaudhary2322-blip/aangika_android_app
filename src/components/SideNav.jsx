@@ -18,6 +18,7 @@ const GROUPS = [
     label: 'Translate',
     items: [
       { id: 'sign', label: 'Sign to speech', Icon: Hand },
+      { id: 'isl', label: 'ISL Studio', Icon: Hand },
       { id: 'hearing', label: 'Speech to text', Icon: Mic },
       { id: 'recorded', label: 'Recorded video', Icon: FileVideo },
     ],

@@ -214,6 +214,28 @@ export default function Dashboard({
               />
             </section>
 
+            {/* ── Indian Sign Language: the team's own dictionary ───── */}
+            <h2 className="eyebrow mt-8 flex items-center gap-1.5">
+              <Hand size={12} className="text-primary" /> Indian Sign Language
+            </h2>
+            <button
+              type="button"
+              onClick={() => onNavigate('isl')}
+              className="surface-card group mt-3 flex w-full items-center gap-4 p-4 text-left transition hover:border-strong"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                <Hand size={24} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="display block text-lg">ISL Studio</span>
+                <span className="mt-0.5 block text-[12px] leading-snug text-ink-dim">
+                  Sign whole sentences; a FULL STOP sign speaks each one. Signs recorded by our team,
+                  reading both hands, every finger and where they are on the body.
+                </span>
+              </span>
+              <ArrowUpRight size={18} className="shrink-0 text-ink-dim transition group-hover:text-ink" />
+            </button>
+
             {/* ── International: ASL ───────────────────────────────── */}
             <h2 className="eyebrow mt-8 flex items-center gap-1.5">
               <Globe2 size={12} className="text-secondary" /> For international users

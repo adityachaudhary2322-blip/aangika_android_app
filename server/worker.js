@@ -1,4 +1,5 @@
 import { handleDictionary } from './dictionary.js';
+import { handleIsl } from './isl.js';
 
 /**
  * Aangika's API (Cloudflare Worker): the Sarvam proxy below, and the
@@ -88,6 +89,10 @@ export async function handle(request, env, fetchImpl = fetch) {
   // Community sign dictionary (dictionary.js): its own limits and code check.
   if (url.pathname === '/dictionary' || url.pathname.startsWith('/dictionary/')) {
     return handleDictionary(request, env, headers);
+  }
+  // ISL Studio dictionary (isl.js).
+  if (url.pathname === '/isl' || url.pathname.startsWith('/isl/')) {
+    return handleIsl(request, env, headers);
   }
 
   const route = ROUTES[url.pathname];

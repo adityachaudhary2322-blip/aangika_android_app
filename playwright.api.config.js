@@ -17,6 +17,8 @@ export default defineConfig({
     baseURL: 'http://localhost:4175',
     viewport: { width: 1280, height: 850 },
     serviceWorkers: 'block',
+    permissions: ['camera', 'microphone'],
+    launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 850 } } }],
   webServer: [

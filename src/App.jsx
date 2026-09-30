@@ -11,6 +11,7 @@ import MySigns from './views/MySigns.jsx';
 import DemoMode from './views/DemoMode.jsx';
 import ReviewContributions from './views/ReviewContributions.jsx';
 import DeveloperDictionary from './views/DeveloperDictionary.jsx';
+import IslStudio from './views/IslStudio.jsx';
 import { checkForUpdates } from './services/modelUpdates.js';
 import { flush as flushContributions } from './services/contributions.js';
 import { checkForUpdates as checkDictionary } from './services/sharedDictionary.js';
@@ -70,7 +71,7 @@ export default function App() {
     if (initialRoom) return 'meet';
     try {
       const v = new URLSearchParams(window.location.search).get('view');
-      return ['sign', 'asl', 'hearing', 'messenger', 'meet'].includes(v) ? v : 'dashboard';
+      return ['sign', 'asl', 'isl', 'hearing', 'messenger', 'meet'].includes(v) ? v : 'dashboard';
     } catch {
       return 'dashboard';
     }
@@ -168,7 +169,7 @@ export default function App() {
   // counts wherever the user happens to be standing when it starts.
   const inCall = call.status === 'live' || call.status === 'dialling'
     || call.status === 'preparing';
-  const needsCamera = view === 'sign' || view === 'asl' || view === 'mysigns' || view === 'demo' || inCall;
+  const needsCamera = view === 'sign' || view === 'asl' || view === 'isl' || view === 'mysigns' || view === 'demo' || inCall;
   useEffect(() => {
     if (!needsCamera) return;
     cameraManager.start().catch((err) => setCameraError(err.message));
@@ -222,6 +223,7 @@ export default function App() {
     meet: meetLive ? 'max-w-none' : 'max-w-md lg:max-w-4xl',
     sign: 'max-w-md lg:max-w-none',
     asl: 'max-w-md lg:max-w-none',
+    isl: 'max-w-md lg:max-w-3xl',
     dashboard: 'max-w-md lg:max-w-5xl',
   }[view] || 'max-w-md lg:max-w-3xl';
 
@@ -244,6 +246,9 @@ export default function App() {
             )}
             {view === 'mysigns' && (
               <MySigns {...shared} cameraError={cameraError} onBack={() => go(returnTo)} onNavigate={go} />
+            )}
+            {view === 'isl' && (
+              <IslStudio onBack={() => go('dashboard')} language={language} mode={mode} />
             )}
             {view === 'developer' && (
               <DeveloperDictionary onBack={() => go('settings')} onNavigate={go} />
@@ -279,7 +284,7 @@ export default function App() {
           view={view}
           onNavigate={go}
           raised={showNav}
-          hidden={view === 'sign' || view === 'asl' || view === 'mysigns' || (view === 'messenger' && chatOpen)
+          hidden={view === 'sign' || view === 'asl' || view === 'isl' || view === 'mysigns' || (view === 'messenger' && chatOpen)
             || (view === 'meet' && meetLive)}
         />
       )}
