@@ -30,7 +30,7 @@ const TYPES = new Set(['word', 'name', 'sentence', 'gloss']);
 
 const failures = new Map();         // ip -> { window, count }
 
-const json = (status, body, headers = {}) => new Response(JSON.stringify(body), {
+export const json = (status, body, headers = {}) => new Response(JSON.stringify(body), {
   status, headers: { ...headers, 'Content-Type': 'application/json' },
 });
 
@@ -113,7 +113,7 @@ function sameCode(a, b) {
 }
 
 /** null when the code is right; otherwise the Response to send. */
-async function checkCode(env, ip, code, headers, now = Date.now()) {
+export async function checkCode(env, ip, code, headers, now = Date.now()) {
   if (!env.DEV_CODE) return json(503, { error: 'Publishing is not set up on the server.' }, headers);
   const hourKey = `fails:${Math.floor(now / 3_600_000)}`;
   const globalFails = Number(await env.DICT.get(hourKey)) || 0;
@@ -194,7 +194,7 @@ export function cleanSign(s) {
   };
 }
 
-async function body(request) {
+export async function readJson(request) {
   const len = Number(request.headers.get('Content-Length') || 0);
   if (len > MAX_BYTES) throw Object.assign(new Error('Request too large.'), { status: 413 });
   const text = await request.text();
@@ -217,7 +217,7 @@ export async function handleDictionary(request, env, headers) {
     }
     if (request.method !== 'POST') return json(405, { error: 'POST only.' }, headers);
 
-    const data = await body(request);
+    const data = await readJson(request);
     const denied = await checkCode(env, ip, data.code, headers);
     if (denied) return denied;
 
