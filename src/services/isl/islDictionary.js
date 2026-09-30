@@ -62,12 +62,23 @@ export function subscribe(fn) { listeners.add(fn); return () => listeners.delete
 
 /** Every usable sign: published ones, with this device's drafts on top. */
 export function listSigns() {
-  const byId = new Map(shared.signs.map((s) => [s.id, { ...s, status: 'published' }]));
-  for (const d of drafts) byId.set(d.id, { ...d, status: byId.has(d.id) ? 'edited' : 'draft' });
+  const byId = new Map(arr(shared?.signs).filter(okSign).map((s) => [s.id, { ...tidy(s), status: 'published' }]));
+  for (const d of arr(drafts).filter(okSign)) byId.set(d.id, { ...tidy(d), status: byId.has(d.id) ? 'edited' : 'draft' });
   return [...byId.values()].sort((a, b) => a.word.localeCompare(b.word));
 }
 export const getSign = (id) => listSigns().find((s) => s.id === id) || null;
-export const getRules = () => shared.rules || [];
+export const getRules = () => arr(shared?.rules).filter((r) => r && typeof r.id === 'string' && Array.isArray(r.pattern) && r.pattern.length && typeof r.english === 'string');
+
+// Stored or downloaded data is never trusted to have every field: one odd
+// sign must not take the whole screen down.
+const arr = (x) => (Array.isArray(x) ? x : []);
+const okSign = (s) => s && typeof s.id === 'string' && typeof s.word === 'string' && s.word.trim();
+const tidy = (s) => ({
+  ...s,
+  token: typeof s.token === 'string' && s.token ? s.token : tokenFor(s.word),
+  texts: s.texts && typeof s.texts === 'object' ? s.texts : {},
+  takes: arr(s.takes).filter((t) => Array.isArray(t) && t.every(Array.isArray)),
+});
 export const version = () => shared.version || 0;
 export const listDrafts = () => drafts;
 
@@ -126,6 +137,18 @@ async function post(path, body) {
     throw err;
   }
   return data;
+}
+
+/**
+ * Recovery: forget this device's cached dictionary (and unpublished drafts),
+ * then download the team's published one again.
+ */
+export async function resetLocal() {
+  shared = { version: 0, signs: [], rules: [] };
+  drafts = [];
+  await persist();
+  emit();
+  await sync({ force: true }).catch(() => {});
 }
 
 /** Fetch the published dictionary if it changed. -> 'updated' | 'current' | 'offline' | 'unavailable' */
