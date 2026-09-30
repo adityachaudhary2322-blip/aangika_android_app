@@ -7,13 +7,22 @@
  *   POST /isl/publish         { code, signs: [...] }  add or update
  *   POST /isl/remove          { code, ids: [...] }
  *   POST /isl/rules           { code, rules: [...] }  this dictionary's rules
+ *   POST /isl/deleted         { code }  recently deleted signs (recoverable)
+ *   POST /isl/restore         { code, ids: [...] }  bring deleted signs back
  *
- * Stored in Workers KV (binding DICT) under the key 'isl'.
+ * Stored in Workers KV (binding DICT) under the key 'isl'. Recordings take
+ * the team real effort, so nothing is ever lost in one step:
+ *   - deleting a sign moves it to a bin (key 'isl:deleted', last 100);
+ *   - every change first copies the previous dictionary to one of ten
+ *     rotating backups ('isl:backup:0'..'isl:backup:9', by version).
  */
 
 import { json, checkCode, readJson, cleanRule } from './dictionary.js';
 
 const KEY = 'isl';
+const BIN_KEY = 'isl:deleted';
+const BIN_MAX = 100;
+const BACKUPS = 10;
 export const ISL_FORMAT = 'aangika-isl/1';
 export const FEATURE_DIM = 100;             // islFeatures.js FEATURE_DIM
 export const FEATURE_VERSION = 1;
@@ -33,6 +42,8 @@ async function load(env) {
 }
 
 async function save(env, d) {
+  const before = await env.DICT.get(KEY);
+  if (before) await env.DICT.put(`${KEY}:backup:${(d.version || 0) % BACKUPS}`, before);
   d.version = (d.version || 0) + 1;
   d.updatedAt = new Date().toISOString();
   const body = JSON.stringify(d);
@@ -40,6 +51,13 @@ async function save(env, d) {
   await env.DICT.put(KEY, body);
   return d;
 }
+
+async function loadBin(env) {
+  const raw = await env.DICT.get(BIN_KEY);
+  const bin = raw ? JSON.parse(raw) : [];
+  return Array.isArray(bin) ? bin : [];
+}
+const saveBin = (env, bin) => env.DICT.put(BIN_KEY, JSON.stringify(bin.slice(0, BIN_MAX)));
 
 const num01 = (v) => typeof v === 'number' && Number.isFinite(v) && v >= -0.001 && v <= 1.001;
 
@@ -119,11 +137,36 @@ export async function handleIsl(request, env, headers) {
     if (url.pathname === '/isl/remove') {
       const ids = new Set((data.ids || []).map(String));
       const d = await load(env);
-      const before = d.signs.length;
+      const gone = d.signs.filter((s) => ids.has(s.id));
+      if (!gone.length) return json(200, { removed: 0, version: d.version, total: d.signs.length }, headers);
+      // Into the bin first: if the dictionary write then fails, nothing is lost.
+      const bin = await loadBin(env);
+      const deletedAt = new Date().toISOString();
+      await saveBin(env, [...gone.map((s) => ({ ...s, deletedAt })), ...bin.filter((b) => !ids.has(b.id))]);
       d.signs = d.signs.filter((s) => !ids.has(s.id));
-      const removed = before - d.signs.length;
-      const saved = removed ? await save(env, d) : d;
-      return json(200, { removed, version: saved.version, total: saved.signs.length }, headers);
+      const saved = await save(env, d);
+      return json(200, { removed: gone.length, version: saved.version, total: saved.signs.length }, headers);
+    }
+    if (url.pathname === '/isl/deleted') {
+      const bin = await loadBin(env);
+      return json(200, { deleted: bin.map(({ id, token, word, type, category, deletedAt, takes }) => ({ id, token, word, type, category, deletedAt, takes: takes.length })) }, headers);
+    }
+    if (url.pathname === '/isl/restore') {
+      const ids = new Set((data.ids || []).map(String));
+      const bin = await loadBin(env);
+      const d = await load(env);
+      const restored = []; const rejected = [];
+      for (const b of bin.filter((x) => ids.has(x.id))) {
+        const { deletedAt, ...sign } = b;
+        if (d.signs.some((s) => s.token === sign.token && s.id !== sign.id)) { rejected.push(`${sign.token}: another sign now has this name`); continue; }
+        d.signs = [...d.signs.filter((s) => s.id !== sign.id), sign];
+        restored.push(sign.id);
+      }
+      if (!restored.length) return json(400, { error: 'Nothing to restore.', rejected }, headers);
+      if (d.signs.length > MAX_SIGNS) return json(413, { error: `At most ${MAX_SIGNS} signs.` }, headers);
+      const saved = await save(env, d);
+      await saveBin(env, bin.filter((b) => !restored.includes(b.id)));
+      return json(200, { restored: restored.length, rejected, version: saved.version, total: saved.signs.length }, headers);
     }
     if (url.pathname === '/isl/rules') {
       if (!Array.isArray(data.rules) || data.rules.length > 100) return json(400, { error: 'rules must be a list (max 100).' }, headers);

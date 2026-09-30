@@ -55,7 +55,7 @@ export const MODELS = [
     vocabSize: 1500,
     files: [
       { url: '/models/sanketvani_word_tagger_v2.onnx', bytes: 21_391_045, role: 'weights' },
-      { url: '/models/vocab.json', bytes: 28_702, role: 'vocabulary' },
+      { url: '/models/vocab.json', bytes: 26_943, role: 'vocabulary' },
     ],
     sharedFiles: ['ort-wasm'],
     licence: {
@@ -132,7 +132,7 @@ MODELS.push({
   vocabSize: 250,
   files: [
     { url: '/models/asl/islr-1st/model.onnx', bytes: 22_187_818, role: 'weights' },
-    { url: '/models/asl/islr-1st/vocab.json', bytes: 3_761, role: 'vocabulary' },
+    { url: '/models/asl/islr-1st/vocab.json', bytes: 3_477, role: 'vocabulary' },
   ],
   sharedFiles: ['ort-wasm'],
   extraDownloads: [{ what: 'MediaPipe face landmarker', bytes: 3_758_596 }],

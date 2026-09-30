@@ -49,7 +49,7 @@ export function init() {
     if (!hasIDB()) return;
     try {
       const [s, d] = await Promise.all([idb('readonly', (st) => st.get('shared')), idb('readonly', (st) => st.get('drafts'))]);
-      if (s) shared = s;
+      if (s && typeof s === 'object') shared = s;
       if (Array.isArray(d)) drafts = d;
     } catch { /* blocked storage: memory only */ }
     emit();
@@ -62,12 +62,23 @@ export function subscribe(fn) { listeners.add(fn); return () => listeners.delete
 
 /** Every usable sign: published ones, with this device's drafts on top. */
 export function listSigns() {
-  const byId = new Map(shared.signs.map((s) => [s.id, { ...s, status: 'published' }]));
-  for (const d of drafts) byId.set(d.id, { ...d, status: byId.has(d.id) ? 'edited' : 'draft' });
+  const byId = new Map(arr(shared?.signs).filter(okSign).map((s) => [s.id, { ...tidy(s), status: 'published' }]));
+  for (const d of arr(drafts).filter(okSign)) byId.set(d.id, { ...tidy(d), status: byId.has(d.id) ? 'edited' : 'draft' });
   return [...byId.values()].sort((a, b) => a.word.localeCompare(b.word));
 }
 export const getSign = (id) => listSigns().find((s) => s.id === id) || null;
-export const getRules = () => shared.rules || [];
+export const getRules = () => arr(shared?.rules).filter((r) => r && typeof r.id === 'string' && Array.isArray(r.pattern) && r.pattern.length && typeof r.english === 'string');
+
+// Stored or downloaded data is never trusted to have every field: one odd
+// sign must not take the whole screen down.
+const arr = (x) => (Array.isArray(x) ? x : []);
+const okSign = (s) => s && typeof s.id === 'string' && typeof s.word === 'string' && s.word.trim();
+const tidy = (s) => ({
+  ...s,
+  token: typeof s.token === 'string' && s.token ? s.token : tokenFor(s.word),
+  texts: s.texts && typeof s.texts === 'object' ? s.texts : {},
+  takes: arr(s.takes).filter((t) => Array.isArray(t) && t.every(Array.isArray)),
+});
 export const version = () => shared.version || 0;
 export const listDrafts = () => drafts;
 
@@ -128,6 +139,18 @@ async function post(path, body) {
   return data;
 }
 
+/**
+ * Recovery: forget this device's cached dictionary (and unpublished drafts),
+ * then download the team's published one again.
+ */
+export async function resetLocal() {
+  shared = { version: 0, signs: [], rules: [] };
+  drafts = [];
+  await persist();
+  emit();
+  await sync({ force: true }).catch(() => {});
+}
+
 /** Fetch the published dictionary if it changed. -> 'updated' | 'current' | 'offline' | 'unavailable' */
 export async function sync({ force = false } = {}) {
   await init();
@@ -166,6 +189,15 @@ export async function removeSigns(code, ids) {
   return result;
 }
 
+/** Recently deleted signs (the server keeps them so a delete can be undone). */
+export const listDeleted = (code) => post('/isl/deleted', { code }).then((r) => r.deleted || []);
+
+export async function restoreSigns(code, ids) {
+  const result = await post('/isl/restore', { code, ids });
+  await sync({ force: true });
+  return result;
+}
+
 export async function saveRules(code, rules) {
   const result = await post('/isl/rules', { code, rules });
   await sync({ force: true });
@@ -173,9 +205,11 @@ export async function saveRules(code, rules) {
 }
 
 /** Test hook. */
+/** Tests only: load exactly this data, as if read from storage. */
+export function _loadForTests(sharedData, draftData) { shared = sharedData; drafts = draftData; ready = Promise.resolve(); }
 export function _resetForTests() { shared = { version: 0, signs: [], rules: [] }; drafts = []; ready = Promise.resolve(); }
 
 export default {
   init, subscribe, listSigns, getSign, getRules, saveDraft, discardDraft, sync, publish, removeSigns,
-  saveRules, isAvailable, tokenFor, version, listDrafts,
+  saveRules, listDeleted, restoreSigns, isAvailable, tokenFor, version, listDrafts,
 };

@@ -129,6 +129,80 @@ console.log('\n5. "When I sign these, say this": WELCOME + SEGUE -> "Welcome to 
   check(hg.translated === 'Segue mein aapka swagat hai.', 'and the typed Hinglish', hg.translated);
   const only = await translateStudio([before[0]], 'en-IN', { mode: 'offline' });
   check(only.english === 'Welcome.', 'WELCOME alone does not trigger it, and just says its word', only.english);
+
+  // The camera rarely gives exactly the rule's signs: extras and order vary.
+  const [w, s] = before;
+  const extra = all.find((x) => x.word === 'I') || { ...w, id: 'x', token: 'HELLO', word: 'HELLO', category: 'other' };
+  const noisy = await translateStudio([extra, w, extra, s], 'en-IN', { mode: 'offline' });
+  check(noisy.english === 'Welcome to Segue.', 'still says it with other signs around', noisy.english);
+  const flipped = await translateStudio([s, w], 'en-IN', { mode: 'offline' });
+  check(flipped.english === 'Welcome to Segue.', 'and in the other order', flipped.english);
+  const rules = [{ id: 'say-welcome', pattern: ['WELCOME'], english: 'Hi there.' }, { id: 'say-welcome-segue', pattern: ['WELCOME', 'SEGUE'], english: 'Welcome to Segue.' }];
+  check(matchStudioRules([w, s], rules)?.english === 'Welcome to Segue.', 'the rule with more signs wins');
+  check(matchStudioRules([w, extra], rules)?.english === 'Hi there.', 'a one-sign rule fires when only that sign is present');
+  check(matchStudioRules([w, extra], [{ id: 'any-action', pattern: ['@action'], english: 'Hi there.' }]) === null, 'rules with @categories still match the whole sentence only');
+  // What the team saved: one rule per sign (made with either form).
+  const team = [{ id: 'welcome-to-segue', pattern: ['WELCOME'], english: 'welcome to segue.', texts: { hinglish: 'Segue mein swagat hai' } }, { id: 'say-segue', pattern: ['SEGUE'], english: 'we are team healx.', texts: { hinglish: 'Hum team HealX hain.' } }];
+  const both = matchStudioRules([w, s], team);
+  check(both?.english === 'Welcome to segue. We are team healx.', 'two one-sign rules: both sentences, in signed order', both?.english);
+  check(both?.texts.hinglish === 'Segue mein swagat hai. Hum team HealX hain.', 'and their Hinglish joined', both?.texts.hinglish);
+  check(matchStudioRules([s, w], team)?.english === 'We are team healx. Welcome to segue.', 'signed the other way round, said the other way round');
+  check(matchStudioRules([w, s, w], team)?.english === 'Welcome to segue. We are team healx.', 'a sign spotted twice does not repeat its sentence');
+}
+
+console.log('\n6. Broken stored data never crashes ISL Studio (the blank page)\n' + '-'.repeat(74));
+{
+  const ok = (label, fn) => { try { const out = fn(); check(true, label, out); } catch (err) { check(false, label, err.message); } };
+  const cases = [
+    ['a sign without a word', { version: 1, signs: [{ id: 'a', token: 'X' }, { id: 'b', word: 'SEGUE' }], rules: [] }, []],
+    ['signs / rules / drafts not arrays', { version: 1, signs: null, rules: 'x' }, null],
+    ['no stored copy at all', undefined, undefined],
+    ['junk entries', { signs: [null, 42, 'x', { id: 7, word: 'NUM' }, { id: 'c', word: 'OK', takes: 'bad', texts: 5 }], rules: [null, { id: 'r' }, { id: 's', pattern: [], english: 'x' }] }, [null, { id: 'd' }]],
+  ];
+  for (const [label, sh, dr] of cases) {
+    isl._loadForTests(sh, dr);
+    ok(`listSigns survives ${label}`, () => isl.listSigns().map((x) => x.word).join(',') || '(none)');
+    ok(`getRules survives ${label}`, () => `${isl.getRules().length} rules`);
+    ok(`sentence rules survive ${label}`, () => String(matchStudioRules(isl.listSigns())));
+  }
+  isl._loadForTests({ signs: [{ id: 'c', word: 'OK', takes: 'bad', texts: 5 }], rules: [] }, []);
+  const [c] = isl.listSigns();
+  check(c.token === 'OK' && Array.isArray(c.takes) && typeof c.texts === 'object', 'missing fields are filled in', JSON.stringify({ token: c.token, takes: c.takes, texts: c.texts }));
+}
+
+console.log('\n7. An "either hand" sign downloaded from the server (e.subarray is not a function)\n' + '-'.repeat(74));
+{
+  const p = proto();
+  const plain = [perform(p), perform(p, 15), perform(p, 13)].map((t) => t.map((f) => Array.from(f)));
+  let sp = null;
+  try { sp = createSpotter([{ id: 'e', token: 'EITHER', takes: plain, eitherHand: true }]); } catch (err) { check(false, 'spotter builds with plain-array takes', err.message); }
+  check(sp && sp.size() === 6, 'spotter builds with plain-array takes, own + mirrored', sp ? `${sp.size()} templates` : 'crashed');
+  const bad = createSpotter([{ id: 'x', token: 'BAD', takes: [[[1, 2], 'junk', null]], eitherHand: true }, { id: 'e', token: 'EITHER', takes: plain }]);
+  check(bad.size() === 3, 'a broken sign is skipped, the others still work', `${bad.size()} templates`);
+}
+
+console.log('\n8. Nothing is lost: deleted signs can be restored, every change is backed up\n' + '-'.repeat(74));
+{
+  isl._resetForTests();
+  await isl.sync({ force: true });                     // the server's dictionary again
+  const one = isl.listSigns().find((s) => s.word === 'go');
+  const takesBefore = JSON.stringify(one.takes);
+  const count = isl.listSigns().length;
+  await isl.removeSigns(CODE, [one.id]);
+  check(!isl.getSign(one.id) && isl.listSigns().length === count - 1, 'a sign is deleted for everyone');
+  let bin = await isl.listDeleted(CODE);
+  check(bin.some((b) => b.id === one.id && b.takes === 3), 'it is kept in "Recently deleted"', bin.map((b) => b.word).join(', '));
+  let denied = false;
+  try { await isl.listDeleted('wrong'); } catch { denied = true; }
+  check(denied, 'the deleted list needs the developer code');
+  await isl.restoreSigns(CODE, [one.id]);
+  check(isl.getSign(one.id) && JSON.stringify(isl.getSign(one.id).takes) === takesBefore, 'restore brings it back with its recordings unchanged');
+  bin = await isl.listDeleted(CODE);
+  check(!bin.some((b) => b.id === one.id), 'and removes it from the bin');
+  const backups = [...kv.keys()].filter((k) => k.startsWith('isl:backup:'));
+  const newest = JSON.parse(kv.get(`isl:backup:${(JSON.parse(kv.get('isl')).version - 1) % 10}`));
+  check(backups.length >= 5 && backups.length <= 10 && newest.version === JSON.parse(kv.get('isl')).version - 1,
+    'the previous dictionary is kept in rotating backups (at most 10)', `${backups.length} backups, newest v${newest.version}`);
 }
 
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));

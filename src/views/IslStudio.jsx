@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, Play, Square, Volume2, Eraser, Plus, Pencil, Trash2, Upload, Video, Lock,
-  Loader2, Search, RefreshCw, CircleStop, Check, AlertTriangle,
+  Loader2, Search, RefreshCw, CircleStop, Check, AlertTriangle, Stethoscope, RotateCcw,
 } from 'lucide-react';
 import CameraStage from '../components/CameraStage.jsx';
 import cameraManager from '../services/cameraManager.js';
 import useLandmarkLoop from '../hooks/useLandmarkLoop.js';
 import { frameFeatures, describeFeatures } from '../services/isl/islFeatures.js';
-import { createSpotter, calibrate, toTemplate, dtwCost, SAMPLE_MS } from '../services/isl/islSpotter.js';
+import { createSpotter, SAMPLE_MS } from '../services/isl/islSpotter.js';
 import isl, { tokenFor } from '../services/isl/islDictionary.js';
-import { translateStudio, matchStudioRules } from '../services/isl/islTranslate.js';
+import { checkSign, checkDictionary } from '../services/isl/islHealth.js';
+import { translateStudio, matchStudioRules, isSayRule } from '../services/isl/islTranslate.js';
 import devSession from '../services/sharedDictionary.js';
 import { speak, unlockAudio } from '../services/ttsService.js';
 
@@ -195,8 +196,20 @@ function DictionaryTab({ signs, unlocked, syncState, onSync }) {
   const [editing, setEditing] = useState(null);           // sign draft being edited / recorded
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [health, setHealth] = useState(null);             // id -> checkSign result
+  const [checking, setChecking] = useState(null);         // progress text
+  const [confirmDel, setConfirmDel] = useState(null);     // id tapped once
+  const [deleted, setDeleted] = useState(null);           // recently deleted (server bin)
   const code = devSession.getDevCode();
   const q = query.trim().toLowerCase();
+
+  const runCheck = async () => {
+    setChecking('Checking…');
+    const res = await checkDictionary(signs, { onProgress: (k, n) => setChecking(`Checking ${k} / ${n}…`) });
+    setHealth(new Map(res.map((r) => [r.id, r])));
+    setChecking(null);
+  };
+  const showDeleted = () => run(async () => setDeleted(await isl.listDeleted(code)));
 
   const run = async (fn, text) => {
     setBusy(true); setMsg(null);
@@ -239,6 +252,39 @@ function DictionaryTab({ signs, unlocked, syncState, onSync }) {
           )}
         </div>
       )}
+      {unlocked && (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={!!checking || signs.length < 2} onClick={runCheck} className="btn-quiet px-3 py-1.5 text-xs">
+            {checking ? <Loader2 size={12} className="animate-spin" /> : <Stethoscope size={12} />} {checking || 'Check dictionary'}
+          </button>
+          <button type="button" disabled={busy} onClick={showDeleted} className="btn-quiet px-3 py-1.5 text-xs"><RotateCcw size={12} /> Recently deleted</button>
+        </div>
+      )}
+      {health && (() => {
+        const all = [...health.values()];
+        const bad = all.filter((h) => h.status === 'bad').length;
+        const warn = all.filter((h) => h.status === 'warn').length;
+        return (
+          <p className={'rounded-2xl border px-3 py-2 text-[11px] ' + (bad ? 'border-rose/30 bg-rose/10 text-rose' : warn ? 'border-amber/30 bg-amber/10 text-amber' : 'border-primary/30 bg-primary/10 text-primary')}>
+            {bad || warn
+              ? `${bad} sign(s) to re-record, ${warn} to watch. They are listed first below. Re-recording them stops wrong or “stuck” readings.`
+              : 'All signs look distinct and consistent.'}
+          </p>
+        );
+      })()}
+      {deleted && (
+        <div className="surface-card space-y-2 p-3">
+          <p className="text-xs font-semibold">Recently deleted <span className="font-normal text-ink-dim">(kept on the server; restore brings a sign back for everyone)</span></p>
+          {!deleted.length && <p className="text-[11px] text-ink-dim">Nothing deleted.</p>}
+          {deleted.map((d) => (
+            <div key={d.id} className="flex items-center gap-2 text-xs">
+              <span className="flex-1">{d.word} <span className="text-[10px] text-ink-dim">· {d.takes} takes · {new Date(d.deletedAt).toLocaleString()}</span></span>
+              <button type="button" disabled={busy} onClick={() => run(async () => { await isl.restoreSigns(code, [d.id]); setDeleted(await isl.listDeleted(code)); }, `“${d.word}” restored for everyone.`)} className="btn-quiet px-3 py-1 text-xs">Restore</button>
+            </div>
+          ))}
+          <button type="button" onClick={() => setDeleted(null)} className="text-[11px] text-ink-dim underline">Close</button>
+        </div>
+      )}
       {msg && <p className={'text-[11px] ' + (msg.tone === 'rose' ? 'text-rose' : 'text-primary')}>{msg.text}</p>}
       {!signs.some((s) => s.type === 'full-stop') && (
         <p className="flex items-start gap-1.5 rounded-2xl border border-amber/30 bg-amber/10 px-3 py-2 text-[11px] text-amber">
@@ -246,7 +292,9 @@ function DictionaryTab({ signs, unlocked, syncState, onSync }) {
         </p>
       )}
       <ul className="space-y-2">
-        {signs.filter((s) => !q || s.word.toLowerCase().includes(q) || s.token.toLowerCase().includes(q)).map((s) => (
+        {signs.filter((s) => !q || s.word.toLowerCase().includes(q) || s.token.toLowerCase().includes(q))
+          .sort((a, b) => (health ? ({ bad: 0, warn: 1, ok: 2 }[health.get(a.id)?.status] ?? 3) - ({ bad: 0, warn: 1, ok: 2 }[health.get(b.id)?.status] ?? 3) : 0))
+          .map((s) => (
           <li key={s.id} className="rounded-2xl border border-subtle bg-card p-3">
             <p className="text-sm font-semibold">
               {s.word}
@@ -255,6 +303,12 @@ function DictionaryTab({ signs, unlocked, syncState, onSync }) {
             </p>
             <p className="text-[10px] text-ink-dim">{s.token} · {s.type} · {s.category} · {s.hands === 'two' ? 'two hands' : s.hands === 'either' ? 'either hand' : 'one hand'} · {s.takes.length} takes
               {s.texts?.['hi-IN'] ? ` · ${s.texts['hi-IN']}` : ''}{s.texts?.hinglish ? ` · ${s.texts.hinglish}` : ''}</p>
+            {health?.get(s.id) && health.get(s.id).status !== 'ok' && (
+              <p className={'mt-1 text-[11px] ' + (health.get(s.id).status === 'bad' ? 'text-rose' : 'text-amber')}>
+                {health.get(s.id).status === 'bad' ? 'Re-record: ' : 'Watch: '}{health.get(s.id).notes.join(' ')}
+              </p>
+            )}
+            {health?.get(s.id)?.status === 'ok' && <p className="mt-1 text-[11px] text-primary">Distinct and consistent.</p>}
             {unlocked && (
               <div className="mt-2 flex flex-wrap gap-2">
                 <button type="button" onClick={() => setEditing({ ...s })} className="btn-quiet px-3 py-1.5 text-xs"><Pencil size={12} /> Edit / reassign</button>
@@ -263,7 +317,13 @@ function DictionaryTab({ signs, unlocked, syncState, onSync }) {
                   <button type="button" onClick={() => run(() => isl.discardDraft(s.id), 'Draft discarded.')} className="btn-quiet px-3 py-1.5 text-xs">Discard draft</button>
                 )}
                 {s.status !== 'draft' && (
-                  <button type="button" disabled={busy} onClick={() => run(() => isl.removeSigns(code, [s.id]), `“${s.word}” deleted for everyone.`)} className="btn-quiet px-3 py-1.5 text-xs text-rose"><Trash2 size={12} /> Delete for everyone</button>
+                  <button type="button" disabled={busy} onClick={() => {
+                    if (confirmDel !== s.id) { setConfirmDel(s.id); return; }
+                    setConfirmDel(null);
+                    run(() => isl.removeSigns(code, [s.id]), `“${s.word}” deleted for everyone. Undo it from “Recently deleted”.`);
+                  }} className="btn-quiet px-3 py-1.5 text-xs text-rose">
+                    <Trash2 size={12} /> {confirmDel === s.id ? 'Tap again to delete for everyone' : 'Delete for everyone'}
+                  </button>
                 )}
               </div>
             )}
@@ -383,6 +443,7 @@ function Recorder({ others, onDone, onCancel }) {
   const [count, setCount] = useState(0);
   const [analysis, setAnalysis] = useState([]);
   const [notes, setNotes] = useState([]);
+  const [verdict, setVerdict] = useState(null);   // health of the recorded takes
   const frames = useRef([]);
   const until = useRef(0);
   const lastSample = useRef(0);
@@ -415,18 +476,14 @@ function Recorder({ others, onDone, onCancel }) {
     if (next.length === TAKES) review(next);
   }
 
+  // Same check as “Check dictionary”: catch a sign that will be misread
+  // BEFORE it is saved, not after it has confused the whole dictionary.
   function review(all) {
-    const templates = all.map((t) => toTemplate(t)).filter((t) => t.length);
-    const tau = calibrate(templates);
-    const out = [`Consistency between takes: ${tau < 0.09 ? 'good' : tau < 0.15 ? 'fair' : 'low (sign it the same way each time)'}.`];
-    for (const o of others) {
-      const ot = (o.takes || []).map((t) => toTemplate(t)).filter((t) => t.length);
-      if (!ot.length) continue;
-      const otau = o.tau || calibrate(ot);
-      const c = Math.min(...ot.map((tpl) => dtwCost(tpl, templates[0])));
-      if (c <= otau) out.push(`Looks like “${o.word}”: make them more different (hand shape, place or movement).`);
-    }
-    setNotes(out);
+    const r = checkSign(all, others);
+    setVerdict(r.status);
+    setNotes(r.status === 'ok'
+      ? ['Consistent takes, distinct from the other signs.']
+      : [...r.notes, 'Start over and record again, or use these takes anyway.']);
   }
 
   const startTake = () => {
@@ -467,12 +524,12 @@ function Recorder({ others, onDone, onCancel }) {
             <Video size={14} /> {phase === 'idle' ? `Record take ${takes.length + 1}` : 'Recording…'}
           </button>
         ) : (
-          <button type="button" onClick={() => onDone(takes)} className="btn-primary px-4 py-2 text-sm"><Check size={14} /> Use these takes</button>
+          <button type="button" onClick={() => onDone(takes)} className={(verdict && verdict !== 'ok' ? 'btn-quiet' : 'btn-primary') + ' px-4 py-2 text-sm'}><Check size={14} /> {verdict && verdict !== 'ok' ? 'Use anyway' : 'Use these takes'}</button>
         )}
-        {takes.length > 0 && <button type="button" onClick={() => { setTakes([]); setNotes([]); }} className="btn-quiet px-3 py-2 text-xs">Start over</button>}
+        {takes.length > 0 && <button type="button" onClick={() => { setTakes([]); setNotes([]); setVerdict(null); }} className="btn-quiet px-3 py-2 text-xs">Start over</button>}
         <button type="button" onClick={onCancel} className="btn-quiet px-3 py-2 text-xs">Cancel</button>
       </div>
-      {notes.map((n) => <p key={n} className="text-[11px] text-amber">{n}</p>)}
+      {notes.map((n) => <p key={n} className={'text-[11px] ' + (verdict === 'ok' ? 'text-primary' : 'text-amber')}>{n}</p>)}
     </section>
   );
 }
@@ -507,8 +564,8 @@ function SignsToSentence({ signs, onSave }) {
 
   return (
     <form onSubmit={submit} className="surface-card space-y-2 border-primary/40 p-3">
-      <p className="text-sm font-semibold">When I sign these… say this sentence</p>
-      <p className="text-[11px] text-ink-dim">Tap your signs in the order you sign them. Then FULL STOP speaks your sentence.</p>
+      <p className="text-sm font-semibold">When these signs are in my sentence… say this</p>
+      <p className="text-[11px] text-ink-dim">Tap the signs. Whenever all of them are in a sentence (any order, other signs allowed), FULL STOP speaks your sentence instead. Several rules can fire at once and are said in the order you signed (WELCOME → “Welcome to Segue.”, SEGUE → “We are team HealX.”). A rule with more signs beats a smaller one using the same sign.</p>
       <div className="flex min-h-[2.25rem] flex-wrap items-center gap-1.5 rounded-2xl border border-subtle p-2">
         {!picked.length && <span className="text-[11px] text-ink-dim">No signs chosen yet</span>}
         {picked.map((t, i) => (
@@ -564,6 +621,7 @@ function RulesTab({ signs, unlocked }) {
 
   return (
     <div className="space-y-3">
+      {!unlocked && <UnlockCard />}
       {unlocked && (
         <SignsToSentence
           signs={signs}
@@ -600,7 +658,7 @@ function RulesTab({ signs, unlocked }) {
         {rules.map((r) => (
           <li key={r.id} className="flex items-start gap-2 rounded-2xl border border-subtle bg-card px-3 py-2 text-[12px]">
             <div className="min-w-0 flex-1">
-              <p className="font-mono text-[11px] text-primary">{r.pattern.join(' + ')}</p>
+              <p className="font-mono text-[11px] text-primary">{r.pattern.join(' + ')} <span className="font-sans text-ink-dim">· {isSayRule(r) ? 'signs anywhere in the sentence' : 'whole sentence, in order'}</span></p>
               <p>{r.english}</p>
               {r.texts?.['hi-IN'] && <p className="text-ink-dim">{r.texts['hi-IN']}</p>}
               {r.texts?.hinglish && <p className="text-ink-dim">{r.texts.hinglish}</p>}
