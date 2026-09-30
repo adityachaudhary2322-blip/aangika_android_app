@@ -508,7 +508,7 @@ function SignsToSentence({ signs, onSave }) {
   return (
     <form onSubmit={submit} className="surface-card space-y-2 border-primary/40 p-3">
       <p className="text-sm font-semibold">When these signs are in my sentence… say this</p>
-      <p className="text-[11px] text-ink-dim">Tap the signs. Whenever all of them are in a sentence (any order, other signs allowed), FULL STOP speaks your sentence instead. If two rules fit, the one with more signs wins.</p>
+      <p className="text-[11px] text-ink-dim">Tap the signs. Whenever all of them are in a sentence (any order, other signs allowed), FULL STOP speaks your sentence instead. Several rules can fire at once and are said in the order you signed (WELCOME → “Welcome to Segue.”, SEGUE → “We are team HealX.”). A rule with more signs beats a smaller one using the same sign.</p>
       <div className="flex min-h-[2.25rem] flex-wrap items-center gap-1.5 rounded-2xl border border-subtle p-2">
         {!picked.length && <span className="text-[11px] text-ink-dim">No signs chosen yet</span>}
         {picked.map((t, i) => (

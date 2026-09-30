@@ -140,7 +140,14 @@ console.log('\n5. "When I sign these, say this": WELCOME + SEGUE -> "Welcome to 
   const rules = [{ id: 'say-welcome', pattern: ['WELCOME'], english: 'Hi there.' }, { id: 'say-welcome-segue', pattern: ['WELCOME', 'SEGUE'], english: 'Welcome to Segue.' }];
   check(matchStudioRules([w, s], rules)?.english === 'Welcome to Segue.', 'the rule with more signs wins');
   check(matchStudioRules([w, extra], rules)?.english === 'Hi there.', 'a one-sign rule fires when only that sign is present');
-  check(matchStudioRules([w, extra], [{ id: 'welcome-only', pattern: ['WELCOME'], english: 'Hi there.' }]) === null, 'advanced rules still match the whole sentence only');
+  check(matchStudioRules([w, extra], [{ id: 'any-action', pattern: ['@action'], english: 'Hi there.' }]) === null, 'rules with @categories still match the whole sentence only');
+  // What the team saved: one rule per sign (made with either form).
+  const team = [{ id: 'welcome-to-segue', pattern: ['WELCOME'], english: 'welcome to segue.', texts: { hinglish: 'Segue mein swagat hai' } }, { id: 'say-segue', pattern: ['SEGUE'], english: 'we are team healx.', texts: { hinglish: 'Hum team HealX hain.' } }];
+  const both = matchStudioRules([w, s], team);
+  check(both?.english === 'Welcome to segue. We are team healx.', 'two one-sign rules: both sentences, in signed order', both?.english);
+  check(both?.texts.hinglish === 'Segue mein swagat hai. Hum team HealX hain.', 'and their Hinglish joined', both?.texts.hinglish);
+  check(matchStudioRules([s, w], team)?.english === 'We are team healx. Welcome to segue.', 'signed the other way round, said the other way round');
+  check(matchStudioRules([w, s, w], team)?.english === 'Welcome to segue. We are team healx.', 'a sign spotted twice does not repeat its sentence');
 }
 
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));
