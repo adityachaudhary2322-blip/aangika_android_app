@@ -99,12 +99,15 @@ export function SharedSignList({ onTry }) {
 /**
  * For developers: enter the developer code to publish taught signs to every
  * user, or remove shared ones. The code is checked by the server (never in
- * the app) and kept only in this component's memory.
+ * the app) and kept in memory for this session only (shared with the
+ * Developer section, so unlocking one unlocks both).
  */
-export function DeveloperPublish() {
-  const [open, setOpen] = useState(false);
-  const [code, setCode] = useState('');
-  const [unlocked, setUnlocked] = useState(false);
+export function DeveloperPublish({ onOpenDeveloper }) {
+  const [open, setOpen] = useState(() => dictionary.isUnlocked());
+  const [code, setCode] = useState(() => dictionary.getDevCode());
+  const [unlocked, setUnlocked] = useState(() => dictionary.isUnlocked());
+  useEffect(() => dictionary.onDevChange((on) => { setUnlocked(on); setCode(dictionary.getDevCode()); }), []);
+  useEffect(() => { if (dictionary.isUnlocked()) dictionary.fetchSummary().then(setOnServer).catch(() => {}); }, []);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   // Every taught sign is ticked unless the developer unticks it (signs taught
@@ -116,7 +119,6 @@ export function DeveloperPublish() {
   const published = new Set(onServer.map((s) => s.id));
 
   const refreshServer = async () => setOnServer(await dictionary.fetchSummary());
-  useEffect(() => () => setCode(''), []);           // forget the code when leaving
 
   if (!dictionary.isAvailable()) return null;
 
@@ -127,9 +129,8 @@ export function DeveloperPublish() {
   };
 
   const unlock = () => run(async () => {
-    const ok = await dictionary.verifyCode(code.trim());
+    const ok = await dictionary.unlock(code.trim());
     if (!ok) { setMsg({ tone: 'rose', text: 'Wrong developer code.' }); return; }
-    setUnlocked(true);
     await refreshServer();
     setMsg({ tone: 'primary', text: 'Unlocked for this screen.' });
   });
@@ -182,6 +183,11 @@ export function DeveloperPublish() {
 
       {open && unlocked && (
         <div className="mt-3 space-y-3">
+          {onOpenDeveloper && (
+            <button type="button" onClick={onOpenDeveloper} className="btn-quiet w-full py-2 text-xs">
+              Open the developer section (built-in signs, edit, reassign, delete)
+            </button>
+          )}
           <div>
             <p className="text-xs font-semibold">Your taught signs</p>
             {!mine.length && <p className="mt-1 text-[11px] text-ink-dim">No recorded signs yet. Teach one above first.</p>}

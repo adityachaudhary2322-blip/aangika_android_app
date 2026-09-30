@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/fetch-speech-models.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "dev:https": "node scripts/dev-https.mjs",
-    "test": "node scripts/test-signbridge.mjs && node scripts/test-signbridge-tracker.mjs && node scripts/test-grammar.mjs && node scripts/test-models.mjs && node scripts/test-asl.mjs && node scripts/test-sentences.mjs && node scripts/test-glove.mjs && node scripts/test-account.mjs && node scripts/test-contributions.mjs && node scripts/test-proxy.mjs && node scripts/test-dictionary.mjs",
+    "test": "node scripts/test-signbridge.mjs && node scripts/test-signbridge-tracker.mjs && node scripts/test-grammar.mjs && node scripts/test-phrases.mjs && node scripts/test-models.mjs && node scripts/test-asl.mjs && node scripts/test-sentences.mjs && node scripts/test-glove.mjs && node scripts/test-account.mjs && node scripts/test-contributions.mjs && node scripts/test-proxy.mjs && node scripts/test-dictionary.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -25,7 +26,8 @@
     "peerjs": "^1.5.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "vosk-browser": "^0.0.8"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
@@ -33,9 +35,11 @@
     "@playwright/test": "^1.63.0",
     "@vitejs/plugin-basic-ssl": "^1.2.0",
     "@vitejs/plugin-react": "^4.7.0",
+    "adm-zip": "^0.6.1",
     "autoprefixer": "^10.5.5",
     "postcss": "^8.5.28",
     "tailwindcss": "^3.4.19",
+    "tar": "^7.5.22",
     "vite": "^5.4.21",
     "vite-plugin-pwa": "^0.21.2"
   }

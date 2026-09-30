@@ -13,6 +13,7 @@
 /** Greeting word per language, used when the signer signs NAMASTE or HELLO. */
 export const GREETING = {
   'en-IN': 'Hello',
+  hinglish: 'Hello',
   'hi-IN': 'नमस्ते',
   'ta-IN': 'வணக்கம்',
   'te-IN': 'నమస్కారం',
@@ -32,6 +33,7 @@ export const GREETING = {
  */
 export const MY_NAME_IS = {
   'en-IN': 'my name is {name}',
+  hinglish: 'mera naam {name} hai',
   'hi-IN': 'मेरा नाम {name} है',
   'ta-IN': 'என் பெயர் {name}',
   'te-IN': 'నా పేరు {name}',

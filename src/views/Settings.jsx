@@ -14,6 +14,7 @@ import {
 } from '../services/engineState.js';
 import RecognitionSettings from '../components/RecognitionSettings.jsx';
 import GloveSettings from '../components/GloveSettings.jsx';
+import OfflineSpeechPanel from '../components/OfflineSpeechPanel.jsx';
 import AccountSettings from '../components/AccountSettings.jsx';
 import ContributeSettings from '../components/ContributeSettings.jsx';
 import { LANGUAGES, VOICES, getVoice, setVoice } from '../config/languages.js';
@@ -57,6 +58,7 @@ export default function Settings({
       <Appearance />
 
       <AppAndOffline />
+      <OfflineSpeechPanel />
 
       <RecognitionSettings visionEngine={visionEngine} chooseVision={chooseVision} />
 
@@ -95,6 +97,19 @@ export default function Settings({
             className="btn-quiet mt-3 w-full"
           >
             Open My signs
+          </button>
+        </section>
+      )}
+
+      {onNavigate && (
+        <section className="mt-4 surface-card p-4">
+          <p className="eyebrow">Developer section</p>
+          <p className="mt-1 text-[11px] text-ink-dim">
+            For the team: the whole sign dictionary (built-in, community and your signs), which
+            sign means which word, and editing it for every user. Needs the developer code.
+          </p>
+          <button type="button" onClick={() => onNavigate('developer')} className="btn-quiet mt-3 w-full">
+            Open developer section
           </button>
         </section>
       )}

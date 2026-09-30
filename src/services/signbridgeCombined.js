@@ -15,9 +15,12 @@
 
 import { classifySignBridgeFrame } from './signbridgeEngine.js';
 import { classifyCustom } from './customHandshapes.js';
+import { applyToRule } from './builtinOverrides.js';
 
 export function classifyFrame(hands, pose = null, { mirrored = false } = {}) {
-  const rule = classifySignBridgeFrame(hands, pose);
+  // Developer overrides (community dictionary): a built-in sign may be
+  // disabled, or reassigned to another word, for every user.
+  const rule = applyToRule(classifySignBridgeFrame(hands, pose));
   let custom = null;
   try {
     custom = classifyCustom(hands, pose, { mirrored });

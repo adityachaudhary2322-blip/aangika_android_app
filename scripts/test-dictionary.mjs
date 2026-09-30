@@ -96,6 +96,26 @@ const motion = { id: 'g2', token: 'G_WAVE', kind: 'glove-motion', output: { type
 d = await jsonOf(await call('/dictionary/publish', { ip: '2.2.2.2', body: { code: CODE, signs: [glove, motion] } }));
 check(d.added === 2, 'glove and glove-motion signs publish too');
 
+console.log('\n1b. Built-in sign overrides and grammar rules (developer section)\n' + '-'.repeat(74));
+r = await call('/dictionary/override', { ip: '2.2.2.2', body: { code: CODE, token: 'WATER', override: { token: 'thirsty', text_en: 'I am very thirsty.', texts: { 'hi-IN': 'मुझे बहुत प्यास लगी है।', hinglish: 'Bahut pyaas lagi hai.', 'xx': 'junk' }, extra: 1 } } });
+d = await jsonOf(r);
+check(r.status === 200 && d.override.token === 'THIRSTY' && !('xx' in d.override.texts) && !('extra' in d.override),
+  'reassigning a built-in sign stores a cleaned override', JSON.stringify(d.override));
+r = await call('/dictionary/override', { ip: '2.2.2.2', body: { code: 'nope', token: 'BAD', override: { disabled: true } } });
+check(r.status === 403, 'overrides need the code');
+await call('/dictionary/override', { ip: '2.2.2.2', body: { code: CODE, token: 'BAD', override: { disabled: true } } });
+d = await jsonOf(await call('/dictionary', { method: 'GET' }));
+check(d.overrides.BAD?.disabled === true && d.overrides.WATER?.token === 'THIRSTY', 'everyone reads the overrides');
+await call('/dictionary/override', { ip: '2.2.2.2', body: { code: CODE, token: 'BAD', override: null } });
+d = await jsonOf(await call('/dictionary', { method: 'GET' }));
+check(!('BAD' in d.overrides), 'reset removes an override');
+r = await call('/dictionary/rules', { ip: '2.2.2.2', body: { code: CODE, rules: [{ id: 'self-need', pattern: ['@self', '@need'], english: 'I need {need}.', texts: { 'hi-IN': 'मुझे {need} चाहिए।' } }] } });
+check(r.status === 200 && (await jsonOf(r)).rules === 1, 'grammar rules can be published');
+r = await call('/dictionary/rules', { ip: '2.2.2.2', body: { code: CODE, rules: [{ id: 'Bad Id', pattern: ['x y'], english: '' }] } });
+check(r.status === 400, 'malformed rules are refused');
+await call('/dictionary/override', { ip: '2.2.2.2', body: { code: CODE, token: 'WATER', override: null } });
+await call('/dictionary/rules', { ip: '2.2.2.2', body: { code: CODE, rules: [] } });
+
 console.log('\n2. Guessing the code\n' + '-'.repeat(74));
 _dictTest.failures.clear();
 const statuses = [];
@@ -185,6 +205,29 @@ console.log('\n4. The app: publish from one device, receive on another\n' + '-'.
   st = await dict.checkForUpdates({ force: true });
   check(signs.findByToken('NAMASTE_ALL')?.shared !== true && st.last.skipped.length === 1,
     'the user\'s own sign keeps its name; the shared one is skipped');
+
+  // Developer overrides reach this device and change recognition + meaning.
+  const { classifyFrame } = await import('../src/services/signbridgeCombined.js');
+  const { translate, MODE_OFFLINE } = await import('../src/services/translationService.js');
+  const { CASES } = await import('./fixtures/syntheticHands.mjs');
+  const caseOf = (t) => CASES.find(([x]) => x === t);
+  check(await dict.unlock('000000') === false && !dict.isUnlocked(), 'developer section stays locked with a wrong code');
+  check(await dict.unlock(CODE) === true && dict.isUnlocked(), 'developer section unlocks with the right code');
+  await dict.setOverride(dict.getDevCode(), 'BAD', { disabled: true });
+  await dict.setOverride(dict.getDevCode(), 'WATER', { token: 'THIRSTY', text_en: 'I am very thirsty.', texts: { 'hi-IN': 'मुझे बहुत प्यास लगी है।' } });
+  const [, badHands, P] = caseOf('BAD');
+  const [, waterHands] = caseOf('WATER');
+  check(classifyFrame(badHands, P)?.token == null, 'a disabled built-in sign is no longer recognised');
+  const w = classifyFrame(waterHands, P);
+  check(w?.token === 'THIRSTY' && w.originalToken === 'WATER', 'a reassigned sign produces the new word', w?.token);
+  const t1 = await translate(['THIRSTY'], 'hi-IN', { mode: MODE_OFFLINE });
+  check(t1.english === 'I am very thirsty.' && t1.translated === 'मुझे बहुत प्यास लगी है।',
+    'its new meaning is spoken, offline, in English and the given Hindi', `${t1.english} / ${t1.translated}`);
+  await dict.setOverride(dict.getDevCode(), 'BAD', null);
+  await dict.setOverride(dict.getDevCode(), 'WATER', null);
+  check(classifyFrame(badHands, P)?.token === 'BAD' && classifyFrame(waterHands, P)?.token === 'WATER', 'reset restores both for everyone');
+  dict.lock();
+  check(!dict.isUnlocked(), 'lock forgets the code');
 
   _setApiBaseForTests('');
   st = await dict.checkForUpdates();

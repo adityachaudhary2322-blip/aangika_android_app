@@ -80,3 +80,6 @@ public/mediapipe/
 
 # Build for the API browser tests (playwright.api.config.js)
 dist-api/
+
+# Offline speech models, fetched at build time (scripts/fetch-speech-models.mjs)
+public/models/speech/

@@ -128,6 +128,39 @@ export const GESTURE_SENTENCES = {
   },
 };
 
+/**
+ * Hinglish: how people actually say these day to day, in Roman script.
+ * Casual on purpose; gender-neutral where Hindi would force a gender.
+ */
+const HINGLISH = {
+  HELLO: 'Hello ji!',
+  STOP: 'Ruko!',
+  GOOD: 'Yeh toh badhiya hai.',
+  BAD: 'Yeh theek nahi hai.',
+  YES: 'Haan.',
+  NO: 'Nahi.',
+  WATER: 'Mujhe paani chahiye.',
+  FOOD: 'Mujhe khaana chahiye.',
+  PLEASE: 'Please.',
+  THANK_YOU: 'Thank you!',
+  HELP: 'Mujhe help chahiye.',
+  WASHROOM: 'Washroom kahan hai?',
+  SORRY: 'Sorry, maaf karna.',
+  UNDERSTAND: 'Haan, samajh aa gaya.',
+  DONT_UNDERSTAND: 'Mujhe samajh nahi aaya.',
+  DOCTOR: 'Mujhe doctor chahiye.',
+  POLICE: 'Mujhe police chahiye.',
+  HOW_MUCH: 'Yeh kitne ka hai?',
+  NAME_ADITYA: 'Hello, mera naam Aditya hai.',
+  GOODBYE: 'Bye, phir milte hain!',
+};
+for (const [token, text] of Object.entries(HINGLISH)) GESTURE_SENTENCES[token].hinglish = text;
+
+// Hindi: "मैं समझ गया" / "मैं नहीं समझा" are masculine; the signer's gender is
+// unknown, so use the neutral "मुझे समझ आ…" forms.
+GESTURE_SENTENCES.UNDERSTAND['hi-IN'] = 'मुझे समझ आ गया।';
+GESTURE_SENTENCES.DONT_UNDERSTAND['hi-IN'] = 'मुझे समझ नहीं आया।';
+
 /** The 20 tokens, in the order of the classifier's decision tree. */
 export const GESTURE_TOKENS = Object.keys(GESTURE_SENTENCES);
 

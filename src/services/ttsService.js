@@ -19,7 +19,7 @@
  *   3. nothing        reported honestly rather than failing silently
  */
 
-import { getLanguage, sarvamTtsPayload } from '../config/languages.js';
+import { getLanguage, sarvamTtsPayload, browserSpeechLocale, sarvamCode, sttCode } from '../config/languages.js';
 import { hasSarvam, sarvamFetch } from './sarvamClient.js';
 
 const SARVAM_TTS_PATH = '/text-to-speech';
@@ -229,9 +229,9 @@ export async function speak(text, code) {
       return { source: 'none', warning: sarvamError.message };
     }
 
-    const voice = await pickVoice(language.code);
+    const voice = await pickVoice(browserSpeechLocale(language.code));
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = language.code;
+    utterance.lang = browserSpeechLocale(language.code);
     if (voice) utterance.voice = voice;
     utterance.rate = 0.95;   // Indic scripts read better slightly slowed
 

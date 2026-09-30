@@ -30,6 +30,7 @@ import { ISL_FEW_SHOT } from './qwenRules.js';
 import { KNOWN_NAMES, buildIntroduction } from '../config/greetings.js';
 import { sentenceFor } from '../config/gestureSentences.js';
 import { findByToken } from './customSigns.js';
+import { overrideFor } from './builtinOverrides.js';
 
 // ── Lexicon ──────────────────────────────────────────────────────────────────
 
@@ -319,7 +320,18 @@ export function expand(tags, languageCode = 'en-IN', { lookup = findByToken } = 
     }
     // Look up the RAW tag: norm() strips underscores, which would turn
     // HOW_MUCH into HOWMUCH and miss the table entirely.
-    const key = String(tags[0] || '').trim().toUpperCase().replace(/[^A-Z_]/g, '');
+    const key = String(tags[0] || '').trim().toUpperCase().replace(/[^A-Z0-9_]/g, '');
+    // A developer's new meaning for a built-in sign wins (community dictionary).
+    const ov = overrideFor(key);
+    if (ov?.text_en) {
+      return {
+        english: ov.text_en,
+        // The built-in templates meant the OLD meaning, so only the
+        // developer's own texts are used; other languages go online.
+        translated: ov.texts?.[languageCode] || '',
+        rule: 'gesture-sentence-override',
+      };
+    }
     const english = sentenceFor(key, 'en-IN');
     if (english) {
       return {
