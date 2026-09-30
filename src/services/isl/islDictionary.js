@@ -105,6 +105,8 @@ export async function saveDraft(input) {
     category: input.category || 'other',
     type: input.type || 'word',
     hands: input.hands || 'one',
+    ...(input.description ? { description: String(input.description).trim().slice(0, 500) } : {}),
+    ...(input.videoUrl ? { videoUrl: String(input.videoUrl).trim().slice(0, 300) } : {}),
     takes,
     featureVersion: FEATURE_VERSION,
     updatedAt: Date.now(),

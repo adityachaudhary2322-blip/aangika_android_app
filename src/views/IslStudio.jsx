@@ -6,11 +6,14 @@ import {
 import CameraStage from '../components/CameraStage.jsx';
 import cameraManager from '../services/cameraManager.js';
 import useLandmarkLoop from '../hooks/useLandmarkLoop.js';
+import useIslSigns from '../hooks/useIslSigns.js';
+import useIslSentence from '../hooks/useIslSentence.js';
+import LearnTab from './IslLearn.jsx';
 import { frameFeatures, describeFeatures } from '../services/isl/islFeatures.js';
-import { createSpotter, SAMPLE_MS, SPOTTER_VERSION } from '../services/isl/islSpotter.js';
+import { SAMPLE_MS, SPOTTER_VERSION } from '../services/isl/islSpotter.js';
 import isl, { tokenFor } from '../services/isl/islDictionary.js';
 import { checkSign, checkDictionary } from '../services/isl/islHealth.js';
-import { translateStudio, matchStudioRules, isSayRule } from '../services/isl/islTranslate.js';
+import { matchStudioRules, isSayRule } from '../services/isl/islTranslate.js';
 import devSession from '../services/sharedDictionary.js';
 import { speak, unlockAudio } from '../services/ttsService.js';
 
@@ -18,7 +21,7 @@ const CATEGORIES = ['pronoun', 'person', 'action', 'thing', 'place', 'time', 'de
 const TYPES = [
   ['word', 'Word'], ['name', 'Name'], ['sentence', 'Whole sentence'], ['full-stop', 'FULL STOP (ends the sentence)'],
 ];
-const TABS = [['translate', 'Translate'], ['dictionary', 'Dictionary'], ['rules', 'Rules']];
+const TABS = [['translate', 'Translate'], ['learn', 'Learn'], ['dictionary', 'Dictionary'], ['rules', 'Rules']];
 
 /**
  * ISL Studio: the team's own Indian Sign Language dictionary and translator.
@@ -29,17 +32,10 @@ const TABS = [['translate', 'Translate'], ['dictionary', 'Dictionary'], ['rules'
  */
 export default function IslStudio({ onBack, language, mode }) {
   const [tab, setTab] = useState('translate');
-  const [signs, setSigns] = useState(() => isl.listSigns());
-  const [syncState, setSyncState] = useState(null);
+  const { signs, syncState, resync } = useIslSigns();
   const [unlocked, setUnlocked] = useState(() => devSession.isUnlocked());
 
   useEffect(() => devSession.onDevChange(setUnlocked), []);
-  useEffect(() => {
-    const refresh = () => setSigns(isl.listSigns());
-    const off = isl.subscribe(refresh);
-    isl.init().then(refresh).then(() => isl.sync().then(setSyncState).catch((e) => setSyncState(e.message)));
-    return off;
-  }, []);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -60,7 +56,8 @@ export default function IslStudio({ onBack, language, mode }) {
       </div>
       <div className="flex-1 overflow-y-auto px-4 pb-6 pt-3 no-scrollbar">
         {tab === 'translate' && <TranslateTab signs={signs} language={language} mode={mode} onDictionary={() => setTab('dictionary')} />}
-        {tab === 'dictionary' && <DictionaryTab signs={signs} unlocked={unlocked} syncState={syncState} onSync={() => isl.sync({ force: true }).then(setSyncState).catch((e) => setSyncState(e.message))} />}
+        {tab === 'dictionary' && <DictionaryTab signs={signs} unlocked={unlocked} syncState={syncState} onSync={resync} />}
+        {tab === 'learn' && <LearnTab signs={signs} />}
         {tab === 'rules' && <RulesTab signs={signs} unlocked={unlocked} />}
       </div>
     </div>
@@ -71,58 +68,23 @@ export default function IslStudio({ onBack, language, mode }) {
 
 function TranslateTab({ signs, language, mode, onDictionary }) {
   const [running, setRunning] = useState(false);
-  const [sentence, setSentence] = useState([]);           // signs of the current sentence
   const [history, setHistory] = useState([]);             // finished sentences
-  const [analysis, setAnalysis] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const [trace, setTrace] = useState([]);                 // why each sign was chosen (latest first)
   const [showWhy, setShowWhy] = useState(false);
-  const sentenceRef = useRef([]);
-  const lastSample = useRef(0);
-  const lastAnalysis = useRef(0);
-  const byId = useMemo(() => new Map(signs.map((s) => [s.id, s])), [signs]);
-  const spotter = useMemo(() => createSpotter(signs.map((s) => ({
-    id: s.id, token: s.token, takes: s.takes, tau: s.tau, eitherHand: s.hands === 'either',
-  }))), [signs]);
-  const hasStop = signs.some((s) => s.type === 'full-stop');
-
-  const finish = useCallback(async () => {
-    const words = sentenceRef.current;
-    if (!words.length) return;
-    sentenceRef.current = [];
-    setSentence([]);
-    setBusy(true);
-    try {
-      const r = await translateStudio(words, language, { mode });
+  const {
+    sentence, analysis, busy, trace, ready, error, finish, clear, reset, hasStop,
+  } = useIslSentence({
+    signs, active: running, language, mode,
+    onSentence: (r) => {
       const text = r.translated || r.english;
-      setHistory((h) => [{ signs: words, english: r.english, translated: r.translated, engine: r.engine, at: Date.now() }, ...h].slice(0, 20));
+      setHistory((h) => [{ signs: r.signs, english: r.english, translated: r.translated, engine: r.engine, at: Date.now() }, ...h].slice(0, 20));
       if (text) speak(text, language);
-    } finally {
-      setBusy(false);
-    }
-  }, [language, mode]);
-
-  const onFrame = useCallback((result, ts) => {
-    if (ts - lastSample.current < SAMPLE_MS) return;
-    lastSample.current = ts;
-    const f = frameFeatures({ hands: result.hands, pose: result.pose, mirrored: cameraManager.isFrontCamera() });
-    if (ts - lastAnalysis.current > 250) { lastAnalysis.current = ts; setAnalysis(describeFeatures(f)); }
-    for (const hit of spotter.push(f)) {
-      const sign = byId.get(hit.id);
-      if (!sign) continue;
-      setTrace((t) => [{ at: Date.now() + Math.random(), word: sign.word, cost: hit.cost, next: byId.get(hit.runnerUp)?.word, nextCost: hit.runnerCost }, ...t].slice(0, 8));
-      if (sign.type === 'full-stop') { finish(); continue; }
-      sentenceRef.current = [...sentenceRef.current, sign];
-      setSentence(sentenceRef.current);
-    }
-  }, [spotter, byId, finish]);
-
-  const { ready, error } = useLandmarkLoop(running, onFrame);
+    },
+  });
 
   const start = async () => {
     await unlockAudio();
     await cameraManager.start().catch(() => {});
-    spotter.reset();
+    reset();
     setRunning(true);
   };
 
@@ -168,7 +130,7 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
           {busy && <Loader2 size={13} className="animate-spin text-primary" />}
           <div className="ml-auto flex gap-2">
             <button type="button" onClick={finish} disabled={!sentence.length} className="btn-quiet px-3 py-1.5 text-xs"><CircleStop size={13} /> Say it now</button>
-            <button type="button" onClick={() => { sentenceRef.current = []; setSentence([]); }} disabled={!sentence.length} aria-label="Clear sentence" className="btn-icon"><Eraser size={14} /></button>
+            <button type="button" onClick={clear} disabled={!sentence.length} aria-label="Clear sentence" className="btn-icon"><Eraser size={14} /></button>
             {running && <button type="button" onClick={() => setRunning(false)} aria-label="Stop camera" className="btn-icon"><Square size={13} /></button>}
           </div>
         </div>
@@ -379,6 +341,7 @@ function SignEditor({ sign, others, onCancel, onSaved }) {
   const [v, setV] = useState({
     word: sign.word || '', type: sign.type || 'word', category: sign.category || 'other', hands: sign.hands || 'one',
     hi: sign.texts?.['hi-IN'] || '', hinglish: sign.texts?.hinglish || '',
+    description: sign.description || '', videoUrl: sign.videoUrl || '',
   });
   const [takes, setTakes] = useState(sign.takes || []);
   const [recording, setRecording] = useState(Boolean(sign.rerecord) || !(sign.takes || []).length);
@@ -389,6 +352,7 @@ function SignEditor({ sign, others, onCancel, onSaved }) {
     try {
       const d = await isl.saveDraft({
         id: sign.id, word: v.word, type: v.type, category: v.category, hands: v.hands,
+        description: v.description, videoUrl: /^https:\/\//.test(v.videoUrl.trim()) ? v.videoUrl.trim() : '',
         token: tokenFor(v.word), texts: { ...(v.hi ? { 'hi-IN': v.hi } : {}), ...(v.hinglish ? { hinglish: v.hinglish } : {}) },
         takes,
       });
@@ -427,6 +391,13 @@ function SignEditor({ sign, others, onCancel, onSaved }) {
         </label>
         <label className="block text-[11px] text-ink-dim">Hinglish (optional)
           <input value={v.hinglish} onChange={(e) => setV({ ...v, hinglish: e.target.value })} className="field mt-1 py-2 text-sm" />
+        </label>
+        <label className="block text-[11px] text-ink-dim">How to make it (for Learn, optional)
+          <textarea value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} rows={2} maxLength={500}
+            placeholder="e.g. Flat right hand at the chin, palm in, move it forward." aria-label="How to make it" className="field mt-1 py-2 text-sm" />
+        </label>
+        <label className="block text-[11px] text-ink-dim">Reference video link (optional, https)
+          <input value={v.videoUrl} onChange={(e) => setV({ ...v, videoUrl: e.target.value })} placeholder="https://…" aria-label="Reference video link" className="field mt-1 py-2 text-sm" />
         </label>
       </section>
 

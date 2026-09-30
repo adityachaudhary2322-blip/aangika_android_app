@@ -8,6 +8,8 @@ import LanguageSelect from '../components/LanguageSelect.jsx';
 import EngineToggle from '../components/EngineToggle.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import useSignPipeline from '../hooks/useSignPipeline.js';
+import useIslSigns from '../hooks/useIslSigns.js';
+import useIslSentence from '../hooks/useIslSentence.js';
 import cameraManager from '../services/cameraManager.js';
 import { translate } from '../services/translationService.js';
 import { speak, stop as stopSpeaking } from '../services/ttsService.js';
@@ -37,7 +39,13 @@ import {
  *   speaker + signer  -> run STT here, send text; speak their sign captions
  *   signer  + signer  -> no pipelines at all, full-resolution video, no clutter
  *   speaker + speaker -> an ordinary video call
+ *
+ * WHICH SIGNS. The signer picks the recogniser: the app's models (a caption
+ * that grows sign by sign) or ISL Studio, the team's own dictionary (continuous
+ * signing; the FULL STOP sign sends the finished sentence to be spoken).
  */
+const SOURCE_KEY = 'aangika-call-sign-source';
+const readSource = () => { try { return localStorage.getItem(SOURCE_KEY) === 'studio' ? 'studio' : 'models'; } catch { return 'models'; } };
 export default function VideoCall({
   language, setLanguage, mode, visionEngine, chooseVision,
 }) {
@@ -89,8 +97,13 @@ export default function VideoCall({
   /** Two signers: the video IS the language, so nothing may cover it. */
   const cleanVideo = relay === 'sign-to-sign';
 
+  const [source, setSourceState] = useState(readSource);
+  const setSource = (v) => { setSourceState(v); try { localStorage.setItem(SOURCE_KEY, v); } catch { /* not remembered */ } };
+  const { signs: islSigns } = useIslSigns();
+  const studioReady = islSigns.some((x) => x.type === 'full-stop');
+
   const { words, stats, frameRef } = useSignPipeline({
-    enabled: signingActive,
+    enabled: signingActive && source === 'models',
     mirrored,
     visionEngine,
     language,
@@ -159,10 +172,29 @@ export default function VideoCall({
     return () => clearInterval(id);
   }, [attachLocalPreview]);
 
+  // ── ISL Studio signs -> sentence at FULL STOP -> wire ─────────────────────
+
+  const studio = useIslSentence({
+    signs: islSigns,
+    active: signingActive && source === 'studio',
+    language,
+    mode,
+    onSentence: (r) => {
+      const text = r.translated || r.english;
+      if (!text) return;
+      setSignerLine(text);
+      sentLineRef.current = text;
+      sendCaption('sign', text);
+    },
+  });
+  const studioPartial = source === 'studio' && studio.sentence.length
+    ? `${studio.sentence.map((x) => x.word).join(' ')} …`
+    : '';
+
   // ── Signs -> text -> wire ─────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!signingActive || words.length === 0) return undefined;
+    if (!signingActive || source !== 'models' || words.length === 0) return undefined;
     let cancelled = false;
     translate(words.map((w) => w.word), language, { mode }).then((r) => {
       if (cancelled) return;
@@ -178,7 +210,7 @@ export default function VideoCall({
       }
     });
     return () => { cancelled = true; };
-  }, [words, signingActive, language, mode, sendCaption]);
+  }, [words, signingActive, source, language, mode, sendCaption]);
 
   // ── Microphone -> text -> wire (speaker side) ─────────────────────────────
 
@@ -351,6 +383,17 @@ export default function VideoCall({
           </span>
           <div className="ml-auto flex items-center gap-2">
             {signingActive && (
+              <select
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+                aria-label="Which signs to recognise"
+                className="pill chrome-plate text-[11px]"
+              >
+                <option value="models">Signs: app models</option>
+                <option value="studio" disabled={!islSigns.length}>Signs: ISL Studio{islSigns.length ? '' : ' (no signs)'}</option>
+              </select>
+            )}
+            {signingActive && source === 'models' && (
               <EngineToggle value={visionEngine} onChange={chooseVision} compact />
             )}
             {!cleanVideo && (
@@ -411,10 +454,12 @@ export default function VideoCall({
                 large
               />
               <CaptionCard
-                label="YOU (SIGNING)"
+                label={source === 'studio' ? 'YOU (ISL STUDIO)' : 'YOU (SIGNING)'}
                 tone="secondary"
-                text={signerLine}
-                placeholder="Sign to caption…"
+                text={studioPartial || signerLine}
+                placeholder={source === 'studio'
+                  ? (studioReady ? 'Sign, then FULL STOP to send the sentence…' : 'ISL Studio has no FULL STOP sign yet.')
+                  : 'Sign to caption…'}
               />
             </>
           )}

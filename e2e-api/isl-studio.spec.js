@@ -88,6 +88,18 @@ test('ISL Studio: team dictionary, rules for everyone, continuous translate scre
   await expect(page.getByText(/saved for everyone/)).toBeVisible();
   await expect(page.getByText('मैं अस्पताल जा रहा हूँ।')).toBeVisible();
 
+  // Learn: pick a sign, read how it is made, sign it and get a result. The
+  // fake camera shows no hands, so the result must say so (no made-up score).
+  await page.getByRole('tab', { name: 'Learn' }).click();
+  await expect(page.getByText("Learn the team's signs")).toBeVisible();
+  await page.getByRole('button', { name: /^hospital/ }).click();
+  await expect(page.getByText('How to sign it')).toBeVisible();
+  await page.getByRole('button', { name: 'Sign it' }).click({ timeout: 90_000 });
+  await expect(page.getByRole('region', { name: 'Your result' }).getByText(/No hands were seen/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/best 0%/)).toBeVisible();
+  await page.getByRole('button', { name: 'Back to signs' }).click();
+  await expect(page.getByText('Best 0%')).toBeVisible();
+
   // Translate: the continuous translator starts on the camera.
   await page.getByRole('tab', { name: 'Translate' }).click();
   await page.getByRole('button', { name: 'Start ISL Studio' }).click();
