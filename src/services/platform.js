@@ -13,6 +13,12 @@ export function isNativeApp() {
     && Boolean(window.Capacitor?.isNativePlatform?.());
 }
 
+/** The public website (links shared from the Android app must point here, not at the app's own https://localhost). */
+export const SITE_URL = String(import.meta.env?.VITE_SITE_URL || 'https://aangika-pwa02.onrender.com').replace(/\/+$/, '');
+
+/** Where a link other people open should point: this site, or the website from inside the app. */
+export const publicOrigin = () => (isNativeApp() ? SITE_URL : window.location.origin);
+
 export const LOCAL_MEDIAPIPE = {
   wasm: '/mediapipe/wasm',
   models: '/mediapipe/models',

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import cameraManager from '../services/cameraManager.js';
 import { buildIceServers } from '../services/iceConfig.js';
 import { peerServerOptions } from '../services/peerServer.js';
+import { publicOrigin } from '../services/platform.js';
 
 /**
  * Group meetings over PeerJS.
@@ -53,7 +54,8 @@ export function formatCode(code) {
 }
 
 export function inviteLink(code) {
-  return `${window.location.origin}/?room=${encodeURIComponent(code)}`;
+  // From the Android app, window.location is https://localhost: share the website instead.
+  return `${publicOrigin()}/?room=${encodeURIComponent(code)}`;
 }
 
 function peerErrorText(err, code) {
