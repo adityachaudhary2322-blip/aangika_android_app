@@ -15,23 +15,74 @@ const watch = (page) => {
 
 // One taught handshape sign, in the app's own export format.
 const hand = (d) => Array.from({ length: 63 }, (_, i) => +(0.45 + ((i * 7) % 13) / 100 + d).toFixed(4));
-const EXPORT = JSON.stringify({
+const exportOf = (token, text) => JSON.stringify({
   format: 'aangika-custom-signs/1',
   signs: [{
-    token: 'TEAM_HEALX', kind: 'handshape', hands: 'one',
-    output: { type: 'name', text_en: 'Team HealX', texts: {} },
+    token, kind: 'handshape', hands: 'one',
+    output: { type: 'name', text_en: text, texts: {} },
     samples: [0, 1, 2].flatMap((c) => [0, 1, 2, 3].map((k) => ({
       capture: c, left: null, right: hand((c * 4 + k) / 400), pose: { 11: [0.4, 0.4], 12: [0.6, 0.4] },
     }))),
     createdAt: 1,
   }],
 });
+const EXPORT = exportOf('TEAM_HEALX', 'Team HealX');
 
 async function openMySigns(page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'My signs' }).first().click();
   await expect(page.getByRole('heading', { name: 'My signs' })).toBeVisible();
 }
+
+test('developer section: whole dictionary, reassign/disable built-ins, publish and delete', async ({ browser }) => {
+  const page = await (await browser.newContext()).newPage();
+  const errors = watch(page);
+  await openMySigns(page);
+  await page.locator('input[type="file"]').setInputFiles({ name: 'signs.json', mimeType: 'application/json', buffer: Buffer.from(exportOf('DEV_TEST_SIGN', 'Dev test')) });
+  await expect(page.getByText(/Imported 1 sign/)).toBeVisible();
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await page.getByRole('button', { name: 'Open developer section' }).click();
+  await expect(page.getByRole('heading', { name: 'Developer section' })).toBeVisible();
+  await page.getByLabel('Developer code').fill('111111');
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  await expect(page.getByText('Wrong developer code.')).toBeVisible();
+  await page.getByLabel('Developer code').fill(DEV_CODE);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+
+  // Built-in: all 20 handshapes, which word each one makes, and what defines it.
+  await expect(page.getByRole('tab', { name: 'Built-in (20)' })).toBeVisible();
+  await expect(page.getByText('Says: “I need water.”')).toBeVisible();
+  const water = page.locator('li', { hasText: 'Says: “I need water.”' });
+  await water.getByRole('button', { name: /Reassign/ }).click();
+  await water.getByLabel('Meaning (English)').fill('I am thirsty.');
+  await water.getByRole('button', { name: 'Save for everyone' }).click();
+  await expect(page.getByText(/WATER reassigned for everyone/)).toBeVisible();
+  const edited = page.locator('li', { hasText: 'Says: “I am thirsty.”' });
+  await expect(edited.getByText('EDITED')).toBeVisible();
+  await edited.getByRole('button', { name: /Disable/ }).click();
+  await expect(edited.getByText('DISABLED')).toBeVisible();
+  await edited.getByRole('button', { name: /Reset/ }).click();
+  await expect(page.getByText('Says: “I need water.”')).toBeVisible();
+
+  // Your signs -> publish -> Community -> edit meaning -> delete.
+  await page.getByRole('tab', { name: /Your signs/ }).click();
+  await expect(page.getByText('not published')).toBeVisible();
+  await page.getByRole('button', { name: 'Publish', exact: true }).click();
+  await expect(page.getByText(/DEV_TEST_SIGN published: every user/)).toBeVisible();
+  await page.getByRole('tab', { name: /Community \(1\)/ }).click();
+  const row = page.locator('li', { hasText: 'DEV_TEST_SIGN' });
+  await row.getByRole('button', { name: /Edit meaning/ }).click();
+  await row.getByLabel('Meaning (English)').fill('Dev test updated');
+  await row.getByRole('button', { name: 'Save for everyone' }).click();
+  await expect(page.getByText('Means: “Dev test updated”')).toBeVisible();
+  await row.getByRole('button', { name: /Delete/ }).click();
+  await row.getByRole('button', { name: 'Delete for everyone' }).click();
+  await expect(page.getByText(/DEV_TEST_SIGN deleted for everyone/)).toBeVisible();
+  await expect(page.getByRole('tab', { name: /Community \(0\)/ })).toBeVisible();
+  expect(errors).toEqual([]);
+});
 
 test('developer publishes a sign; another device receives it; removal reaches it too', async ({ browser }) => {
   // ── Developer's device ─────────────────────────────────────────────────

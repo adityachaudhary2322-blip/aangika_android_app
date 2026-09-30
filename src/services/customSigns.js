@@ -189,7 +189,10 @@ export function validate(record, { ignoreId = null } = {}) {
     errors.push(`${token} is already a built-in sign or model word.`);
   }
   const clash = findByToken(token);
-  if (clash && clash.id !== ignoreId) {
+  // A developer's own working copy of a community sign (same id as the
+  // published sign) may share its name with the downloaded copy.
+  const ownCopyOf = clash?.shared && clash.sharedId === (ignoreId ?? record.id);
+  if (clash && clash.id !== ignoreId && !ownCopyOf) {
     errors.push(clash.shared
       ? `${token} is already in the community dictionary.`
       : `You already have a sign called ${token}.`);

@@ -6,6 +6,9 @@
  *   POST /dictionary/verify   { code }                -> { ok }
  *   POST /dictionary/publish  { code, signs: [...] }  -> { added, updated, version }
  *   POST /dictionary/remove   { code, ids: [...] }    -> { removed, version }
+ *   POST /dictionary/override { code, token, override|null }
+ *        reassign / disable a BUILT-IN sign for everyone (null = back to default)
+ *   POST /dictionary/rules    { code, rules: [...] }   replace the shared grammar rules
  *
  * The developer code is a Worker SECRET (DEV_CODE), never in the app: a code
  * shipped in a website or APK can be read by anyone. It is compared in
@@ -33,8 +36,61 @@ const json = (status, body, headers = {}) => new Response(JSON.stringify(body), 
 
 async function load(env) {
   const raw = await env.DICT.get(KEY);
-  if (!raw) return { format: DICT_FORMAT, version: 0, updatedAt: null, signs: [] };
-  return JSON.parse(raw);
+  const dict = raw ? JSON.parse(raw) : { format: DICT_FORMAT, version: 0, updatedAt: null, signs: [] };
+  dict.overrides = dict.overrides || {};    // built-in sign token -> override
+  dict.rules = dict.rules || [];            // shared grammar rules
+  return dict;
+}
+
+const TOKEN_RE = /^[A-Z0-9_]{1,32}$/;
+const LANG_RE = /^[a-z]{2}-[A-Z]{2}$|^hinglish$/;
+const MAX_RULES = 100;
+
+const texts = (obj) => {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (LANG_RE.test(k) && typeof v === 'string' && v.trim()) out[k] = v.trim().slice(0, 300);
+  }
+  return out;
+};
+
+/** A built-in sign override: {disabled?, token?, text_en?, texts?}; null = none. */
+export function cleanOverride(o) {
+  if (o === null) return { override: null };
+  if (typeof o !== 'object') return { error: 'bad override' };
+  const out = {};
+  if (o.disabled) out.disabled = true;
+  if (o.token !== undefined && o.token !== '') {
+    const t = String(o.token).toUpperCase();
+    if (!TOKEN_RE.test(t)) return { error: 'bad token' };
+    out.token = t;
+  }
+  if (typeof o.text_en === 'string' && o.text_en.trim()) out.text_en = o.text_en.trim().slice(0, 300);
+  const tx = texts(o.texts);
+  if (Object.keys(tx).length) out.texts = tx;
+  return { override: Object.keys(out).length ? out : null };
+}
+
+/**
+ * A grammar rule: { id, pattern: ["@self", "@side?", "@body", "PAIN?"],
+ * english: "I have pain in my {side} {body}.", texts: {'hi-IN': ..., hinglish: ...},
+ * note? }. Pattern items: a sign token, or an @class; "?" = optional.
+ */
+export function cleanRule(r) {
+  const id = String(r?.id || '').slice(0, 40);
+  if (!/^[a-z0-9-]{1,40}$/.test(id)) return { error: 'bad rule id' };
+  const pattern = Array.isArray(r.pattern) ? r.pattern.map(String) : [];
+  if (!pattern.length || pattern.length > 8) return { error: `${id}: pattern must have 1-8 items` };
+  if (!pattern.every((p) => /^(@[a-z]{2,16}|[A-Z0-9_]{1,32})\??$/.test(p))) return { error: `${id}: bad pattern item` };
+  const english = String(r.english || '').trim();
+  if (!english || english.length > 200) return { error: `${id}: english template required (max 200)` };
+  return {
+    rule: {
+      id, pattern, english,
+      texts: texts(r.texts),
+      ...(r.note ? { note: String(r.note).slice(0, 200) } : {}),
+    },
+  };
 }
 
 async function save(env, dict) {
@@ -188,6 +244,37 @@ export async function handleDictionary(request, env, headers) {
       if (added + updated === 0) return json(400, { error: 'Nothing publishable.', rejected }, headers);
       const saved = await save(env, dict);
       return json(200, { added, updated, rejected, version: saved.version, total: saved.signs.length }, headers);
+    }
+
+    if (url.pathname === '/dictionary/override') {
+      const token = String(data.token || '').toUpperCase();
+      if (!TOKEN_RE.test(token)) return json(400, { error: 'Bad sign token.' }, headers);
+      const { override, error } = cleanOverride(data.override ?? null);
+      if (error) return json(400, { error }, headers);
+      const dict = await load(env);
+      if (override) dict.overrides[token] = override; else delete dict.overrides[token];
+      const saved = await save(env, dict);
+      return json(200, { token, override, version: saved.version }, headers);
+    }
+
+    if (url.pathname === '/dictionary/rules') {
+      if (!Array.isArray(data.rules)) return json(400, { error: 'rules must be a list.' }, headers);
+      if (data.rules.length > MAX_RULES) return json(413, { error: `At most ${MAX_RULES} rules.` }, headers);
+      const rules = [];
+      const rejected = [];
+      const ids = new Set();
+      for (const raw of data.rules) {
+        const { rule, error } = cleanRule(raw);
+        if (error) { rejected.push(error); continue; }
+        if (ids.has(rule.id)) { rejected.push(`${rule.id}: duplicate id`); continue; }
+        ids.add(rule.id);
+        rules.push(rule);
+      }
+      if (rejected.length) return json(400, { error: 'Some rules are invalid.', rejected }, headers);
+      const dict = await load(env);
+      dict.rules = rules;
+      const saved = await save(env, dict);
+      return json(200, { rules: rules.length, version: saved.version }, headers);
     }
 
     if (url.pathname === '/dictionary/remove') {

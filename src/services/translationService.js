@@ -24,6 +24,7 @@ import {
   reconstruct as geminiReconstruct, sarvamReconstruct, sarvamTranslate, getKeys,
 } from './translator.js';
 import { hasSarvam, isHosted } from './sarvamClient.js';
+import { overrideFor } from './builtinOverrides.js';
 import { getLanguage } from '../config/languages.js';
 import { findByToken, textFor } from './customSigns.js';
 import { expandAsl } from './aslGrammar.js';
@@ -45,6 +46,21 @@ function lookupSign(token) {
   if (own) return own;
   if (isFingerspelled(token)) {
     return { id: `fs:${token}`, token, output: { type: 'name', text_en: spelledText(token), texts: {} } };
+  }
+  return null;
+}
+
+/**
+ * Meanings fixed by developers, used in EVERY mode (before any model):
+ * a single built-in sign reassigned to a new meaning.
+ * -> {english, translated, engine} | null
+ */
+function fixedMeaning(tags, languageCode) {
+  if (tags.length === 1) {
+    const ov = overrideFor(tags[0]);
+    if (ov?.text_en) {
+      return { english: ov.text_en, translated: ov.texts?.[languageCode] || '', engine: 'developer-meaning' };
+    }
   }
   return null;
 }
@@ -236,6 +252,24 @@ export async function translate(tags, languageCode, {
           : null,
       };
     }
+  }
+
+  // ── Fixed meanings a developer set (community dictionary) ───────────────
+  // A built-in sign given a new meaning says exactly that in every mode; the
+  // online engines would otherwise reinterpret the old word. Other languages:
+  // the developer's own text, else Mayura when online, else English.
+  const fixed = fixedMeaning(tags, language.code);
+  if (fixed) {
+    let translated = language.code === 'en-IN' ? '' : (fixed.translated || '');
+    let engine = fixed.engine;
+    if (!translated && language.code !== 'en-IN' && mode !== MODE_OFFLINE && hasSarvam()) {
+      try { translated = await sarvamTranslate(fixed.english, language.code); engine += ' + mayura'; } catch { /* English */ }
+    }
+    return {
+      english: fixed.english, translated, source: 'rules', engine, language,
+      latencyMs: Math.round(performance.now() - started), mode, signLanguage,
+      note: language.code !== 'en-IN' && !translated ? `${language.name} text not available offline for this.` : null,
+    };
   }
 
   // ── Offline: no fetch, no await on anything remote ──────────────────────

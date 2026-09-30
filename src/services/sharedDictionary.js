@@ -16,6 +16,25 @@
 
 import { apiBase } from './apiBase.js';
 import { applyShared, listSharedSigns, listOwnSigns, init as initSigns } from './customSigns.js';
+import { getOverrides, setOverrides } from './builtinOverrides.js';
+
+/** The last full dictionary downloaded (for the developer section). */
+let lastDict = null;
+
+// ── Developer session: the code lives in memory only, for this page load ──
+let devCode = '';
+const devListeners = new Set();
+export const isUnlocked = () => Boolean(devCode);
+export const getDevCode = () => devCode;
+export function onDevChange(fn) { devListeners.add(fn); return () => devListeners.delete(fn); }
+function setDev(code) { devCode = code; devListeners.forEach((fn) => { try { fn(Boolean(code)); } catch { /* */ } }); }
+/** Verify with the server and remember for this session. -> true | false */
+export async function unlock(code) {
+  const ok = await verifyCode(String(code || '').trim());
+  if (ok) setDev(String(code).trim());
+  return ok;
+}
+export const lock = () => setDev('');
 
 const VERSION_KEY = 'aangika.dictionary.version';
 const CHECKED_KEY = 'aangika.dictionary.checkedAt';
@@ -67,8 +86,12 @@ export function checkForUpdates({ force = false } = {}) {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
       const dict = await res.json();
       const report = await applyShared(dict.signs || []);
+      const before = JSON.stringify(getOverrides());
+      setOverrides(dict.overrides || {});
+      const overridesChanged = JSON.stringify(getOverrides()) !== before;
       write(VERSION_KEY, dict.version || 0);
-      const changed = report.added + report.updated + report.removed > 0;
+      lastDict = dict;
+      const changed = report.added + report.updated + report.removed > 0 || overridesChanged;
       return set({
         status: changed ? 'updated' : 'current', version: dict.version || 0, checkedAt: now, last: report,
       });
@@ -131,6 +154,23 @@ export async function fetchSummary() {
   return (dict.signs || []).map((s) => ({ id: s.id, token: s.token, text: s.output?.text_en || s.token }));
 }
 
+/** The whole server dictionary (signs, overrides, rules), fresh. */
+export async function fetchFull() {
+  if (!isAvailable()) return null;
+  const res = await fetch(`${apiBase()}/dictionary`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  lastDict = await res.json();
+  return lastDict;
+}
+export const getLastDict = () => lastDict;
+
+/** Reassign / disable a built-in sign for everyone (null = back to default). */
+export async function setOverride(code, token, override) {
+  const result = await post('/dictionary/override', { code, token, override });
+  await checkForUpdates({ force: true });
+  return result;
+}
+
 /** Remove shared signs (by their server id) for everyone. */
 export async function removeShared(code, sharedIds) {
   const result = await post('/dictionary/remove', { code, ids: sharedIds });
@@ -140,5 +180,6 @@ export async function removeShared(code, sharedIds) {
 
 export default {
   isAvailable, checkForUpdates, verifyCode, publish, publishable, removeShared, fetchSummary,
+  fetchFull, getLastDict, setOverride, unlock, lock, isUnlocked, getDevCode, onDevChange,
   getState, subscribe,
 };

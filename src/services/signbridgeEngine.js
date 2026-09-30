@@ -449,6 +449,29 @@ export function classifySignBridgeFrame(hands, pose = null) {
 
 export const SIGNBRIDGE_LABELS = GESTURE_TOKENS;
 
+/**
+ * The built-in signs as people read them: each token with the names of the
+ * conditions that define it (from rules() itself, so they cannot drift) and
+ * the movement it assumes, if any. For the developer section.
+ */
+export function describeBuiltinSigns() {
+  const P = { x: 0.5, y: 0.5 };
+  const flags = {
+    indexOpen: false, middleOpen: false, ringOpen: false, pinkyOpen: false,
+    thumbUp: false, thumbDown: false, radial: {}, handTilt: 0, fingersOpen: 0,
+    radialOpen: 0, allOpen: false, allClosed: false, isAboveShoulder: false,
+    isNearMouth: false, isWristNearMouth: false, isChestLevel: false,
+    indexTip: P, indexMiddleGap: 1, pinch: 1, pinchMiddle: 1, tipCluster: 1,
+    thumbPinkyGap: 1, wrist: P, k: 1,
+  };
+  return rules(flags, null, 1).map((r) => ({
+    token: r.token,
+    conditions: r.conds.map(([name]) => name),
+    twoHands: r.conds.some(([name]) => name === 'two hands'),
+    motion: r.motion || null,
+  }));
+}
+
 export default {
   extractHandFeature, handFlags, classifySignBridgeFrame,
   SIGNBRIDGE_LABELS, HAND_FEATURE_DIM,

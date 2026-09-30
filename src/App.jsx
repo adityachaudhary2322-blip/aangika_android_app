@@ -10,6 +10,7 @@ import RecordedVideoTranslator from './views/RecordedVideoTranslator.jsx';
 import MySigns from './views/MySigns.jsx';
 import DemoMode from './views/DemoMode.jsx';
 import ReviewContributions from './views/ReviewContributions.jsx';
+import DeveloperDictionary from './views/DeveloperDictionary.jsx';
 import { checkForUpdates } from './services/modelUpdates.js';
 import { flush as flushContributions } from './services/contributions.js';
 import { checkForUpdates as checkDictionary } from './services/sharedDictionary.js';
@@ -191,7 +192,7 @@ export default function App() {
         e.detail?.exit?.();
         return;
       }
-      go(view === 'mysigns' ? returnTo : view === 'demo' ? 'settings' : 'dashboard');
+      go(view === 'mysigns' ? returnTo : ['demo', 'developer', 'review'].includes(view) ? 'settings' : 'dashboard');
     };
     window.addEventListener('aangika:back', onBack);
     return () => window.removeEventListener('aangika:back', onBack);
@@ -242,7 +243,10 @@ export default function App() {
               <AslTranslator {...shared} cameraError={cameraError} onNavigate={go} />
             )}
             {view === 'mysigns' && (
-              <MySigns {...shared} cameraError={cameraError} onBack={() => go(returnTo)} />
+              <MySigns {...shared} cameraError={cameraError} onBack={() => go(returnTo)} onNavigate={go} />
+            )}
+            {view === 'developer' && (
+              <DeveloperDictionary onBack={() => go('settings')} onNavigate={go} />
             )}
             {view === 'hearing' && <HearingMode {...shared} />}
             {view === 'recorded' && <RecordedVideoTranslator {...shared} />}

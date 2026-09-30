@@ -99,6 +99,19 @@ export default function Settings({
         </section>
       )}
 
+      {onNavigate && (
+        <section className="mt-4 surface-card p-4">
+          <p className="eyebrow">Developer section</p>
+          <p className="mt-1 text-[11px] text-ink-dim">
+            For the team: the whole sign dictionary (built-in, community and your signs), which
+            sign means which word, and editing it for every user. Needs the developer code.
+          </p>
+          <button type="button" onClick={() => onNavigate('developer')} className="btn-quiet mt-3 w-full">
+            Open developer section
+          </button>
+        </section>
+      )}
+
       <section className="mt-4 surface-card p-4" data-tour="grammar">
         <p className="eyebrow">
           Grammar engine

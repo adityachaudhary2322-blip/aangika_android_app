@@ -10,7 +10,7 @@ import cameraManager from '../services/cameraManager.js';
 import landmarker from '../services/landmarker.js';
 import recognizer from '../services/signRecognizer.js';
 import {
-  init, listSigns, subscribe, saveSign, deleteSign, exportJSON, importJSON,
+  init, listSigns, subscribe, saveSign, deleteSign, exportJSON, importJSON, getSign,
   tokenFromText, validate, isPersistent, OUTPUT_TYPES, WORD_CATEGORIES,
 } from '../services/customSigns.js';
 import {
@@ -24,6 +24,7 @@ import { LANGUAGES } from '../config/languages.js';
 import {
   DictionaryPanel, SharedSignList, DeveloperPublish,
 } from '../components/CommunityDictionary.jsx';
+import { takeIntent } from '../services/navIntent.js';
 
 const CAPTURES = 3;
 const CAPTURE_MS = 2000;
@@ -87,11 +88,21 @@ function useLandmarkLoop(active, onFrame) {
   return { ready, error };
 }
 
-export default function MySigns({ onBack, online, cameraError }) {
+export default function MySigns({ onBack, online, cameraError, onNavigate }) {
   const [signs, setSigns] = useState(() => listSigns());
   // The list shows what THIS user taught; community signs are listed below it.
   const ownSigns = useMemo(() => signs.filter((s) => !s.shared), [signs]);
-  const [screen, setScreen] = useState({ name: 'list' });
+  // Opened from the developer section on a specific step (navIntent.js).
+  const [screen, setScreen] = useState(() => {
+    const intent = takeIntent();
+    const sign = intent?.signId ? getSign(intent.signId) : null;
+    if (intent?.action === 'new') return { name: 'edit', draft: emptyDraft() };
+    if (intent?.action === 'edit' && sign) return { name: 'edit', draft: { ...sign, tokenTouched: true } };
+    if (intent?.action === 'record' && sign) {
+      return { name: 'capture', draft: { ...sign, samples: [], side: null, tokenTouched: true } };
+    }
+    return { name: 'list' };
+  });
   const [notice, setNotice] = useState(null);
   const fileRef = useRef(null);
 
@@ -178,7 +189,7 @@ export default function MySigns({ onBack, online, cameraError }) {
             <div className="mt-6">
               <DictionaryPanel />
               <SharedSignList onTry={(s) => setScreen({ name: 'try', sign: s })} />
-              <DeveloperPublish />
+              <DeveloperPublish onOpenDeveloper={onNavigate ? () => onNavigate('developer') : undefined} />
             </div>
           </>
         )}
