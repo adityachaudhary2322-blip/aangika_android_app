@@ -4,6 +4,7 @@ import {
   Loader2, Search, RefreshCw, CircleStop, Check, AlertTriangle, Stethoscope, RotateCcw,
 } from 'lucide-react';
 import CameraStage from '../components/CameraStage.jsx';
+import FlipCameraButton from '../components/FlipCameraButton.jsx';
 import cameraManager from '../services/cameraManager.js';
 import useLandmarkLoop from '../hooks/useLandmarkLoop.js';
 import useIslSigns from '../hooks/useIslSigns.js';
@@ -122,6 +123,7 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
     <div className="space-y-3">
       <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border border-subtle bg-black">
         <CameraStage className="absolute inset-0" />
+        <FlipCameraButton className="absolute right-2 top-2 z-20" />
         {!running && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface/85 px-6 text-center">
             <button type="button" onClick={start} aria-label="Start ISL Studio" className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-fill-a to-fill-b text-white shadow-glow">
@@ -746,6 +748,7 @@ function Recorder({ others, onDone, onCancel, onReview }) {
     <section className="surface-card space-y-2 p-3">
       <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-black">
         <CameraStage className="absolute inset-0" />
+        <FlipCameraButton className="absolute right-2 top-2 z-20" />
         {(!ready || error) && <div className="absolute inset-0 flex items-center justify-center bg-surface/85 text-sm">{error || 'Loading hand and body tracking…'}</div>}
         {phase === 'countdown' && <div className="absolute inset-0 flex items-center justify-center text-6xl font-bold text-white drop-shadow">{count}</div>}
         {phase === 'recording' && <div className="absolute left-2 top-2 rounded-full bg-rose px-3 py-1 text-xs font-bold text-white">● Sign now</div>}

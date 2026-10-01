@@ -12,6 +12,7 @@ import useIslSigns from '../hooks/useIslSigns.js';
 import useIslSentence from '../hooks/useIslSentence.js';
 import useLiveSpeech from '../hooks/useLiveSpeech.js';
 import cameraManager from '../services/cameraManager.js';
+import FlipCameraButton from '../components/FlipCameraButton.jsx';
 import { speak, unlockAudio } from '../services/ttsService.js';
 import { ROLE_SIGNER, ROLE_SPEAKER } from '../services/chatStorage.js';
 import { getUser } from '../services/session.js';
@@ -343,6 +344,7 @@ function Room({ meeting, me, language, mode }) {
         <footer className="flex items-center justify-center gap-2 px-4 py-3 lg:pb-0">
           <Ctl on={mic} onClick={() => setMic(!mic)} label={mic ? 'Mute' : 'Unmute'} OnIcon={Mic} OffIcon={MicOff} />
           <Ctl on={cam} onClick={() => setCam(!cam)} label={cam ? 'Camera off' : 'Camera on'} OnIcon={Video} OffIcon={VideoOff} />
+          <FlipCameraButton variant="control" />
           <Ctl
             on={captionsOn}
             onClick={() => setCaptionsOn((v) => !v)}
@@ -408,6 +410,8 @@ function Ctl({ on, onClick, label, OnIcon, OffIcon }) {
 function Tile({ person, main = false }) {
   const ref = useRef(null);
   const [, tick] = useState(0);
+  // My own picture: re-draw when the camera flips (mirrored only for the front one).
+  useEffect(() => (person.self ? cameraManager.subscribe(() => tick((n) => n + 1)) : undefined), [person.self]);
 
   useEffect(() => {
     const v = ref.current;

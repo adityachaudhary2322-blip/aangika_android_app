@@ -3,6 +3,7 @@ import cameraManager from '../services/cameraManager.js';
 import { buildIceServers } from '../services/iceConfig.js';
 import { peerServerOptions } from '../services/peerServer.js';
 import { publicOrigin } from '../services/platform.js';
+import { keepCallVideoCurrent } from '../services/callCamera.js';
 
 /**
  * Group meetings over PeerJS.
@@ -215,6 +216,19 @@ export default function useMeeting(me) {
   }, [cleanup, send]);
 
   useEffect(() => () => { leavingRef.current = true; cleanup(); }, [cleanup]);
+
+  // Flipping the camera mid-call: send the new camera to everyone (and keep
+  // a camera that was switched off, off).
+  const camRef = useRef(true);
+  useEffect(() => { camRef.current = cam; }, [cam]);
+  useEffect(() => {
+    if (!localStream) return undefined;
+    return keepCallVideoCurrent(
+      () => [...callsRef.current.values()].map((c) => c.peerConnection).filter(Boolean),
+      localStream,
+      () => camRef.current,
+    );
+  }, [localStream]);
 
   // ── Start: host or join ───────────────────────────────────────────────
   const start = useCallback(async (roomCode, asHost) => {
