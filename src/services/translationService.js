@@ -27,6 +27,7 @@ import { hasSarvam, isHosted } from './sarvamClient.js';
 import { overrideFor } from './builtinOverrides.js';
 import { matchRules } from './phraseRules.js';
 import { getLanguage } from '../config/languages.js';
+import { inTargetScript } from './script.js';
 import { findByToken, textFor } from './customSigns.js';
 import { expandAsl } from './aslGrammar.js';
 import { getSignLanguage } from './engineState.js';
@@ -305,8 +306,9 @@ export async function translate(tags, languageCode, {
     const r = await sarvamReconstruct(tags, languageCode, { glossary, signLanguage });
     if (r.source === 'sarvam') {
       // Hinglish always comes from Mayura's code-mixed mode (consistent,
-      // casual, Roman script); the chat model's attempt is not used.
-      let translated = language.code === 'hinglish' ? '' : r.translated;
+      // casual, Roman script); the chat model's attempt is not used. Nor is a
+      // "Hindi" written in Roman letters / with English words left in.
+      let translated = language.code === 'hinglish' || !inTargetScript(r.translated, language.code) ? '' : r.translated;
       // The chat model occasionally skips the translation; Mayura fills it.
       if (!translated && language.code !== 'en-IN') {
         translated = await sarvamTranslate(r.english, language.code).catch(() => '');
@@ -342,9 +344,13 @@ export async function translate(tags, languageCode, {
   });
 
   if (result.source === 'gemini') {
+    let translated = result.translated;
+    if (language.code !== 'en-IN' && (!translated || !inTargetScript(translated, language.code)) && hasSarvam()) {
+      translated = await sarvamTranslate(result.english, language.code).catch(() => (inTargetScript(translated, language.code) ? translated : ''));
+    }
     return {
       english: result.english,
-      translated: result.translated,
+      translated,
       source: 'online',
       engine: result.model,
       language,

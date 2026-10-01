@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import AccountSettings from '../components/AccountSettings.jsx';
+import GenderChoice from '../components/GenderChoice.jsx';
 
 /** The Account page: sign in / create an account, or who is signed in. */
 export default function Account({ onBack }) {
@@ -13,6 +14,7 @@ export default function Account({ onBack }) {
       </header>
       <div className="max-w-md">
         <AccountSettings />
+        <GenderChoice className="mt-4" />
       </div>
     </div>
   );

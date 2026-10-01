@@ -10,6 +10,8 @@
  * Note `od-IN` for Odia: Sarvam uses that tag, not the ISO `or-IN`. Sending
  * `or-IN` returns a 4xx, so this list is the source of truth for API calls.
  */
+
+import { getGender } from '../services/signerPrefs.js';
 export const LANGUAGES = [
   { code: 'hi-IN', name: 'Hindi',     script: 'हिन्दी',    speaker: 'ritu',   dir: 'ltr' },
   { code: 'en-IN', name: 'English',   script: 'English',  speaker: 'ritu',   dir: 'ltr' },
@@ -75,7 +77,7 @@ export function sarvamTtsPayload(text, code) {
   return {
     text,
     target_language_code: lang.sarvam || lang.code,
-    speaker: getVoice() || lang.speaker,
+    speaker: getVoice() || (getGender() === 'male' ? 'shubh' : getGender() === 'female' ? 'ritu' : lang.speaker),
     model: 'bulbul:v3',
     output_audio_codec: 'wav',
   };

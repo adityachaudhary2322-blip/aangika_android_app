@@ -16,6 +16,7 @@ import RecognitionSettings from '../components/RecognitionSettings.jsx';
 import GloveSettings from '../components/GloveSettings.jsx';
 import OfflineSpeechPanel from '../components/OfflineSpeechPanel.jsx';
 import AccountSettings from '../components/AccountSettings.jsx';
+import GenderChoice from '../components/GenderChoice.jsx';
 import ContributeSettings from '../components/ContributeSettings.jsx';
 import { LANGUAGES, VOICES, getVoice, setVoice } from '../config/languages.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
@@ -63,6 +64,8 @@ export default function Settings({
       <RecognitionSettings visionEngine={visionEngine} chooseVision={chooseVision} />
 
       <GloveSettings />
+
+      <GenderChoice className="mt-4" />
 
       <AccountSettings />
 
