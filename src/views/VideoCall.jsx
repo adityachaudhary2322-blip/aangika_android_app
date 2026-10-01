@@ -45,6 +45,7 @@ import {
  * signing; the FULL STOP sign sends the finished sentence to be spoken).
  */
 const SOURCE_KEY = 'aangika-call-sign-source';
+const CALL_AUTO_SEND = { handsDownMs: 1500, idleMs: 6000 };
 const readSource = () => { try { return localStorage.getItem(SOURCE_KEY) === 'models' ? 'models' : 'studio'; } catch { return 'studio'; } };
 export default function VideoCall({
   language, setLanguage, mode, visionEngine, chooseVision,
@@ -179,6 +180,8 @@ export default function VideoCall({
     active: signingActive && source === 'studio',
     language,
     mode,
+    // Also send when the hands go down (or after a long pause), not only on FULL STOP.
+    autoSend: CALL_AUTO_SEND,
     onSentence: (r) => {
       const text = r.translated || r.english;
       if (!text) return;
@@ -458,7 +461,7 @@ export default function VideoCall({
                 tone="secondary"
                 text={studioPartial || signerLine}
                 placeholder={source === 'studio'
-                  ? (studioReady ? 'Sign, then FULL STOP to send the sentence…' : 'ISL Studio has no FULL STOP sign yet.')
+                  ? (studioReady ? 'Sign, then FULL STOP or lower your hands to send the sentence…' : 'ISL Studio has no FULL STOP sign yet.')
                   : 'Sign to caption…'}
               />
             </>

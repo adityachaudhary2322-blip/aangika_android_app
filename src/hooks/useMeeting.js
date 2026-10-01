@@ -250,10 +250,23 @@ export default function useMeeting(me) {
     peerRef.current = peer;
     answerCalls(peer, codeN);
 
+    // Once the call is up, the media and messages flow phone to phone: losing
+    // the (free, public) signalling server for a moment must not end the call.
+    // Reconnect to it instead; only a failure while STARTING is fatal.
+    let up = false;
+    peer.on('open', () => { up = true; });
+    peer.on('disconnected', () => {
+      if (leavingRef.current || peer.destroyed) return;
+      setTimeout(() => { try { if (!peer.destroyed && peer.disconnected) peer.reconnect(); } catch { /* next drop retries */ } }, 1000);
+    });
     peer.on('error', (err) => {
       if (leavingRef.current) return;
+      if (up && ['network', 'socket-error', 'socket-closed', 'server-error', 'disconnected'].includes(err?.type)) {
+        console.warn('[meet] signalling server lost; the call continues, reconnecting:', err?.type);
+        return;
+      }
       // A member that vanished mid-call is not fatal; a missing host is.
-      if (err?.type === 'peer-unavailable' && !asHost && hostConnRef.current?.open) return;
+      if (err?.type === 'peer-unavailable' && (asHost || hostConnRef.current?.open)) return;
       setError(peerErrorText(err, codeN));
       setStatus('error');
       cleanup();

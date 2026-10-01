@@ -34,7 +34,9 @@ async function copyText(text) {
  *              signer's screen.
  */
 const ROLE_KEY = 'aangika-meet-role';
-const PAUSE_SEND_MS = 3000;     // no new sign for this long: send the sentence
+// Send a sentence without FULL STOP: hands down 1.5 s, or no new sign for 6 s
+// (a shorter pause with the hands up split sentences, so rules never matched).
+const AUTO_SEND = { handsDownMs: 1500, idleMs: 6000 };
 
 export default function Meet({
   onBack, language, mode, initialCode = '', onLiveChange,
@@ -222,6 +224,7 @@ function Room({ meeting, me, language, mode }) {
     active: signer && captionsOn && live,
     language,
     mode,
+    autoSend: AUTO_SEND,
     onSentence: (r) => {
       const text = r.translated || r.english;
       if (!text) return;
@@ -235,9 +238,7 @@ function Room({ meeting, me, language, mode }) {
     if (!signer || !partial) return undefined;
     setMine(`${partial} …`);
     sendCaption(`${partial} …`, 'sign');
-    // No new sign for a moment: send the sentence without waiting for FULL STOP.
-    const id = setTimeout(() => studio.finish(), PAUSE_SEND_MS);
-    return () => clearTimeout(id);
+    return undefined;
   }, [partial]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Speaker: live speech -> captions on the signer's screen ───────────
@@ -334,7 +335,7 @@ function Room({ meeting, me, language, mode }) {
           <p className="mx-4 mt-2 min-h-[1.25rem] text-center text-xs text-ink-dim" aria-live="polite">
             {notice || (mine
               ? <><span className="font-semibold text-ink">You {signer ? 'signed' : 'said'}:</span> {mine}</>
-              : signer ? 'Sign, then FULL STOP (or pause) to send the sentence.' : 'Speak: your words appear on their screen.')}
+              : signer ? 'Sign, then FULL STOP or lower your hands to send the sentence.' : 'Speak: your words appear on their screen.')}
           </p>
         )}
 
