@@ -18,6 +18,8 @@ const requestFor = (signLanguage) => (signLanguage === 'ASL' ? buildAslRequest :
 import { getLanguage, sarvamTtsPayload, browserSpeechLocale, sarvamCode, sttCode } from '../config/languages.js';
 
 import { hasSarvam, sarvamFetch } from './sarvamClient.js';
+import { grammarGender } from './signerPrefs.js';
+import { inTargetScript } from './script.js';
 
 const GEMINI_ENDPOINT =
   'https://generativelanguage.googleapis.com/v1beta/models';
@@ -307,7 +309,7 @@ const TRANSLATE_CHAR_LIMIT = 1000;
  * proxy). Throws on failure so callers can queue a retry.
  */
 export async function sarvamTranslate(
-  text, targetCode, { mode = 'modern-colloquial', source = 'en-IN' } = {}
+  text, targetCode, { mode = 'classic-colloquial', source = 'en-IN', gender = grammarGender() } = {}
 ) {
   if (!hasSarvam()) throw new Error('No Sarvam key set.');
   const input = String(text || '').trim();
@@ -320,7 +322,13 @@ export async function sarvamTranslate(
   const hinglish = targetCode === 'hinglish';
   const models = hinglish ? ['mayura:v1'] : TRANSLATE_MODELS;
   const errors = [];
+  // Hindi etc. must come out in their own script: colloquial Mayura leaves
+  // some English words in Latin letters ("मेरा phone"); then ask for the
+  // formal register, which writes everything in the target script.
+  const tryModes = hinglish ? [mode] : [mode, 'formal'];
+  let fallbackOut = '';
   for (const model of models) {
+    for (const m of (model === 'mayura:v1' ? tryModes : [null])) {
     try {
       const response = await sarvamFetch(SARVAM_TRANSLATE_PATH, {
         method: 'POST',
@@ -332,21 +340,26 @@ export async function sarvamTranslate(
           target_language_code: sarvamCode(targetCode),
           model,
           ...(model === 'mayura:v1' ? {
-            mode: hinglish ? 'code-mixed' : mode,
+            mode: hinglish ? 'code-mixed' : m,
             numerals_format: 'international',
             ...(hinglish ? { output_script: 'roman' } : {}),
+            // Mayura defaults to the FEMININE first person ("खाती हूँ").
+            ...(gender ? { speaker_gender: gender === 'female' ? 'Female' : 'Male' } : {}),
           } : {}),
         }),
       });
       if (!response.ok) { errors.push(`${model}: HTTP ${response.status}`); continue; }
       const body = await response.json();
       const out = String(body?.translated_text || '').trim();
-      if (out) return out;
-      errors.push(`${model}: empty reply`);
+      if (out && (hinglish || inTargetScript(out, targetCode))) return out;
+      if (out) fallbackOut ||= out;                     // English left in: only if nothing better comes
+      errors.push(out ? `${model}/${m || 'default'}: English words left in` : `${model}: empty reply`);
     } catch (err) {
       errors.push(`${model}: ${err.message}`);
     }
+    }
   }
+  if (fallbackOut) return fallbackOut;
   throw new Error('Sarvam translate failed - ' + errors.join(' | '));
 }
 

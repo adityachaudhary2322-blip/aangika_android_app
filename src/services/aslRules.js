@@ -8,7 +8,7 @@
  * say which prompt produced a sentence.
  */
 
-import { glossaryBlock } from './qwenRules.js';
+import { glossaryBlock, targetNotes } from './qwenRules.js';
 
 export const ASL_PROMPT_VERSION = 'asl-1';
 
@@ -52,7 +52,7 @@ export function buildAslRequest(tags, targetLanguage, glossary = []) {
   contents.push({ role: 'user', parts: [{ text: tags.join(', ') }] });
 
   let systemInstruction = `${ASL_SYSTEM_PROMPT}\n\n` + (targetLanguage && targetLanguage.code !== 'en-IN'
-    ? `Also provide a ${targetLanguage.name} (${targetLanguage.script}) translation of the English sentence. `
+    ? `Also provide a ${targetLanguage.name} (${targetLanguage.script}) translation of the English sentence.${targetNotes(targetLanguage)} `
     : '') + 'Return JSON only: {"english": "...", "translated": "..."}';
   const block = glossaryBlock(glossary, targetLanguage?.code);
   if (block) systemInstruction += `\n\n${block}`;

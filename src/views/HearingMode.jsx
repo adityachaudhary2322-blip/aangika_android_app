@@ -115,6 +115,7 @@ export default function HearingMode({ language, online, onBack }) {
     try {
       const out = await sarvamTranslate(text, language, {
         source: theirLang === 'unknown' ? 'auto' : theirLang,
+        gender: null,                       // someone else is speaking: not the user's gender
       });
       if (out && out.trim() !== text.trim()) {
         setLog((l) => l.map((e) => (e.id === id ? { ...e, translated: out } : e)));

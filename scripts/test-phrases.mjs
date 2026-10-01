@@ -122,8 +122,19 @@ console.log('\n6. Hinglish (casual)\n' + '-'.repeat(74));
   const out = await sarvamTranslate('I need water.', 'hinglish');
   check(out === 'Mujhe paani chahiye.' && sent.body.target_language_code === 'hi-IN' && sent.body.mode === 'code-mixed' && sent.body.output_script === 'roman' && sent.body.model === 'mayura:v1',
     'online: Mayura code-mixed mode, Roman script', JSON.stringify({ t: sent.body.target_language_code, m: sent.body.mode, s: sent.body.output_script }));
+  check(sent.body.speaker_gender === 'Male', "the signer's gender is sent (male until chosen; Mayura defaults to female)", sent.body.speaker_gender);
+  // Hindi: colloquial first; a reply with English left in ("मैं food खाता हूँ") is retried formally.
+  const calls = [];
+  globalThis.fetch = async (url, init) => { const b = JSON.parse(init.body); calls.push(b.mode || b.model); return new Response(JSON.stringify({ translated_text: b.mode === 'formal' ? 'मैं भोजन करता हूँ।' : 'मैं food खाता हूँ।' }), { status: 200 }); };
+  const hi = await sarvamTranslate('I eat food.', 'hi-IN');
+  check(hi === 'मैं भोजन करता हूँ।' && calls.join(',') === 'classic-colloquial,formal', 'Hindi with English words left in is retried in the formal register', `${hi} via ${calls.join(',')}`);
+  store.set('aangika.gender', 'female');
+  globalThis.fetch = async (url, init) => { sent = { url, body: JSON.parse(init.body) }; return new Response(JSON.stringify({ translated_text: 'மற்றவை' }), { status: 200 }); };
   await sarvamTranslate('I need water.', 'ta-IN');
-  check(sent.body.target_language_code === 'ta-IN' && !('output_script' in sent.body) && sent.body.mode === 'modern-colloquial', 'other languages unchanged');
+  check(sent.body.target_language_code === 'ta-IN' && !('output_script' in sent.body) && sent.body.mode === 'classic-colloquial' && sent.body.speaker_gender === 'Female', 'other languages: own script, the chosen gender', JSON.stringify({ m: sent.body.mode, g: sent.body.speaker_gender }));
+  await sarvamTranslate('Hello', 'hi-IN', { gender: null });
+  check(!('speaker_gender' in sent.body), 'someone else speaking (Speech to text): no gender sent');
+  store.delete('aangika.gender');
 }
 
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));

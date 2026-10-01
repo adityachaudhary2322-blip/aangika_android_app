@@ -21,6 +21,8 @@
  * Treat offline output as a rough gloss, not a translation.
  */
 
+import { grammarGender } from './signerPrefs.js';
+
 export const ISL_SYSTEM_PROMPT = [
   'You are an ISL (Indian Sign Language) translation assistant.',
   "ISL frequently omits first-person pronouns ('I', 'me', 'my'). Unless " +
@@ -70,6 +72,21 @@ export function ruleBasedJoin(tags) {
  * the real request. Gemini takes system text separately, so that is returned
  * alongside rather than folded in.
  */
+
+/**
+ * For the online models: write the translation in the language's own script
+ * (no Roman letters, no English words left in), and use the signer's gender
+ * for first-person forms ("मैं खाता हूँ" / "मैं खाती हूँ").
+ */
+export function targetNotes(targetLanguage) {
+  if (!targetLanguage || targetLanguage.code === 'en-IN') return '';
+  const g = grammarGender();
+  const script = targetLanguage.code === 'hinglish'
+    ? 'Write it in Roman script, casually, as Hinglish.'
+    : `Write it entirely in ${targetLanguage.name} script (${targetLanguage.script}): no Roman letters, and translate every English word (e.g. "food" -> "खाना", not "food").`;
+  return ` ${script} The person signing is ${g}: use ${g === 'female' ? 'feminine' : 'masculine'} first-person forms (Hindi: ${g === 'female' ? '"मैं खाती हूँ", "मैं जा रही हूँ"' : '"मैं खाता हूँ", "मैं जा रहा हूँ"'}).`;
+}
+
 export function buildGeminiRequest(tags, targetLanguage, glossary = []) {
   const contents = [];
   for (const shot of ISL_FEW_SHOT) {
@@ -80,7 +97,7 @@ export function buildGeminiRequest(tags, targetLanguage, glossary = []) {
 
   let systemInstruction = targetLanguage
     ? `${ISL_SYSTEM_PROMPT}\n\nAlso provide a ${targetLanguage.name} ` +
-      `(${targetLanguage.script}) translation. Return JSON only: ` +
+      `(${targetLanguage.script}) translation.${targetNotes(targetLanguage)} Return JSON only: ` +
       '{"english": "...", "translated": "..."}'
     : ISL_SYSTEM_PROMPT;
 

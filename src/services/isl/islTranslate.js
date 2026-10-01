@@ -13,6 +13,7 @@
 import { getRules } from './islDictionary.js';
 import { translate } from '../translationService.js';
 import { hasSarvam, sarvamTranslate } from '../translator.js';
+import { grammarGender } from '../signerPrefs.js';
 
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
@@ -48,7 +49,15 @@ export function matchStudioPattern(pattern, signs) {
   return go(0, 0, {});
 }
 
+/**
+ * Gendered words in a rule's text: {masculine|feminine}, e.g. "मैं जा {रहा|रही} हूँ।",
+ * chosen by the signer's gender (Settings; masculine when not set).
+ */
+export const pickGender = (template, gender = grammarGender()) =>
+  String(template).replace(/\{([^{}|]*)\|([^{}|]*)\}/g, (_, m, f) => (gender === 'female' ? f : m));
+
 function fill(template, caps, lang) {
+  template = pickGender(template);
   const field = lang === 'en-IN' ? 'en' : lang === 'hi-IN' ? 'hi' : lang === 'hinglish' ? 'hinglish' : null;
   let missing = false;
   const out = template.replace(/\{(\w+)\}/g, (_, key) => {

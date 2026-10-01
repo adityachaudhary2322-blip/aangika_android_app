@@ -36,6 +36,10 @@ const MIN_PRESENCE = 0.6;
 export const TAU_MIN = 0.075;
 export const TAU_MAX = 0.12;
 export const clampTau = (tau) => Math.max(TAU_MIN, Math.min(TAU_MAX, tau));
+// Say a sign only when it matches clearly: cost within 70% of its own threshold.
+// Measured on the team's 55 signs: sentences 95.8% -> 97.2% correct, extra
+// signs 6 -> 1, pauses read as a sign 36 -> 27 of 110.
+const ACCEPT = 0.7;
 const GAP_FLUSH = 3;                   // hands out of view this many frames: signing paused, decide now
 const STILL_MAX = 0.03;                // frame change below this: hands held still
 
@@ -111,7 +115,7 @@ export function calibrate(takes) {
  * The spotter. `signs`: [{ id, token, takes: [frames[]], eitherHand }].
  * Feed frames with push(features); it returns the signs completed by then.
  */
-export function createSpotter(signs, { minLen = 5 } = {}) {
+export function createSpotter(signs, { minLen = 5, accept = ACCEPT } = {}) {
   const templates = [];
   for (const s of signs) {
     // One bad recording skips that sign; it never stops the others.
@@ -165,6 +169,7 @@ export function createSpotter(signs, { minLen = 5 } = {}) {
     const cost = tp.dmin / tp.m;
     // Ranked by how well it matched, NOT by cost / own threshold: that ratio
     // made the sign with the loosest threshold win against every other sign.
+    if (cost > accept * tp.tau) return;              // weak match: not confident enough to say
     pending.push({ sign: tp.sign, cost, score: cost / TAU_MAX, ts: tp.ts, te: tp.te, mirrored: tp.mirrored, tp });
   }
 

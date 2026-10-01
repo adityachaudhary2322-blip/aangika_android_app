@@ -122,6 +122,12 @@ test('ISL Studio: team dictionary, rules for everyone, continuous translate scre
   await page.getByRole('button', { name: 'Start ISL Studio' }).click();
   await expect(page.getByText(/No hands in view|hand:/).first()).toBeVisible({ timeout: 90_000 });
   await expect(page.getByRole('button', { name: /Say it now/ })).toBeDisabled();
+  // Live demos: pause reading signs (button or Space) while talking.
+  await page.getByRole('button', { name: /Pause signing/ }).click();
+  await expect(page.getByText(/Paused: signs are not being read/)).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('button', { name: /Pause signing/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Undo last sign' })).toBeDisabled();
 
   await request.post(`${API}/isl/rules`, { headers: HEAD, data: { code: DEV_CODE, rules: [] } });
   await request.post(`${API}/isl/remove`, { headers: HEAD, data: { code: DEV_CODE, ids: ['e2e-1', 'e2e-2', 'e2e-3', 'e2e-4'] } });

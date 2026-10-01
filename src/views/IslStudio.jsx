@@ -73,7 +73,7 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
   const [history, setHistory] = useState([]);             // finished sentences
   const [showWhy, setShowWhy] = useState(false);
   const {
-    sentence, analysis, busy, trace, ready, error, finish, clear, reset, hasStop,
+    sentence, analysis, busy, trace, ready, error, finish, clear, reset, hasStop, removeAt, undo, paused, setPaused,
   } = useIslSentence({
     signs, active: running, language, mode,
     onSentence: (r) => {
@@ -82,6 +82,18 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
       if (text) speak(text, language);
     },
   });
+
+  // Space pauses / resumes reading signs (live demos: talk without stray signs).
+  useEffect(() => {
+    if (!running) return undefined;
+    const onKey = (e) => {
+      if (e.code !== 'Space' || /input|textarea|select/i.test(e.target?.tagName || '')) return;
+      e.preventDefault();
+      setPaused(!paused);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [running, paused, setPaused]);
 
   const start = async () => {
     await unlockAudio();
@@ -131,14 +143,26 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
           <p className="eyebrow">Sentence so far</p>
           {busy && <Loader2 size={13} className="animate-spin text-primary" />}
           <div className="ml-auto flex gap-2">
+            {running && (
+              <button type="button" onClick={() => setPaused(!paused)} aria-pressed={paused} title="Space"
+                className={'btn-quiet px-3 py-1.5 text-xs ' + (paused ? 'border-amber/50 text-amber' : '')}>
+                {paused ? <Play size={13} /> : <Square size={11} />} {paused ? 'Resume signing' : 'Pause signing'}
+              </button>
+            )}
             <button type="button" onClick={finish} disabled={!sentence.length} className="btn-quiet px-3 py-1.5 text-xs"><CircleStop size={13} /> Say it now</button>
+            <button type="button" onClick={undo} disabled={!sentence.length} aria-label="Undo last sign" className="btn-icon"><RotateCcw size={13} /></button>
             <button type="button" onClick={clear} disabled={!sentence.length} aria-label="Clear sentence" className="btn-icon"><Eraser size={14} /></button>
             {running && <button type="button" onClick={() => setRunning(false)} aria-label="Stop camera" className="btn-icon"><Square size={13} /></button>}
           </div>
         </div>
         <div className="mt-2 flex min-h-[2rem] flex-wrap gap-1.5">
-          {!sentence.length && <span className="text-xs text-ink-dim">Signs appear here as you sign.</span>}
-          {sentence.map((s, i) => <span key={`${s.id}-${i}`} className="pill animate-fade-up border-subtle bg-card-high text-ink">{s.word}</span>)}
+          {!sentence.length && <span className="text-xs text-ink-dim">{paused ? 'Paused: signs are not being read. Tap Resume (or Space) to go on.' : 'Signs appear here as you sign.'}</span>}
+          {sentence.map((s, i) => (
+            <button key={`${s.id}-${i}`} type="button" onClick={() => removeAt(i)} aria-label={`Remove ${s.word}`} title="Tap to remove a stray sign"
+              className="pill animate-fade-up border-subtle bg-card-high text-ink hover:border-rose/50 hover:text-rose">
+              {s.word} <span aria-hidden="true" className="text-ink-dim">×</span>
+            </button>
+          ))}
         </div>
         <div className="mt-2 flex items-center gap-2 text-[10px] text-ink-dim">
           <span>Recogniser v{SPOTTER_VERSION}</span>
@@ -871,6 +895,7 @@ function RulesTab({ signs, unlocked }) {
       <p className="text-[11px] text-ink-dim">
         <b>Advanced rules</b> (for many sentences at once) match a whole sentence. Pattern items: a sign's word (WATER), a category (@pronoun @person @action @thing @place @time @describing @question @negation @other) or @name; add ? for optional.
         In the text, {'{'}place{'}'}, {'{'}name{'}'} … insert the matched sign's word (its Hindi / Hinglish in those texts).
+        For words that change with the signer's gender write {'{'}masculine|feminine{'}'}, e.g. “मैं जा {'{'}रहा|रही{'}'} हूँ।”: each signer's Settings choose.
       </p>
       {unlocked && (
         <button type="button" onClick={() => setDraft(draft ? null : { pattern: '', english: '', hi: '', hinglish: '' })} className="btn-quiet w-full py-2 text-xs"><Plus size={12} /> New advanced rule</button>

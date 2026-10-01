@@ -32,6 +32,10 @@ export default function useIslSentence({ signs, active, language, mode, onSenten
   const [analysis, setAnalysis] = useState([]);
   const [busy, setBusy] = useState(false);
   const [trace, setTrace] = useState([]);                 // why each sign was chosen (latest first)
+  // Live demos: talking to people with the hands moving makes stray signs.
+  // Paused, the camera keeps running but nothing is recognised.
+  const [paused, setPausedState] = useState(false);
+  const pausedRef = useRef(false);
   const sentenceRef = useRef([]);
   const lastSample = useRef(0);
   const lastAnalysis = useRef(0);
@@ -60,12 +64,16 @@ export default function useIslSentence({ signs, active, language, mode, onSenten
   }, [language, mode]);
 
   const clear = useCallback(() => { sentenceRef.current = []; setSentence([]); }, []);
+  /** Take out a stray sign (by position), before the sentence is said. */
+  const removeAt = useCallback((i) => { sentenceRef.current = sentenceRef.current.filter((_, k) => k !== i); setSentence(sentenceRef.current); }, []);
+  const undo = useCallback(() => { sentenceRef.current = sentenceRef.current.slice(0, -1); setSentence(sentenceRef.current); }, []);
 
   const onFrame = useCallback((result, ts) => {
     if (ts - lastSample.current < SAMPLE_MS) return;
     lastSample.current = ts;
     const f = frameFeatures({ hands: result.hands, pose: result.pose, mirrored: cameraManager.isFrontCamera() });
     if (ts - lastAnalysis.current > 250) { lastAnalysis.current = ts; setAnalysis(describeFeatures(f)); }
+    if (pausedRef.current) return;                        // paused: watch, recognise nothing
     const hands = f[0] > 0.5 || f[HAND_DIM] > 0.5;
     if (hands) handsGoneAt.current = 0; else if (!handsGoneAt.current) handsGoneAt.current = ts;
     for (const hit of spotter.push(f)) {
@@ -84,9 +92,15 @@ export default function useIslSentence({ signs, active, language, mode, onSenten
 
   const { ready, error } = useLandmarkLoop(active, onFrame);
   const reset = useCallback(() => spotter.reset(), [spotter]);
+  const setPaused = useCallback((p) => {
+    pausedRef.current = p;
+    setPausedState(p);
+    spotter.reset();                                      // nothing half-matched carries over
+    handsGoneAt.current = 0;
+  }, [spotter]);
 
   return {
-    sentence, analysis, busy, trace, ready, error, finish, clear, reset,
+    sentence, analysis, busy, trace, ready, error, finish, clear, reset, removeAt, undo, paused, setPaused,
     hasStop: signs.some((s) => s.type === 'full-stop'),
   };
 }
