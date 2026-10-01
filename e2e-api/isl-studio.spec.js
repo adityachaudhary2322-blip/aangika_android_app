@@ -128,6 +128,11 @@ test('ISL Studio: team dictionary, rules for everyone, continuous translate scre
   await page.keyboard.press('Space');
   await expect(page.getByRole('button', { name: /Pause signing/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Undo last sign' })).toBeDisabled();
+  // Demo mode: nothing is read until the signer signs FULL STOP.
+  await page.getByLabel('Start with FULL STOP').check();
+  await expect(page.getByText('Waiting for FULL STOP to start reading signs…')).toBeVisible();
+  await page.getByLabel('Start with FULL STOP').uncheck();
+  await expect(page.getByText('Signs appear here as you sign.')).toBeVisible();
 
   await request.post(`${API}/isl/rules`, { headers: HEAD, data: { code: DEV_CODE, rules: [] } });
   await request.post(`${API}/isl/remove`, { headers: HEAD, data: { code: DEV_CODE, ids: ['e2e-1', 'e2e-2', 'e2e-3', 'e2e-4'] } });

@@ -16,6 +16,7 @@ import {
   FilesetResolver, HandLandmarker, PoseLandmarker, FaceLandmarker,
 } from '@mediapipe/tasks-vision';
 import { assetUrl, LOCAL_MEDIAPIPE } from './platform.js';
+import { createFocus } from './personFocus.js';
 
 /** CDN on the website; the copy bundled in the APK in the Android app. */
 const local = (url) => assetUrl(url, `${LOCAL_MEDIAPIPE.models}/${url.split('/').pop()}`);
@@ -37,6 +38,9 @@ let handLandmarker = null;
 let poseLandmarker = null;
 let faceLandmarker = null;
 let faceLoading = null;
+const focus = createFocus();
+let lastFocus = { people: 0, ignoredHands: 0, raising: false, switched: false };
+
 let fileset = null;
 let loading = null;
 
@@ -58,7 +62,9 @@ export async function load(onProgress = () => {}) {
       handLandmarker = await HandLandmarker.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: local(HAND_MODEL), delegate },
         runningMode: 'VIDEO',
-        numHands: 2,
+        // Up to 4: with other people in view the signer's two hands must not
+        // lose their slots to a bystander's; personFocus keeps the signer's.
+        numHands: 4,
         minHandDetectionConfidence: 0.5,
         minHandPresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,
@@ -68,7 +74,7 @@ export async function load(onProgress = () => {}) {
       poseLandmarker = await PoseLandmarker.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: local(POSE_MODEL), delegate },
         runningMode: 'VIDEO',
-        numPoses: 1,
+        numPoses: 3,                    // several people: personFocus picks the signer
         minPoseDetectionConfidence: 0.5,
         minPosePresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,
@@ -121,7 +127,7 @@ export async function loadFace(onProgress = () => {}) {
     const make = (delegate) => FaceLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: local(FACE_MODEL), delegate },
       runningMode: 'VIDEO',
-      numFaces: 1,
+      numFaces: 3,                       // the signer's face is picked in detect()
       minFaceDetectionConfidence: 0.5,
       minFacePresenceConfidence: 0.5,
       minTrackingConfidence: 0.5,
@@ -160,12 +166,12 @@ export function detect(video, timestampMs) {
   if (!handLandmarker || !poseLandmarker) return null;
   if (!video || video.readyState < 2) return null;
 
-  let pose = null;
+  let poses = [];
   let hands = [];
 
   try {
     const poseResult = poseLandmarker.detectForVideo(video, timestampMs);
-    if (poseResult?.landmarks?.length) pose = poseResult.landmarks[0];
+    if (poseResult?.landmarks?.length) poses = poseResult.landmarks;
   } catch {
     // Frame-timing jitter throws here; skipping one frame is harmless.
   }
@@ -189,14 +195,29 @@ export function detect(video, timestampMs) {
   if (faceLandmarker) {
     try {
       const faceResult = faceLandmarker.detectForVideo(video, timestampMs);
-      if (faceResult?.faceLandmarks?.length) face = faceResult.faceLandmarks[0];
+      if (faceResult?.faceLandmarks?.length) face = faceResult.faceLandmarks;
     } catch {
       // Same.
     }
   }
 
-  return { pose, hands, face };
+  // Several people in view: keep only the signer (the central person, or
+  // whoever raised a hand to take over) and their hands.
+  const f = focus.select({ poses, hands }, timestampMs, video);
+  if (Array.isArray(face) && face.length && Array.isArray(face[0])) {
+    // The signer's face: the one nearest their nose (else the first).
+    const nose = f.pose?.[0];
+    const d = (m) => (nose && m[1] ? Math.hypot(m[1].x - nose.x, m[1].y - nose.y) : 0);
+    face = face.reduce((a, b) => (d(b) < d(a) ? b : a));
+  }
+  lastFocus = { people: f.people, ignoredHands: f.ignoredHands, raising: f.raising, switched: f.switched };
+  return { pose: f.pose, hands: f.hands, face, people: f.people, ignoredHands: f.ignoredHands };
 }
+
+/** Who was in view on the last frame: { people, ignoredHands, raising, switched }. */
+export const getFocusInfo = () => lastFocus;
+/** Choose the signer again (e.g. a new session). */
+export const resetFocus = () => focus.reset();
 
 export function close() {
   try { handLandmarker?.close(); } catch { /* already closed */ }
@@ -224,6 +245,6 @@ export const POSE_BONES = [
 ];
 
 export default {
-  load, isLoaded, detect, close, getDelegate, HAND_BONES, POSE_BONES,
+  load, isLoaded, detect, close, getDelegate, HAND_BONES, POSE_BONES, getFocusInfo, resetFocus,
   loadFace, unloadFace, hasFace,
 };

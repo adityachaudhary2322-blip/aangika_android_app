@@ -68,13 +68,19 @@ export default function IslStudio({ onBack, language, mode }) {
 
 // ── Translate: continuous signing, FULL STOP speaks ─────────────────────────
 
+const START_KEY = 'aangika-isl-start-with-stop';
 function TranslateTab({ signs, language, mode, onDictionary }) {
   const [running, setRunning] = useState(false);
+  // Demo mode: signs are read only after the signer does FULL STOP.
+  const [startWithStop, setStartWithStopState] = useState(() => { try { return localStorage.getItem(START_KEY) === '1'; } catch { return false; } });
+  const setStartWithStop = (v) => { setStartWithStopState(v); try { localStorage.setItem(START_KEY, v ? '1' : '0'); } catch { /* not remembered */ } };
   const [history, setHistory] = useState([]);             // finished sentences
   const [showWhy, setShowWhy] = useState(false);
   const {
     sentence, analysis, busy, trace, ready, error, finish, clear, reset, hasStop, removeAt, undo, paused, setPaused,
+    waitingForStart, focusInfo,
   } = useIslSentence({
+    startWithStop,
     signs, active: running, language, mode,
     onSentence: (r) => {
       const text = r.translated || r.english;
@@ -132,6 +138,11 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
         )}
         {running && ready && (
           <div className="absolute inset-x-2 bottom-2 space-y-1">
+            {focusInfo && (
+              <span className="pill chrome-plate mr-1 text-[11px] text-primary">
+                {focusInfo.raising ? 'Hand raised: switching signer…' : `Focused on the signer${focusInfo.people > 1 ? ` · ${focusInfo.people - 1} other${focusInfo.people > 2 ? 's' : ''} ignored` : ''}`}
+              </span>
+            )}
             {analysis.length === 0 && <span className="pill chrome-plate text-[11px]">No hands in view</span>}
             {analysis.map((a) => <span key={a.side} className="pill chrome-plate mr-1 text-[11px]">{a.text}</span>)}
           </div>
@@ -156,7 +167,13 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
           </div>
         </div>
         <div className="mt-2 flex min-h-[2rem] flex-wrap gap-1.5">
-          {!sentence.length && <span className="text-xs text-ink-dim">{paused ? 'Paused: signs are not being read. Tap Resume (or Space) to go on.' : 'Signs appear here as you sign.'}</span>}
+          {!sentence.length && (
+            <span className={'text-xs ' + (waitingForStart && !paused ? 'font-semibold text-amber' : 'text-ink-dim')}>
+              {paused ? 'Paused: signs are not being read. Tap Resume (or Space) to go on.'
+                : waitingForStart ? 'Waiting for FULL STOP to start reading signs…'
+                  : 'Signs appear here as you sign.'}
+            </span>
+          )}
           {sentence.map((s, i) => (
             <button key={`${s.id}-${i}`} type="button" onClick={() => removeAt(i)} aria-label={`Remove ${s.word}`} title="Tap to remove a stray sign"
               className="pill animate-fade-up border-subtle bg-card-high text-ink hover:border-rose/50 hover:text-rose">
@@ -164,6 +181,10 @@ function TranslateTab({ signs, language, mode, onDictionary }) {
             </button>
           ))}
         </div>
+        <label className="mt-2 flex items-center gap-2 text-[11px] text-ink-dim">
+          <input type="checkbox" checked={startWithStop} onChange={(e) => setStartWithStop(e.target.checked)} aria-label="Start with FULL STOP" />
+          Start each turn with FULL STOP (demos: nothing is read until the signer signs FULL STOP; 10 s idle and it waits again)
+        </label>
         <div className="mt-2 flex items-center gap-2 text-[10px] text-ink-dim">
           <span>Recogniser v{SPOTTER_VERSION}</span>
           <button type="button" onClick={() => setShowWhy(!showWhy)} className="underline">{showWhy ? 'Hide' : 'Why these signs?'}</button>
