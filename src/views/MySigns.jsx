@@ -4,6 +4,7 @@ import {
   Loader2, Check, AlertTriangle, Hand,
 } from 'lucide-react';
 import CameraStage from '../components/CameraStage.jsx';
+import FlipCameraButton from '../components/FlipCameraButton.jsx';
 import LandmarkCanvas from '../components/LandmarkCanvas.jsx';
 import HandSkeleton from '../components/HandSkeleton.jsx';
 import cameraManager from '../services/cameraManager.js';
@@ -579,6 +580,7 @@ function CaptureFlow({ draft, onDone, onCancel, cameraError }) {
     <div className="space-y-3">
       <div className="relative aspect-[3/4] overflow-hidden rounded-2xl">
         <CameraStage className="absolute inset-0" />
+        <FlipCameraButton className="absolute right-2 top-2 z-20" />
         <LandmarkCanvas frameRef={frameRef} mirrored={mirrored} />
         <div className="absolute inset-x-0 top-0 flex flex-wrap gap-1.5 p-2">
           <Dot ok={live.hands} label={draft.hands === 'two' ? 'both hands' : 'hand visible'} />
@@ -757,6 +759,7 @@ function TryIt({ sign, cameraError }) {
     <div className="space-y-3">
       <div className="relative aspect-[3/4] overflow-hidden rounded-2xl">
         <CameraStage className="absolute inset-0" />
+        <FlipCameraButton className="absolute right-2 top-2 z-20" />
         <LandmarkCanvas frameRef={frameRef} mirrored={mirrored} />
         {(!ready || cameraError || error) && (
           <div className="absolute inset-0 flex items-center justify-center bg-surface/85 px-6 text-center text-sm">

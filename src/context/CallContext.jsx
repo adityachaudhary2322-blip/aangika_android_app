@@ -6,6 +6,7 @@ import { unlockAudio } from '../services/ttsService.js';
 import { buildIceServers } from '../services/iceConfig.js';
 import { peerServerOptions } from '../services/peerServer.js';
 import * as store from '../services/chatStorage.js';
+import { keepCallVideoCurrent } from '../services/callCamera.js';
 
 /**
  * The one Peer for the whole app.
@@ -93,6 +94,7 @@ export function CallProvider({ children }) {
 
   const peerRef = useRef(null);
   const mediaRef = useRef(null);            // active MediaConnection
+  const cameraFollowRef = useRef(null);     // stops keeping the call on the current camera
   const pendingRef = useRef(null);          // unanswered incoming MediaConnection
   const connsRef = useRef(new Map());       // handle -> DataConnection
   const micRef = useRef(null);
@@ -300,6 +302,9 @@ export function CallProvider({ children }) {
 
   const wireMedia = useCallback((mc, handle, direction) => {
     mediaRef.current = mc;
+    // Flipping the camera mid-call: send the new camera, not the stopped one.
+    cameraFollowRef.current?.();
+    cameraFollowRef.current = keepCallVideoCurrent(() => [mc.peerConnection].filter(Boolean));
 
     mc.on('stream', (stream) => {
       setRemoteStream(stream);
@@ -343,6 +348,8 @@ export function CallProvider({ children }) {
 
     if (!remote && handle) sendOn(handle, { type: 'hangup' });
 
+    cameraFollowRef.current?.();
+    cameraFollowRef.current = null;
     try { mediaRef.current?.close(); } catch { /* already closed */ }
     try { pendingRef.current?.close(); } catch { /* already closed */ }
     mediaRef.current = null;
