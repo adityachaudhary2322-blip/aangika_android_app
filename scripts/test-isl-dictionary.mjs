@@ -291,5 +291,45 @@ console.log('\n12. Rules the old whole-list saves erased come back from a phone 
   check(!isl.listRuleDrafts().length, 'it runs once per device: a later sync does not bring rules back');
 }
 
+console.log('\n13. Rules in a video call: the signer\'s sentence is not split by a pause\n' + '-'.repeat(74));
+{
+  const { shouldAutoSend } = await import('../src/hooks/useIslSentence.js');
+  const SAMPLE = 66;
+  // The same loop as useIslSentence (the call's recogniser): spot signs,
+  // decide when to send, translate with this dictionary's rules.
+  async function call(frames, policy) {
+    const all = isl.listSigns();
+    const sp = createSpotter(all.map((s) => ({ id: s.id, token: s.token, takes: s.takes })));
+    const sent = []; let sentence = []; let lastSignAt = 0; let handsGoneAt = 0;
+    for (let i = 0; i < frames.length; i++) {
+      const f = Float32Array.from(frames[i]); const now = (i + 1) * SAMPLE;
+      const hands = f[0] > 0.5 || f[HAND_DIM] > 0.5;
+      if (hands) handsGoneAt = 0; else if (!handsGoneAt) handsGoneAt = now;
+      for (const h of sp.push(f)) {
+        const s = all.find((x) => x.id === h.id);
+        if (s.type === 'full-stop') { if (sentence.length) sent.push((await translateStudio(sentence, 'en-IN', { mode: 'offline' })).english); sentence = []; continue; }
+        sentence.push(s); lastSignAt = now;
+      }
+      if (shouldAutoSend({ pending: sentence.length > 0, handsGoneAt, lastSignAt, now }, policy)) {
+        sent.push((await translateStudio(sentence, 'en-IN', { mode: 'offline' })).english); sentence = [];
+      }
+    }
+    return sent;
+  }
+  const W = isl.listSigns().find((s) => s.word === 'WELCOME');
+  const S = isl.listSigns().find((s) => s.word === 'SEGUE');
+  const hold = (take, n) => Array.from({ length: n }, () => take[take.length - 1]);
+  // WELCOME, then hands kept UP for ~3.3 s (thinking), then SEGUE, then hands down.
+  const frames = [rest(), rest(), ...W.takes[0], ...hold(W.takes[0], 50), ...S.takes[0], ...Array.from({ length: 70 }, rest)];
+  const rule = isl.getRules().find((r) => r.pattern.join(' ') === 'WELCOME SEGUE');
+  const now = await call(frames, { handsDownMs: 1500, idleMs: 6000 });
+  check(now.length === 1 && now[0] === rule.english, 'a pause with the hands up keeps one sentence: the rule fires', JSON.stringify(now));
+  const old = await call(frames, { handsDownMs: Infinity, idleMs: 3000 });
+  check(old.length === 2 && !old.includes(rule.english), 'the old 3 s send split it and the rule never matched (the bug)', JSON.stringify(old));
+  check(shouldAutoSend({ pending: true, handsGoneAt: 1000, lastSignAt: 900, now: 2600 }) === true, 'hands down for 1.5 s: send');
+  check(shouldAutoSend({ pending: true, handsGoneAt: 0, lastSignAt: 1000, now: 5000 }) === false, 'hands up, 4 s without a sign: keep waiting');
+  check(shouldAutoSend({ pending: false, handsGoneAt: 1, lastSignAt: 0, now: 99999 }) === false, 'nothing signed: nothing to send');
+}
+
 console.log('\n' + '='.repeat(74) + `\n  ${pass} passed, ${fail} failed\n` + '='.repeat(74));
 process.exit(fail ? 1 : 0);
